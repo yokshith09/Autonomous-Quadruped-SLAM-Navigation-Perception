@@ -1,4 +1,4 @@
-﻿"""SLAM Agent: IMU-stabilized scan-matching odometry and continuous pose estimation."""
+"""SLAM Agent: IMU-stabilized scan-matching odometry and continuous pose estimation."""
 import numpy as np
 import math
 from .base import BaseAgent
@@ -37,8 +37,23 @@ class SLAMAgent(BaseAgent):
             # Convert to IMU-stabilized base frame using current heading
             head_pts = world_to_base_points(sampled_w, gt_x, gt_y, gt_yaw)
             
-            # Run ICP match
-            slam_pose = self.pose_estimator.update(head_pts)
+            # Run Point-to-Line Metric ICP with loop closure
+            prev_closures = len(self.pose_estimator.loop_manager.loop_closures)
+            slam_pose = self.pose_estimator.update(head_pts, timestamp=current_time)
+            
+            # Check for new loop closures
+            if len(self.pose_estimator.loop_manager.loop_closures) > prev_closures:
+                latest_c = self.pose_estimator.loop_manager.loop_closures[-1]
+                from .bus import MissionEventMsg
+                self.bus.publish("mission/event", MissionEventMsg(
+                    timestamp=current_time,
+                    event_type="LOOP_CLOSURE_DETECTED",
+                    details={
+                        "matched_keyframe": latest_c["keyframe_id"],
+                        "rmse": latest_c["rmse"],
+                        "matches": latest_c["matches"]
+                    }
+                ))
 
             # Publish SLAM estimated pose
             self.bus.publish("pose/slam", PoseMsg(
