@@ -123,7 +123,8 @@ def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Op
             # Fall back to SVD point-to-point if too few valid correspondences
             return icp_match(source, target, initial_guess=initial_guess,
                              max_correspondence_distance=max_correspondence_distance,
-                             min_correspondences=min_correspondences)
+                             min_correspondences=min_correspondences,
+                             mode="point_to_point")
 
         p = aligned[valid]
         q = target[indices[valid]]

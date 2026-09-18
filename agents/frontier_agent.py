@@ -27,8 +27,18 @@ class FrontierAgent(BaseAgent):
     def initialize(self) -> bool:
         self.bus.subscribe("pose/state", self.on_pose)
         self.bus.subscribe("map/grid", self.on_grid)
+        self.bus.subscribe("mission/event", self.on_mission_event)
         self.is_running = True
         return True
+
+    def on_mission_event(self, event_msg: MissionEventMsg):
+        if event_msg.event_type == "PATH_UNREACHABLE":
+            tgx = event_msg.details.get("target_gx")
+            tgy = event_msg.details.get("target_gy")
+            if tgx is not None and tgy is not None:
+                self.blacklist_frontiers.add((tgx, tgy))
+                if len(self.blacklist_frontiers) > 30:
+                    self.blacklist_frontiers.clear()
 
     def on_pose(self, pose_msg: PoseMsg):
         self.latest_pose = pose_msg

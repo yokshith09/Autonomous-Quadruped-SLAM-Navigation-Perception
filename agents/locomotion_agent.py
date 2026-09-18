@@ -41,7 +41,11 @@ class LocomotionAgent(BaseAgent):
             target_wx, target_wy = self.waypoints[self.wp_idx]
             dist_to_wp = math.hypot(target_wx - rx, target_wy - ry)
 
-            if dist_to_wp < self.wp_radius:
+            # Lookahead advance: advance if reached waypoint or already closer to the next waypoint
+            if dist_to_wp < self.wp_radius or (
+                self.wp_idx < len(self.waypoints) - 1 and
+                math.hypot(self.waypoints[self.wp_idx + 1][0] - rx, self.waypoints[self.wp_idx + 1][1] - ry) < dist_to_wp
+            ):
                 self.wp_idx += 1
                 if self.wp_idx >= len(self.waypoints):
                     self.speed = 0.0
@@ -55,12 +59,16 @@ class LocomotionAgent(BaseAgent):
                 target_heading = math.atan2(target_wy - ry, target_wx - rx)
                 heading_err = norm_angle(target_heading - r_yaw)
 
-                # Heading steering logic
-                if abs(heading_err) > 0.45:
-                    self.speed = 0.0  # Pivot turn in place
-                    self.state_str = "PIVOT"
+                # Continuous speed modulation: NEVER stop at 0.0 speed during turns
+                abs_err = abs(heading_err)
+                if abs_err > 0.45:
+                    self.speed = 0.45  # Continuous turn-while-walking
+                    self.state_str = "TURN"
+                elif abs_err > 0.20:
+                    self.speed = 0.75  # Arc turn
+                    self.state_str = "WALK"
                 else:
-                    self.speed = 1.0  # Walk forward
+                    self.speed = 1.0   # Full forward walk
                     self.state_str = "WALK"
 
                 if self.robot is not None:
@@ -79,7 +87,7 @@ class LocomotionAgent(BaseAgent):
                     state_str=self.state_str
                 ))
         else:
-            self.speed = 0.25
+            self.speed = 0.35
             self.state_str = "SCAN"
             if self.robot is not None:
                 try:

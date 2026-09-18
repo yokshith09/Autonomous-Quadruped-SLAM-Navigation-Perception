@@ -3,7 +3,7 @@ import time
 import math
 from typing import List, Tuple, Optional
 from .base import BaseAgent
-from .bus import MessageBus, PathMsg, FrontierTargetMsg, PoseMsg, GridMapMsg
+from .bus import MessageBus, PathMsg, FrontierTargetMsg, PoseMsg, GridMapMsg, MissionEventMsg
 from planner import a_star_search, smooth_path
 from grid import find_nearest_free, ROBOT_RADIUS
 
@@ -54,6 +54,14 @@ class PlanningAgent(BaseAgent):
         # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
         world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False)
         if not world_path:
+            self.bus.publish("mission/event", MissionEventMsg(
+                timestamp=current_time,
+                event_type="PATH_UNREACHABLE",
+                details={
+                    "target_gx": self.latest_target.target_gx,
+                    "target_gy": self.latest_target.target_gy
+                }
+            ))
             return None
 
         # Line-of-sight shortcut smoothing on world coordinates

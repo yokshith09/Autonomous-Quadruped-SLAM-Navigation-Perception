@@ -1,4 +1,4 @@
-﻿"""Base Agent class for robotic multi-agent subsystems."""
+"""Base Agent class for robotic multi-agent subsystems."""
 from abc import ABC, abstractmethod
 import time
 import threading
@@ -35,3 +35,5 @@ class BaseAgent(ABC):
         """Fault isolation and error reporting."""
         self.error_count += 1
         print(f"[Agent {self.name} ERROR #{self.error_count}] {err}")
+        import traceback
+        traceback.print_exc()
