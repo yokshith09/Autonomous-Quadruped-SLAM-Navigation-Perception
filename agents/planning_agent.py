@@ -23,8 +23,15 @@ class PlanningAgent(BaseAgent):
     def initialize(self) -> bool:
         self.bus.subscribe("frontier/target", self.on_target)
         self.bus.subscribe("pose/state", self.on_pose)
+        self.bus.subscribe("mission/event", self.on_mission_event)
         self.is_running = True
         return True
+
+    def on_mission_event(self, event_msg: MissionEventMsg):
+        if event_msg.event_type in ["ROBOT_STUCK", "ROOM_COMPLETED"]:
+            self.current_path = []
+            self.last_replan_time = -999.0
+            self.latest_target = None
 
     def on_target(self, target_msg: FrontierTargetMsg):
         self.latest_target = target_msg
@@ -41,6 +48,11 @@ class PlanningAgent(BaseAgent):
             return self.current_path
 
         rx, ry = self.latest_pose.x, self.latest_pose.y
+        dist_to_goal = math.hypot(self.latest_target.target_wx - rx, self.latest_target.target_wy - ry)
+        if dist_to_goal < 0.28:
+            self.latest_target = None
+            return None
+
         start_gx, start_gy = self.grid.world_to_grid(rx, ry)
         goal_gx, goal_gy = self.latest_target.target_gx, self.latest_target.target_gy
 
@@ -49,6 +61,7 @@ class PlanningAgent(BaseAgent):
         goal_gx, goal_gy = find_nearest_free(self.grid, goal_gx, goal_gy)
 
         if start_gx == goal_gx and start_gy == goal_gy:
+            self.latest_target = None
             return None
 
         # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
@@ -62,6 +75,7 @@ class PlanningAgent(BaseAgent):
                     "target_gy": self.latest_target.target_gy
                 }
             ))
+            self.latest_target = None
             return None
 
         # Line-of-sight shortcut smoothing on world coordinates

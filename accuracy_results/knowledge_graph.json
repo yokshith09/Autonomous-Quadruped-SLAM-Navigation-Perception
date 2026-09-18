@@ -1,5 +1,19 @@
 {
   "rooms": {
+    "1": {
+      "room_id": 1,
+      "name": "Room_1",
+      "status": "EXPLORING",
+      "centroid": [
+        0.0,
+        0.0
+      ],
+      "entities": [],
+      "doorways": [
+        "doorway_1",
+        "doorway_2"
+      ]
+    },
     "2": {
       "room_id": 2,
       "name": "Room_2",
@@ -9,10 +23,61 @@
         0.0
       ],
       "entities": [],
-      "doorways": []
+      "doorways": [
+        "doorway_1",
+        "doorway_2"
+      ]
     }
   },
-  "doorways": {},
+  "doorways": {
+    "doorway_1": {
+      "door_id": "doorway_1",
+      "world_pos": [
+        2.4000000000000004,
+        1.5
+      ],
+      "connects_rooms": [
+        1,
+        2
+      ],
+      "width_m": 0.8,
+      "is_traversed": false
+    },
+    "doorway_2": {
+      "door_id": "doorway_2",
+      "world_pos": [
+        1.9000000000000004,
+        1.6000000000000005
+      ],
+      "connects_rooms": [
+        1,
+        2
+      ],
+      "width_m": 0.8,
+      "is_traversed": false
+    }
+  },
   "entities": {},
-  "edges": []
+  "edges": [
+    {
+      "source": "Room_1",
+      "relation": "CONNECTS_VIA",
+      "target": "doorway_1"
+    },
+    {
+      "source": "doorway_1",
+      "relation": "LEADS_TO",
+      "target": "Room_2"
+    },
+    {
+      "source": "Room_1",
+      "relation": "CONNECTS_VIA",
+      "target": "doorway_2"
+    },
+    {
+      "source": "doorway_2",
+      "relation": "LEADS_TO",
+      "target": "Room_2"
+    }
+  ]
 }

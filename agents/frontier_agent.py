@@ -32,13 +32,33 @@ class FrontierAgent(BaseAgent):
         return True
 
     def on_mission_event(self, event_msg: MissionEventMsg):
-        if event_msg.event_type == "PATH_UNREACHABLE":
+        if event_msg.event_type in ["PATH_UNREACHABLE", "ROBOT_STUCK"]:
             tgx = event_msg.details.get("target_gx")
             tgy = event_msg.details.get("target_gy")
             if tgx is not None and tgy is not None:
                 self.blacklist_frontiers.add((tgx, tgy))
                 if len(self.blacklist_frontiers) > 30:
                     self.blacklist_frontiers.clear()
+
+    def _get_room_at(self, gx: int, gy: int, room_labels: Optional[np.ndarray], radius: int = 4) -> int:
+        if room_labels is None:
+            return 0
+        h, w = room_labels.shape
+        if not (0 <= gy < h and 0 <= gx < w):
+            return 0
+        val = int(room_labels[gy, gx])
+        if val > 0:
+            return val
+        
+        # Sample neighborhood around cell (essential for frontiers on unknown boundary)
+        y0, y1 = max(0, gy - radius), min(h, gy + radius + 1)
+        x0, x1 = max(0, gx - radius), min(w, gx + radius + 1)
+        sub = room_labels[y0:y1, x0:x1]
+        pos = sub[sub > 0]
+        if len(pos) == 0:
+            return 0
+        vals, counts = np.unique(pos, return_counts=True)
+        return int(vals[np.argmax(counts)])
 
     def on_pose(self, pose_msg: PoseMsg):
         self.latest_pose = pose_msg
@@ -55,12 +75,21 @@ class FrontierAgent(BaseAgent):
         rx, ry = self.latest_pose.x, self.latest_pose.y
         rgx, rgy = self.grid.world_to_grid(rx, ry)
 
-        # Detect current room if unassigned
+        # Detect current room
         room_labels = self.latest_grid_msg.room_labels if self.latest_grid_msg else None
-        if room_labels is not None and 0 <= rgy < room_labels.shape[0] and 0 <= rgx < room_labels.shape[1]:
-            current_detected_room = int(room_labels[rgy, rgx])
-            if current_detected_room > 1 and self.active_room_id == -1:
+        current_detected_room = self._get_room_at(rgx, rgy, room_labels)
+        if current_detected_room > 0:
+            if self.active_room_id <= 0:
                 self.active_room_id = current_detected_room
+                self.bus.publish("mission/event", MissionEventMsg(
+                    timestamp=current_time,
+                    event_type="ROOM_ENTERED",
+                    details={"room_id": self.active_room_id}
+                ))
+            elif current_detected_room != self.active_room_id and self.state == "INTER_ROOM_TRANSIT":
+                self.explored_rooms.add(self.active_room_id)
+                self.active_room_id = current_detected_room
+                self.state = "INTRA_ROOM_SWEEP"
                 self.bus.publish("mission/event", MissionEventMsg(
                     timestamp=current_time,
                     event_type="ROOM_ENTERED",
@@ -104,11 +133,9 @@ class FrontierAgent(BaseAgent):
         other_frontiers = []
         for f, dist in dist_candidates:
             gx, gy, area = f
-            f_room = -1
-            if room_labels is not None and 0 <= gy < room_labels.shape[0] and 0 <= gx < room_labels.shape[1]:
-                f_room = int(room_labels[gy, gx])
+            f_room = self._get_room_at(gx, gy, room_labels)
 
-            if self.active_room_id > 1 and f_room == self.active_room_id:
+            if self.active_room_id > 0 and f_room == self.active_room_id:
                 room_frontiers.append((f, dist))
             else:
                 other_frontiers.append((f, dist))

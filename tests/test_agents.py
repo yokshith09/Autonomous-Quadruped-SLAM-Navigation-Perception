@@ -175,14 +175,57 @@ def test_locomotion_agent():
     loco = LocomotionAgent(bus, robot_driver=None)
     loco.initialize()
 
+    # 1. Test idle state when no waypoints (Must NOT spin)
     loco.on_pose(PoseMsg(timestamp=1.0, x=0.0, y=0.0, yaw=0.0))
-    loco.on_path(PathMsg(timestamp=1.0, waypoints=[(1.0, 0.0), (2.0, 0.0)]))
-
     loco.step(current_time=1.0)
+    assert loco.speed == 0.0
+    assert loco.state_str == "IDLE"
+
+    # 2. Test walk when waypoints provided
+    loco.on_path(PathMsg(timestamp=1.1, waypoints=[(1.0, 0.0), (2.0, 0.0)]))
+    loco.step(current_time=1.1)
     assert loco.speed > 0.0
-    act = bus.get_latest("control/actuation")
-    assert act is not None
-    assert act.state_str == "WALK"
+    assert loco.state_str == "WALK"
+
+    # 3. Test reactive obstacle repulsion
+    # Add obstacle point 20cm ahead slightly to the left
+    scan = ScanMsg(timestamp=1.2, points_2d=np.array([[0.20, 0.08]]))
+    loco.on_scan(scan)
+    loco.step(current_time=1.2)
+    assert loco.state_str == "AVOID"
+
+    # 4. Test anti-stuck detection
+    loco.last_stuck_check_time = 0.0
+    loco.last_stuck_pos = (0.0, 0.0)
+    # Simulate staying stuck at same position over consecutive intervals
+    loco.step(current_time=2.5)
+    loco.step(current_time=3.6)
+    assert loco.recovery_countdown > 0 or loco.state_str in ["RECOVER_BACKUP", "IDLE"]
+    print("PASSED")
+
+
+def test_frontier_boundary_room_association():
+    print("Running test_frontier_boundary_room_association...", end=" ")
+    bus = MessageBus()
+    grid = BayesianOccupancyGrid(-5.0, 5.0, -5.0, 5.0, 0.1)
+    fa = FrontierAgent(bus, grid_ref=grid)
+    fa.initialize()
+
+    # Create room_labels where Room 1 is x < 0, Room 2 is x > 0
+    # BUT on the boundary (x = 0), cells are 0 (unknown/unsegmented)
+    labels = np.zeros((grid.height, grid.width), dtype=np.int32)
+    labels[:, :grid.width // 2 - 1] = 1
+    labels[:, grid.width // 2 + 1:] = 2
+
+    gx_boundary = grid.width // 2 - 1
+    gy_boundary = grid.height // 2
+
+    # Verify cell at boundary has label 0 in raw map
+    assert labels[gy_boundary, gx_boundary] == 0
+
+    # _get_room_at should correctly inspect neighborhood and resolve to Room 1
+    assigned_room = fa._get_room_at(gx_boundary, gy_boundary, labels, radius=3)
+    assert assigned_room == 1, f"Expected Room 1, got {assigned_room}"
     print("PASSED")
 
 
@@ -195,4 +238,5 @@ if __name__ == "__main__":
     test_systematic_room_exploration()
     test_planning_agent()
     test_locomotion_agent()
+    test_frontier_boundary_room_association()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")

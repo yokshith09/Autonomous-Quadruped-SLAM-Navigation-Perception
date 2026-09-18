@@ -1,6 +1,7 @@
-﻿"""Mapping Agent: Bayesian log-odds occupancy grid, Bresenham raycasting, and Watershed room segmentation."""
+"""Mapping Agent: Bayesian log-odds occupancy grid, Bresenham raycasting, and Watershed room segmentation."""
 import numpy as np
 import cv2
+from scipy.ndimage import distance_transform_edt
 from typing import List, Tuple, Dict, Optional
 from .base import BaseAgent
 from .bus import MessageBus, GridMapMsg, ScanMsg, PoseMsg
@@ -33,57 +34,64 @@ class MappingAgent(BaseAgent):
         self.latest_pose = pose_msg
 
     def segment_rooms(self) -> Tuple[np.ndarray, List[Tuple[float, float]]]:
-        """Topological Room Segmentation using Euclidean Distance Transform and Watershed.
-        Identifies rooms as major free-space convex basins and doorways as narrow bottlenecks.
+        """Topological Room Segmentation using Euclidean Distance Transform and Voronoi partitioning.
+        Identifies rooms as major free-space convex basins and doorways as interface bottlenecks.
         """
         free_mask = (self.grid.grid_log_odds <= self.grid.thresh_free).astype(np.uint8) * 255
-        occupied_mask = (self.grid.grid_log_odds >= self.grid.thresh_occ).astype(np.uint8) * 255
         
         if np.sum(free_mask) < 200:
             return np.zeros_like(free_mask, dtype=np.int32), []
 
         # 1. Distance transform on free space
         dist_transform = cv2.distanceTransform(free_mask, cv2.DIST_L2, 5)
-
-        # 2. Find local maxima (room centers) with distance threshold
         max_val = np.max(dist_transform)
         if max_val < 4:  # At least 20cm clearance
             return np.zeros_like(free_mask, dtype=np.int32), []
 
-        # Threshold to get reliable room core regions
-        _, sure_fg = cv2.threshold(dist_transform, 0.45 * max_val, 255, 0)
-        sure_fg = np.uint8(sure_fg)
+        # 2. Threshold to get reliable room core regions
+        thresh = 0.45 * max_val
+        sure_fg = (dist_transform >= thresh).astype(np.uint8)
 
         # 3. Label room marker components
-        num_markers, markers = cv2.connectedComponents(sure_fg)
-        if num_markers <= 1:
-            # Single room detected so far
-            return (free_mask > 0).astype(np.int32), []
+        num_markers, markers, stats, cents = cv2.connectedComponentsWithStats(sure_fg)
+        seeds = np.zeros_like(markers, dtype=np.int32)
+        valid_id = 1
+        for i in range(1, num_markers):
+            if stats[i, cv2.CC_STAT_AREA] >= 10:
+                seeds[markers == i] = valid_id
+                valid_id += 1
+        num_rooms = valid_id - 1
 
-        # Add 1 to all labels so that background is not 0
-        markers = markers + 1
-        # Mark unknown and occupied as background 0
-        markers[free_mask == 0] = 0
+        if num_rooms <= 1:
+            # Single room detected so far (all free cells belong to Room 1)
+            room_map = (free_mask > 0).astype(np.int32) * 1
+            self.room_labels = room_map
+            self.doorways = []
+            return room_map, []
 
-        # 4. Apply watershed on 3-channel visual representation
-        cv_img = cv2.cvtColor(free_mask, cv2.COLOR_GRAY2BGR)
-        cv2.watershed(cv_img, markers)
+        # 4. Multi-room Voronoi partitioning via Euclidean distance transform
+        _, indices = distance_transform_edt(seeds == 0, return_indices=True)
+        room_map = seeds[indices[0], indices[1]]
+        room_map[free_mask == 0] = 0
 
-        # Watershed boundary lines are -1
+        # 5. Extract doorways: interface where two distinct rooms touch in free space
+        door_mask = np.zeros_like(free_mask, dtype=np.uint8)
+        for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            shifted = np.roll(np.roll(room_map, dy, axis=0), dx, axis=1)
+            interface = (room_map > 0) & (shifted > 0) & (room_map != shifted)
+            door_mask |= interface.astype(np.uint8)
+
+        num_d, d_labels, d_stats, d_cents = cv2.connectedComponentsWithStats(door_mask)
         doorway_points = []
-        boundary_mask = (markers == -1) & (free_mask > 0)
-        
-        # Doorway centroids from boundary intersections
-        num_doors, door_labels, stats, centroids = cv2.connectedComponentsWithStats(boundary_mask.astype(np.uint8))
-        for i in range(1, num_doors):
-            if stats[i, cv2.CC_STAT_AREA] >= 2:
-                gx, gy = int(centroids[i][0]), int(centroids[i][1])
-                wx, wy = self.grid.grid_to_world(gx, gy)
+        for i in range(1, num_d):
+            if d_stats[i, cv2.CC_STAT_AREA] >= 2:
+                dgx, dgy = int(round(d_cents[i][0])), int(round(d_cents[i][1]))
+                wx, wy = self.grid.grid_to_world(dgx, dgy)
                 doorway_points.append((wx, wy))
 
-        self.room_labels = markers
+        self.room_labels = room_map
         self.doorways = doorway_points
-        return markers, doorway_points
+        return room_map, doorway_points
 
     def step(self, current_time: float) -> None:
         if self.latest_scan is None or self.latest_pose is None:
