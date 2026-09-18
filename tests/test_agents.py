@@ -1,4 +1,4 @@
-﻿"""Runnable verification tests for the Multi-Agent Robotics Stack."""
+"""Runnable verification tests for the Multi-Agent Robotics Stack."""
 import numpy as np
 import math
 import sys
@@ -139,6 +139,53 @@ def test_systematic_room_exploration():
     print("PASSED")
 
 
+def test_planning_agent():
+    print("Running test_planning_agent...", end=" ")
+    from agents import PlanningAgent
+    bus = MessageBus()
+    grid = BayesianOccupancyGrid(-5.0, 5.0, -5.0, 5.0, 0.1)
+    
+    # Mark a 2x2m area as FREE
+    for wy in np.arange(-1.0, 1.0, 0.1):
+        for wx in np.arange(-1.0, 1.0, 0.1):
+            gx, gy = grid.world_to_grid(wx, wy)
+            grid.grid_log_odds[gy, gx] = grid.l_min
+
+    planner = PlanningAgent(bus, grid_ref=grid, replan_cooldown=0.0)
+    planner.initialize()
+
+    planner.on_pose(PoseMsg(timestamp=1.0, x=0.0, y=0.0, yaw=0.0))
+    tgt_gx, tgt_gy = grid.world_to_grid(0.5, 0.5)
+    planner.on_target(FrontierTargetMsg(
+        timestamp=1.0, target_gx=tgt_gx, target_gy=tgt_gy,
+        target_wx=0.5, target_wy=0.5, room_id=1, area=10
+    ))
+
+    path = planner.plan_path(current_time=1.0)
+    assert path is not None
+    assert len(path) >= 2
+    assert bus.get_latest("plan/path") is not None
+    print("PASSED")
+
+
+def test_locomotion_agent():
+    print("Running test_locomotion_agent...", end=" ")
+    from agents import LocomotionAgent
+    bus = MessageBus()
+    loco = LocomotionAgent(bus, robot_driver=None)
+    loco.initialize()
+
+    loco.on_pose(PoseMsg(timestamp=1.0, x=0.0, y=0.0, yaw=0.0))
+    loco.on_path(PathMsg(timestamp=1.0, waypoints=[(1.0, 0.0), (2.0, 0.0)]))
+
+    loco.step(current_time=1.0)
+    assert loco.speed > 0.0
+    act = bus.get_latest("control/actuation")
+    assert act is not None
+    assert act.state_str == "WALK"
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()
@@ -146,4 +193,6 @@ if __name__ == "__main__":
     test_episodic_memory()
     test_room_segmentation()
     test_systematic_room_exploration()
+    test_planning_agent()
+    test_locomotion_agent()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")

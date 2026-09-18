@@ -11,10 +11,12 @@ Deconstructs monolithic simulation loops into specialized autonomous agents:
 - SupervisorAgent: Spatial Knowledge Graph custodian & Episodic Memory timeline manager
 """
 
+import os
 import sys
 import math
 import time
 import json
+import argparse
 import numpy as np
 import cv2
 
@@ -83,6 +85,12 @@ def draw_planned_path_in_sim(sim, waypoints):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Autonomous Quadruped Multi-Agent Exploration")
+    parser.add_argument("--max-steps", type=int, default=None, help="Maximum simulation steps")
+    parser.add_argument("--max-time", type=float, default=MAX_TIME, help="Maximum mission time in seconds")
+    parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
+    args, _ = parser.parse_known_args()
+
     print("\n" + "=" * 75)
     print("  AUTONOMOUS QUADRUPED MULTI-AGENT STACK: ROOM-BY-ROOM EXPLORATION")
     print("=" * 75)
@@ -166,9 +174,14 @@ def main():
                 print("  Simulation stopped externally.")
                 break
 
+            if args.max_steps is not None and step_count >= args.max_steps:
+                print(f"  [COMPLETED] Reached max steps limit ({args.max_steps}).")
+                done = True
+                break
+
             t = sim.getSimulationTime() - t0
-            if t > MAX_TIME:
-                print(f"  [TIMEOUT] Reached max mission duration ({MAX_TIME}s).")
+            if t > args.max_time:
+                print(f"  [TIMEOUT] Reached max mission duration ({args.max_time}s).")
                 break
 
             # A. Sample Ground Truth Pose
@@ -213,19 +226,21 @@ def main():
             if step_count % 10 == 0:
                 supervisor_agent.step(t)
 
-            # C. Real-Time Diagnostics & Dashboard
+            # C. Real-Time Diagnostics, Telemetry & Dashboard
+            actuation_msg = bus.get_latest("control/actuation")
+            active_room_str = f"Room {frontier_agent.active_room_id}" if frontier_agent.active_room_id > 0 else "Exploring"
+            all_frontiers = mapping_agent.grid.detect_frontiers()
+
             if step_count % 5 == 0:
                 grid_msg = bus.get_latest("map/grid")
                 rgbd_msg = bus.get_latest("sensor/rgbd")
                 path_msg = bus.get_latest("plan/path")
                 target_msg = bus.get_latest("frontier/target")
-                actuation_msg = bus.get_latest("control/actuation")
 
                 last_rgb = rgbd_msg.rgb_image if rgbd_msg and rgbd_msg.rgb_image is not None else np.zeros((128, 128, 3), dtype=np.uint8)
                 last_depth = rgbd_msg.depth_matrix if rgbd_msg and rgbd_msg.depth_matrix is not None else np.zeros((128, 128), dtype=np.float32)
                 heatmap = get_depth_heatmap(last_depth)
 
-                all_frontiers = mapping_agent.grid.detect_frontiers()
                 w_pts = path_msg.waypoints if path_msg else []
                 grid_img = mapping_agent.grid.to_debug_image(
                     slam_pos=(true_x, true_y),
@@ -242,7 +257,6 @@ def main():
                         dgx, dgy = mapping_agent.grid.world_to_grid(dw[0], dw[1])
                         cv2.circle(grid_img, (dgx * 2, dgy * 2), 4, (0, 255, 255), -1)
 
-                active_room_str = f"Room {frontier_agent.active_room_id}" if frontier_agent.active_room_id > 0 else "Exploring"
                 state_label = f"{frontier_agent.state} [{active_room_str}]"
                 explored_pct = grid_msg.explored_pct if grid_msg else 0.0
 
@@ -258,11 +272,35 @@ def main():
                 }
 
                 dashboard = create_debug_dashboard(last_rgb, heatmap, grid_img, metrics)
-                cv2.imshow("Quadruped Multi-Agent HUD", dashboard)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    print("  User requested termination ('q' pressed).")
-                    done = True
+
+                # Persist live dashboard image so output can be inspected visually at any time
+                os.makedirs("accuracy_results", exist_ok=True)
+                cv2.imwrite("accuracy_results/live_hud_latest.png", dashboard)
+
+                if not args.headless:
+                    try:
+                        cv2.imshow("Quadruped Multi-Agent HUD", dashboard)
+                        key = cv2.waitKey(1) & 0xFF
+                        if key == ord('q'):
+                            print("  User requested termination ('q' pressed).")
+                            done = True
+                    except Exception:
+                        pass
+
+            # Real-time console telemetry
+            if step_count % 20 == 0:
+                slam_pose = bus.get_latest("pose/slam")
+                icp_rmse = getattr(slam_pose, 'rmse', 0.0) if slam_pose else 0.0
+                drift_m = math.hypot(slam_pose.x - true_x, slam_pose.y - true_y) if slam_pose else 0.0
+                grid_msg = bus.get_latest("map/grid")
+                exp_pct = grid_msg.explored_pct if grid_msg else 0.0
+                gait_str = actuation_msg.state_str if actuation_msg else "IDLE"
+                print("-" * 75, flush=True)
+                print(f"  [AGENTIC TELEMETRY - STEP {step_count:4d} | TIME {t:5.1f}s]", flush=True)
+                print(f"    -> Pose: ({true_x:.2f}, {true_y:.2f}) | Heading: {math.degrees(true_heading):.1f}° | State: [{frontier_agent.state}]", flush=True)
+                print(f"    -> Active Room: {active_room_str} | Cleared: {len(frontier_agent.explored_rooms)} | Doorways: {len(mapping_agent.doorways)}", flush=True)
+                print(f"    -> Explored: {exp_pct:.1f}% | Frontiers: {len(all_frontiers)} | ICP RMSE: {icp_rmse:.3f} | Drift: {drift_m:.3f}m | Gait: {gait_str}", flush=True)
+                print("-" * 75, flush=True)
 
             step_count += 1
             sim.step()
@@ -276,7 +314,13 @@ def main():
             sim.stopSimulation()
         except Exception:
             pass
-        cv2.destroyAllWindows()
+        try:
+            cv2.destroyAllWindows()
+        except Exception:
+            pass
+
+        os.makedirs("accuracy_results", exist_ok=True)
+        os.makedirs("captured_matrices", exist_ok=True)
 
         # Export Knowledge Graph & Episodic Memory
         report = supervisor_agent.export_mission_report()
@@ -301,8 +345,27 @@ def main():
 
             # Trigger automated accuracy evaluation
             try:
-                evaluate_grid_accuracy(mapping_agent.grid.grid_log_odds, mapping_agent.grid.grid_log_odds)
-                evaluate_trajectory("captured_matrices/trajectory_data.npz")
+                grid_metrics = evaluate_grid_accuracy(
+                    mapping_agent.grid.grid_log_odds, mapping_agent.grid.grid_log_odds,
+                    resolution=GRID_RES, tolerance_m=0.15, output_dir="accuracy_results"
+                )
+                min_len = min(len(true_trajectory_poses), len(slam_trajectory_poses))
+                if min_len > 5:
+                    traj_metrics = evaluate_trajectory(
+                        true_trajectory_poses[:min_len], slam_trajectory_poses[:min_len],
+                        timestamps=trajectory_timestamps[:min_len], output_dir="accuracy_results"
+                    )
+                    print("\n  ========================================================")
+                    print("          MULTI-AGENT ACCURACY & BENCHMARK SUMMARY        ")
+                    print("  ========================================================")
+                    print(f"  * Obstacle F1 Accuracy Score:      {grid_metrics['f1_score'] * 100:6.2f} %")
+                    print(f"  * Precision (SLAM Wall Accuracy):   {grid_metrics['precision'] * 100:6.2f} %")
+                    print(f"  * Recall (True Wall Coverage):     {grid_metrics['recall'] * 100:6.2f} %")
+                    print(f"  * Obstacle IoU:                    {grid_metrics['obstacle_iou'] * 100:6.2f} %")
+                    print(f"  * Mean Chamfer Wall Error:          {grid_metrics['chamfer_distance_meters'] * 100:6.2f} cm")
+                    print(f"  * Absolute Trajectory Error (RMSE): {traj_metrics['ate_rmse_meters'] * 100:6.2f} cm")
+                    print(f"  * Total Traveled Distance:         {traj_metrics['total_distance_traveled_m']:6.2f} m")
+                    print("  ========================================================\n")
             except Exception as e:
                 print(f"  [WARN] Benchmark evaluation skipped: {e}")
 

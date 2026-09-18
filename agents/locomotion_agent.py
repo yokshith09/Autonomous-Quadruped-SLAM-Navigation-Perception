@@ -1,4 +1,4 @@
-﻿"""Locomotion Agent: Biomimetic sinusoidal quadruped gait generation and heading control."""
+"""Locomotion Agent: Biomimetic sinusoidal quadruped gait generation and heading control."""
 import math
 from typing import List, Tuple, Optional
 from .base import BaseAgent
@@ -46,10 +46,12 @@ class LocomotionAgent(BaseAgent):
                 if self.wp_idx >= len(self.waypoints):
                     self.speed = 0.0
                     self.state_str = "ARRIVED"
+                    self.waypoints = []
+                    self.wp_idx = 0
                 else:
                     target_wx, target_wy = self.waypoints[self.wp_idx]
 
-            if self.wp_idx < len(self.waypoints):
+            if self.waypoints and self.wp_idx < len(self.waypoints):
                 target_heading = math.atan2(target_wy - ry, target_wx - rx)
                 heading_err = norm_angle(target_heading - r_yaw)
 
@@ -62,8 +64,12 @@ class LocomotionAgent(BaseAgent):
                     self.state_str = "WALK"
 
                 if self.robot is not None:
-                    self.robot.steer_heading(target_heading, current_time)
-                    self.robot.apply_gait(current_time, self.speed)
+                    try:
+                        orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
+                        self.robot.steer_heading(orient, r_yaw, target_heading)
+                        self.robot.apply_gait(current_time, self.speed)
+                    except Exception as e:
+                        self.handle_error(e)
 
                 self.bus.publish("control/actuation", ActuationMsg(
                     timestamp=current_time,
@@ -73,7 +79,13 @@ class LocomotionAgent(BaseAgent):
                     state_str=self.state_str
                 ))
         else:
-            self.speed = 0.0
-            self.state_str = "WAITING_PATH"
+            self.speed = 0.25
+            self.state_str = "SCAN"
             if self.robot is not None:
-                self.robot.apply_gait(current_time, 0.0)
+                try:
+                    orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
+                    desired = norm_angle(r_yaw + 0.04)
+                    self.robot.steer_heading(orient, r_yaw, desired)
+                    self.robot.apply_gait(current_time, self.speed)
+                except Exception:
+                    self.robot.apply_gait(current_time, 0.0)

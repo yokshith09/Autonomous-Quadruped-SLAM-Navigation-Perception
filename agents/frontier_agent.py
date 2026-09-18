@@ -1,4 +1,4 @@
-﻿"""Frontier Exploration Agent: Hierarchical room-by-room frontier selection and doorway transitions."""
+"""Frontier Exploration Agent: Hierarchical room-by-room frontier selection and doorway transitions."""
 import math
 import numpy as np
 from typing import List, Tuple, Set, Optional
@@ -59,23 +59,41 @@ class FrontierAgent(BaseAgent):
 
         all_frontiers = self.grid.detect_frontiers()
         if not all_frontiers:
+            self.state = "MISSION_COMPLETE"
             return None
 
-        # Filter frontiers inside the ACTIVE room (Systematic Room-by-Room logic)
-        room_frontiers = []
-        other_frontiers = []
-
+        # 1. Collect valid candidates, respecting blacklist
+        candidates = []
         for f in all_frontiers:
             gx, gy, area = f
             if (gx, gy) in self.blacklist_frontiers:
                 continue
-
             wx, wy = self.grid.grid_to_world(gx, gy)
             dist = math.hypot(wx - rx, wy - ry)
-            if dist < self.min_dist:
-                continue
+            candidates.append((f, dist))
 
-            # Check room membership
+        if not candidates:
+            # If all frontiers were blacklisted, clear blacklist and re-try
+            if self.blacklist_frontiers:
+                self.blacklist_frontiers.clear()
+                for f in all_frontiers:
+                    wx, wy = self.grid.grid_to_world(f[0], f[1])
+                    dist = math.hypot(wx - rx, wy - ry)
+                    candidates.append((f, dist))
+            if not candidates:
+                self.state = "MISSION_COMPLETE"
+                return None
+
+        # Filter by min_dist (prefer frontiers > min_dist, but fall back to closer if none exist)
+        dist_candidates = [c for c in candidates if c[1] >= self.min_dist]
+        if not dist_candidates:
+            dist_candidates = candidates  # Use all available candidates
+
+        # Classify into active room vs other rooms
+        room_frontiers = []
+        other_frontiers = []
+        for f, dist in dist_candidates:
+            gx, gy, area = f
             f_room = -1
             if room_labels is not None and 0 <= gy < room_labels.shape[0] and 0 <= gx < room_labels.shape[1]:
                 f_room = int(room_labels[gy, gx])
@@ -106,13 +124,12 @@ class FrontierAgent(BaseAgent):
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
-        # Case B: Current room is 100% CLEARED! Transition to next room via Doorway
+        # Case B: Current room is CLEARED! Transition to next room via Doorway
         doorways = self.latest_grid_msg.doorways if self.latest_grid_msg else []
         unvisited_doorways = [d for d in doorways if d not in self.visited_doorways]
 
         if unvisited_doorways:
             self.state = "INTER_ROOM_TRANSIT"
-            # Find closest unvisited doorway
             unvisited_doorways.sort(key=lambda d: math.hypot(d[0] - rx, d[1] - ry))
             dw_target = unvisited_doorways[0]
             self.visited_doorways.add(dw_target)
@@ -139,7 +156,7 @@ class FrontierAgent(BaseAgent):
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
-        # Case C: Fallback to global frontier scoring if doorways haven't formed yet
+        # Case C: Global exploration if other frontiers exist
         if other_frontiers:
             self.state = "GLOBAL_EXPLORATION"
             target_frontier = self._score_frontiers(other_frontiers, rx, ry)

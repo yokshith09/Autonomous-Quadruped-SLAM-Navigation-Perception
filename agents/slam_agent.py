@@ -61,7 +61,8 @@ class SLAMAgent(BaseAgent):
                 x=slam_pose.x,
                 y=slam_pose.y,
                 yaw=slam_pose.yaw,
-                is_ground_truth=False
+                is_ground_truth=False,
+                rmse=float(getattr(slam_pose, 'rmse', 0.0))
             ))
 
             # Active navigation pose

@@ -1,4 +1,4 @@
-﻿"""Planning Agent: Vector-dilated A* search and line-of-sight shortcut smoothing."""
+"""Planning Agent: Vector-dilated A* search and line-of-sight shortcut smoothing."""
 import time
 import math
 from typing import List, Tuple, Optional
@@ -48,13 +48,16 @@ class PlanningAgent(BaseAgent):
         start_gx, start_gy = find_nearest_free(self.grid, start_gx, start_gy)
         goal_gx, goal_gy = find_nearest_free(self.grid, goal_gx, goal_gy)
 
-        grid_path = a_star_search(self.grid, start_gx, start_gy, goal_gx, goal_gy)
-        if not grid_path:
+        if start_gx == goal_gx and start_gy == goal_gy:
             return None
 
-        # Line-of-sight shortcut smoothing
-        smoothed_grid_path = smooth_path(self.grid, grid_path)
-        world_waypoints = [self.grid.grid_to_world(gx, gy) for gx, gy in smoothed_grid_path]
+        # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
+        world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False)
+        if not world_path:
+            return None
+
+        # Line-of-sight shortcut smoothing on world coordinates
+        world_waypoints = smooth_path(self.grid, world_path)
 
         self.last_replan_time = current_time
         self.replan_count += 1

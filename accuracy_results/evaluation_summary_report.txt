@@ -39,10 +39,10 @@ GRID METRICS:
 PERCEPTION METRICS:
   sensor_resolution_w: 128
   sensor_resolution_h: 128
-  valid_depth_pixels: 11273
-  valid_depth_ratio: 0.68804931640625
-  min_detected_depth_m: 0.12243646383285522
-  max_detected_depth_m: 3.3339967727661133
-  mean_detected_depth_m: 0.7488232254981995
-  std_depth_m: 0.8635455369949341
-  close_obstacle_ratio: 0.570556640625
+  valid_depth_pixels: 10210
+  valid_depth_ratio: 0.6231689453125
+  min_detected_depth_m: 0.12232222408056259
+  max_detected_depth_m: 7.884141445159912
+  mean_detected_depth_m: 0.880336344242096
+  std_depth_m: 1.113642692565918
+  close_obstacle_ratio: 0.48095703125

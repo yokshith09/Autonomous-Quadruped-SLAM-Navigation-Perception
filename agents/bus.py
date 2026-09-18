@@ -1,4 +1,4 @@
-﻿"""Asynchronous message bus and strongly typed telemetry contracts."""
+"""Asynchronous message bus and strongly typed telemetry contracts."""
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Optional, Callable
 import time
@@ -14,6 +14,7 @@ class PoseMsg:
     yaw: float
     is_ground_truth: bool = False
     covariance: float = 0.0
+    rmse: float = 0.0
 
 
 @dataclass

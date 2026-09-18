@@ -1,5 +1,12 @@
-﻿__pycache__/
+__pycache__/
 *.py[cod]
 *.class
 .ipynb_checkpoints/
 *.log
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+.agents/
+.claude/
+captured_matrices/*.npy
+captured_matrices/*.npz
+
