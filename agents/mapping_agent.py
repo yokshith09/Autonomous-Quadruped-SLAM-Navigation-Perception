@@ -1,4 +1,5 @@
 """Mapping Agent: Bayesian log-odds occupancy grid, Bresenham raycasting, and Watershed room segmentation."""
+import math
 import numpy as np
 import cv2
 from scipy.ndimage import distance_transform_edt
@@ -20,6 +21,10 @@ class MappingAgent(BaseAgent):
         self.doorways: List[Tuple[float, float]] = []
         self.segmentation_interval = 20  # Re-segment rooms periodically
         self.step_counter = 0
+
+        # Persistent Room Identity Tracking (Prevents room IDs from flipping across updates)
+        self.room_centroids: Dict[int, Tuple[float, float]] = {}
+        self.next_room_id: int = 1
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
@@ -52,33 +57,64 @@ class MappingAgent(BaseAgent):
         thresh = 0.45 * max_val
         sure_fg = (dist_transform >= thresh).astype(np.uint8)
 
-        # 3. Label room marker components
+        # 3. Label room marker components and track centroids persistently across updates
         num_markers, markers, stats, cents = cv2.connectedComponentsWithStats(sure_fg)
-        seeds = np.zeros_like(markers, dtype=np.int32)
-        valid_id = 1
+        
+        valid_components = []
         for i in range(1, num_markers):
             if stats[i, cv2.CC_STAT_AREA] >= 10:
-                seeds[markers == i] = valid_id
-                valid_id += 1
-        num_rooms = valid_id - 1
+                gx, gy = cents[i][0], cents[i][1]
+                wx, wy = self.grid.grid_to_world(int(round(gx)), int(round(gy)))
+                valid_components.append((i, (wx, wy)))
 
+        num_rooms = len(valid_components)
         if num_rooms <= 1:
-            # Single room detected so far (all free cells belong to Room 1)
-            room_map = (free_mask > 0).astype(np.int32) * 1
-            self.room_labels = room_map
+            # Single room detected so far (Room 1): whole map belongs to Room 1
+            voronoi_map = np.ones_like(free_mask, dtype=np.int32)
+            self.room_labels = voronoi_map
             self.doorways = []
-            return room_map, []
+            if num_rooms == 1:
+                self.room_centroids[1] = valid_components[0][1]
+            return voronoi_map, []
 
-        # 4. Multi-room Voronoi partitioning via Euclidean distance transform
+        # Persistent Room ID Matching: match new cores to previous room centroids
+        seeds = np.zeros_like(markers, dtype=np.int32)
+        used_persistent_ids = set()
+        for comp_idx, (cwx, cwy) in valid_components:
+            best_id = None
+            best_dist = 2.0  # 2.0-meter matching radius
+            for rid, (rcx, rcy) in self.room_centroids.items():
+                if rid in used_persistent_ids:
+                    continue
+                d = math.hypot(cwx - rcx, cwy - rcy)
+                if d < best_dist:
+                    best_dist = d
+                    best_id = rid
+            if best_id is not None:
+                assigned_id = best_id
+                used_persistent_ids.add(assigned_id)
+                self.room_centroids[assigned_id] = (cwx, cwy)
+            else:
+                assigned_id = self.next_room_id
+                self.next_room_id += 1
+                used_persistent_ids.add(assigned_id)
+                self.room_centroids[assigned_id] = (cwx, cwy)
+            
+            seeds[markers == comp_idx] = assigned_id
+
+        # 4. Multi-room Voronoi partitioning via Euclidean distance transform (whole-grid partitioning)
         _, indices = distance_transform_edt(seeds == 0, return_indices=True)
-        room_map = seeds[indices[0], indices[1]]
-        room_map[free_mask == 0] = 0
+        voronoi_map = seeds[indices[0], indices[1]]
+
+        # Free space room map for doorway interface detection
+        free_room_map = voronoi_map.copy()
+        free_room_map[free_mask == 0] = 0
 
         # 5. Extract doorways: interface where two distinct rooms touch in free space
         door_mask = np.zeros_like(free_mask, dtype=np.uint8)
         for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            shifted = np.roll(np.roll(room_map, dy, axis=0), dx, axis=1)
-            interface = (room_map > 0) & (shifted > 0) & (room_map != shifted)
+            shifted = np.roll(np.roll(free_room_map, dy, axis=0), dx, axis=1)
+            interface = (free_room_map > 0) & (shifted > 0) & (free_room_map != shifted)
             door_mask |= interface.astype(np.uint8)
 
         num_d, d_labels, d_stats, d_cents = cv2.connectedComponentsWithStats(door_mask)
@@ -89,9 +125,9 @@ class MappingAgent(BaseAgent):
                 wx, wy = self.grid.grid_to_world(dgx, dgy)
                 doorway_points.append((wx, wy))
 
-        self.room_labels = room_map
+        self.room_labels = voronoi_map
         self.doorways = doorway_points
-        return room_map, doorway_points
+        return voronoi_map, doorway_points
 
     def step(self, current_time: float) -> None:
         if self.latest_scan is None or self.latest_pose is None:

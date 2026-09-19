@@ -27,6 +27,7 @@ class FrontierAgent(BaseAgent):
 
         # Goal Commitment & Hysteresis State (Prevents target thrashing / path confusion)
         self.committed_target: Optional[Tuple[int, int]] = None
+        self.committed_doorway: Optional[Tuple[float, float]] = None
         self.commitment_time: float = 0.0
 
     def initialize(self) -> bool:
@@ -44,28 +45,30 @@ class FrontierAgent(BaseAgent):
                 self.blacklist_frontiers.add((tgx, tgy))
                 if self.committed_target == (tgx, tgy):
                     self.committed_target = None
+                    self.committed_doorway = None
                 if len(self.blacklist_frontiers) > 30:
                     self.blacklist_frontiers.clear()
         elif event_msg.event_type == "ROOM_COMPLETED":
             self.committed_target = None
+            self.committed_doorway = None
 
-    def _get_room_at(self, gx: int, gy: int, room_labels: Optional[np.ndarray], radius: int = 4) -> int:
+    def _get_room_at(self, gx: int, gy: int, room_labels: Optional[np.ndarray], radius: int = 8) -> int:
         if room_labels is None:
-            return 0
+            return self.active_room_id if self.active_room_id > 0 else 1
         h, w = room_labels.shape
         if not (0 <= gy < h and 0 <= gx < w):
-            return 0
+            return self.active_room_id if self.active_room_id > 0 else 1
         val = int(room_labels[gy, gx])
         if val > 0:
             return val
         
-        # Sample neighborhood around cell (essential for frontiers on unknown boundary)
+        # Sample neighborhood around cell (essential for frontiers on unsegmented boundary)
         y0, y1 = max(0, gy - radius), min(h, gy + radius + 1)
         x0, x1 = max(0, gx - radius), min(w, gx + radius + 1)
         sub = room_labels[y0:y1, x0:x1]
         pos = sub[sub > 0]
         if len(pos) == 0:
-            return 0
+            return self.active_room_id if self.active_room_id > 0 else 1
         vals, counts = np.unique(pos, return_counts=True)
         return int(vals[np.argmax(counts)])
 
@@ -89,7 +92,11 @@ class FrontierAgent(BaseAgent):
         if self.committed_target is not None:
             cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
             if math.hypot(cwx - rx, cwy - ry) < 0.35:
-                self.blacklist_frontiers.add(self.committed_target)
+                if self.committed_doorway is not None:
+                    self.visited_doorways.add(self.committed_doorway)
+                    self.committed_doorway = None
+                else:
+                    self.blacklist_frontiers.add(self.committed_target)
                 self.committed_target = None
 
         # Detect current room
@@ -103,8 +110,11 @@ class FrontierAgent(BaseAgent):
                     event_type="ROOM_ENTERED",
                     details={"room_id": self.active_room_id}
                 ))
-            elif current_detected_room != self.active_room_id and self.state == "INTER_ROOM_TRANSIT":
+            elif current_detected_room != self.active_room_id and self.state in ["INTER_ROOM_TRANSIT", "GLOBAL_EXPLORATION"]:
                 self.explored_rooms.add(self.active_room_id)
+                if self.committed_doorway is not None:
+                    self.visited_doorways.add(self.committed_doorway)
+                    self.committed_doorway = None
                 self.active_room_id = current_detected_room
                 self.state = "INTRA_ROOM_SWEEP"
                 self.committed_target = None
@@ -113,6 +123,14 @@ class FrontierAgent(BaseAgent):
                     event_type="ROOM_ENTERED",
                     details={"room_id": self.active_room_id}
                 ))
+        elif self.active_room_id <= 0:
+            self.active_room_id = 1
+
+        # If currently transiting a doorway, maintain commitment until reaching or entering new room
+        if self.state == "INTER_ROOM_TRANSIT" and self.committed_target is not None:
+            cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
+            if math.hypot(cwx - rx, cwy - ry) >= 0.35:
+                return None
 
         all_frontiers = self.grid.detect_frontiers()
         if not all_frontiers:
@@ -189,7 +207,7 @@ class FrontierAgent(BaseAgent):
             self.state = "INTER_ROOM_TRANSIT"
             unvisited_doorways.sort(key=lambda d: math.hypot(d[0] - rx, d[1] - ry))
             dw_target = unvisited_doorways[0]
-            self.visited_doorways.add(dw_target)
+            self.committed_doorway = dw_target
             
             if self.active_room_id > 0:
                 self.explored_rooms.add(self.active_room_id)
