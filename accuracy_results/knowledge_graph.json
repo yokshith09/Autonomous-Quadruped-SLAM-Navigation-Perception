@@ -10,8 +10,7 @@
       ],
       "entities": [],
       "doorways": [
-        "doorway_1",
-        "doorway_2"
+        "doorway_1"
       ]
     },
     "2": {
@@ -24,8 +23,7 @@
       ],
       "entities": [],
       "doorways": [
-        "doorway_1",
-        "doorway_2"
+        "doorway_1"
       ]
     }
   },
@@ -33,21 +31,8 @@
     "doorway_1": {
       "door_id": "doorway_1",
       "world_pos": [
-        2.5,
-        1.5500000000000007
-      ],
-      "connects_rooms": [
-        1,
-        2
-      ],
-      "width_m": 0.8,
-      "is_traversed": false
-    },
-    "doorway_2": {
-      "door_id": "doorway_2",
-      "world_pos": [
-        1.8500000000000005,
-        1.5500000000000007
+        0.5,
+        -0.09999999999999964
       ],
       "connects_rooms": [
         1,
@@ -66,16 +51,6 @@
     },
     {
       "source": "doorway_1",
-      "relation": "LEADS_TO",
-      "target": "Room_2"
-    },
-    {
-      "source": "Room_1",
-      "relation": "CONNECTS_VIA",
-      "target": "doorway_2"
-    },
-    {
-      "source": "doorway_2",
       "relation": "LEADS_TO",
       "target": "Room_2"
     }
