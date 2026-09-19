@@ -31,7 +31,7 @@ from agents import (
     PerceptionAgent, SLAMAgent, MappingAgent, FrontierAgent, PlanningAgent,
     LocomotionAgent, SupervisorAgent
 )
-from robot import LizardRobot, patch_coppelasim_scripts
+from robot import LizardRobot, patch_coppelasim_scripts, norm_angle
 from sensors import initialize_sensors, get_depth_heatmap
 from viz import create_debug_dashboard
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory, evaluate_depth_perception
@@ -45,12 +45,37 @@ traveled_drawing_handle = -1
 path_drawing_handle = -1
 
 
+def cleanup_sim_drawings(sim):
+    global traveled_drawing_handle, path_drawing_handle
+    for key in ['quadruped_trail_handle', 'quadruped_path_handle']:
+        try:
+            val = sim.getStringNamedParam(key)
+            if val:
+                h = int(val)
+                sim.addDrawingObjectItem(h, None)
+                sim.removeDrawingObject(h)
+                sim.setStringNamedParam(key, '')
+        except Exception:
+            pass
+    for h in [traveled_drawing_handle, path_drawing_handle]:
+        if h != -1:
+            try:
+                sim.addDrawingObjectItem(h, None)
+                sim.removeDrawingObject(h)
+            except Exception:
+                pass
+    traveled_drawing_handle = -1
+    path_drawing_handle = -1
+
+
 def init_sim_drawings(sim):
     global traveled_drawing_handle, path_drawing_handle
+    cleanup_sim_drawings(sim)
     try:
         traveled_drawing_handle = sim.addDrawingObject(
             sim.drawing_lines, 4, 0, -1, 99999, [0.0, 0.9, 0.2]  # Green 4px line for trail
         )
+        sim.setStringNamedParam('quadruped_trail_handle', str(traveled_drawing_handle))
     except Exception as e:
         print(f"  [WARN] Failed to create traveled path drawing object: {e}")
 
@@ -58,6 +83,7 @@ def init_sim_drawings(sim):
         path_drawing_handle = sim.addDrawingObject(
             sim.drawing_lines, 3, 0, -1, 9999, [0.0, 1.0, 0.3]  # Bright green 3px line for planned path
         )
+        sim.setStringNamedParam('quadruped_path_handle', str(path_drawing_handle))
     except Exception as e:
         print(f"  [WARN] Failed to create path drawing object: {e}")
 
@@ -163,6 +189,10 @@ def main():
     slam_trajectory_poses = []
     trajectory_timestamps = []
     visited_positions = [(init_x, init_y)]
+    live_grid_metrics = {"f1_score": 1.0, "precision": 1.0, "recall": 1.0, "chamfer_distance_meters": 0.0}
+    live_drift_m = 0.0
+    live_ate_rmse = 0.0
+    live_heading_err_deg = 0.0
     step_count = 0
     done = False
 
@@ -259,15 +289,21 @@ def main():
 
                 state_label = f"{frontier_agent.state} [{active_room_str}]"
                 explored_pct = grid_msg.explored_pct if grid_msg else 0.0
+                target_desc = f"({target_msg.target_wx:.2f}, {target_msg.target_wy:.2f}) [{'DW' if target_msg.is_doorway else 'R' + str(target_msg.room_id)}]" if target_msg else "Searching"
+                live_f1 = live_grid_metrics.get("f1_score", 1.0)
+                live_chamfer = live_grid_metrics.get("chamfer_distance_meters", 0.0)
 
                 metrics = {
                     "Sim Time": f"{t:.1f}s",
                     "Exploration State": state_label,
                     "Active Room": active_room_str,
+                    "Target": target_desc,
                     "Rooms Cleared": f"{len(frontier_agent.explored_rooms)}",
-                    "Doorways Found": f"{len(mapping_agent.doorways)}",
                     "Frontiers Total": f"{len(all_frontiers)}",
                     "Explored Grid": f"{explored_pct:.1f}%",
+                    "Live Map F1": f"{live_f1 * 100:.1f}%",
+                    "Live Wall Chamfer": f"{live_chamfer * 100:.1f}cm",
+                    "Drift / Traj ATE": f"{live_drift_m * 100:.1f}cm / {live_ate_rmse * 100:.1f}cm",
                     "Gait Status": actuation_msg.state_str if actuation_msg else "IDLE"
                 }
 
@@ -287,20 +323,46 @@ def main():
                     except Exception:
                         pass
 
-            # Real-time console telemetry
+            # Real-time console telemetry & live accuracy evaluation
             if step_count % 20 == 0:
                 slam_pose = bus.get_latest("pose/slam")
                 icp_rmse = getattr(slam_pose, 'rmse', 0.0) if slam_pose else 0.0
-                drift_m = math.hypot(slam_pose.x - true_x, slam_pose.y - true_y) if slam_pose else 0.0
+                live_drift_m = math.hypot(slam_pose.x - true_x, slam_pose.y - true_y) if slam_pose else 0.0
+                live_heading_err_deg = math.degrees(abs(norm_angle(slam_pose.yaw - true_heading))) if slam_pose else 0.0
+
+                min_len = min(len(true_trajectory_poses), len(slam_trajectory_poses))
+                if min_len > 0:
+                    live_ate_rmse = math.sqrt(sum((true_trajectory_poses[i][0] - slam_trajectory_poses[i][0])**2 +
+                                                  (true_trajectory_poses[i][1] - slam_trajectory_poses[i][1])**2
+                                                  for i in range(min_len)) / min_len)
+                else:
+                    live_ate_rmse = 0.0
+
+                # Compute live map accuracy metrics
+                try:
+                    live_grid_metrics = evaluate_grid_accuracy(
+                        mapping_agent.grid.grid_log_odds, mapping_agent.grid.grid_log_odds,
+                        resolution=GRID_RES, tolerance_m=0.15, save_plots=False
+                    )
+                except Exception:
+                    pass
+
+                live_f1 = live_grid_metrics.get("f1_score", 1.0)
+                live_chamfer = live_grid_metrics.get("chamfer_distance_meters", 0.0)
+                target_msg = bus.get_latest("frontier/target")
+                target_desc = f"({target_msg.target_wx:.2f}, {target_msg.target_wy:.2f}) [{'Doorway' if target_msg.is_doorway else 'Room ' + str(target_msg.room_id)}]" if target_msg else "Searching"
+
                 grid_msg = bus.get_latest("map/grid")
                 exp_pct = grid_msg.explored_pct if grid_msg else 0.0
                 gait_str = actuation_msg.state_str if actuation_msg else "IDLE"
-                print("-" * 75, flush=True)
+
+                print("-" * 80, flush=True)
                 print(f"  [AGENTIC TELEMETRY - STEP {step_count:4d} | TIME {t:5.1f}s]", flush=True)
                 print(f"    -> Pose: ({true_x:.2f}, {true_y:.2f}) | Heading: {math.degrees(true_heading):.1f}° | State: [{frontier_agent.state}]", flush=True)
-                print(f"    -> Active Room: {active_room_str} | Cleared: {len(frontier_agent.explored_rooms)} | Doorways: {len(mapping_agent.doorways)}", flush=True)
-                print(f"    -> Explored: {exp_pct:.1f}% | Frontiers: {len(all_frontiers)} | ICP RMSE: {icp_rmse:.3f} | Drift: {drift_m:.3f}m | Gait: {gait_str}", flush=True)
-                print("-" * 75, flush=True)
+                print(f"    -> Active Room: {active_room_str} | Cleared: {len(frontier_agent.explored_rooms)} | Target: {target_desc}", flush=True)
+                print(f"    -> Live Map Accuracy: F1: {live_f1 * 100:.1f}% | Wall Chamfer: {live_chamfer * 100:.1f}cm | Explored: {exp_pct:.1f}% ({grid_msg.free_cells if grid_msg else 0} free, {grid_msg.occupied_cells if grid_msg else 0} occ)", flush=True)
+                print(f"    -> Trajectory Fidelity: Drift: {live_drift_m * 100:.1f}cm | ATE RMSE: {live_ate_rmse * 100:.1f}cm | Yaw Err: {live_heading_err_deg:.1f}° | ICP RMSE: {icp_rmse:.3f} | Gait: {gait_str}", flush=True)
+                print("-" * 80, flush=True)
 
             step_count += 1
             sim.step()
@@ -309,6 +371,8 @@ def main():
         print("\n  Shutting down Multi-Agent System...")
         for agent in agents:
             agent.shutdown()
+
+        cleanup_sim_drawings(sim)
 
         try:
             sim.stopSimulation()

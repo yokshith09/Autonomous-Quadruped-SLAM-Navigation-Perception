@@ -5,6 +5,7 @@ from typing import List, Tuple, Set, Optional
 from .base import BaseAgent
 from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEventMsg
 from grid import find_nearest_free
+from robot import norm_angle
 
 
 class FrontierAgent(BaseAgent):
@@ -24,6 +25,10 @@ class FrontierAgent(BaseAgent):
         self.visited_positions: List[Tuple[float, float]] = []
         self.state: str = "INTRA_ROOM_SWEEP"  # INTRA_ROOM_SWEEP | INTER_ROOM_TRANSIT | MISSION_COMPLETE
 
+        # Goal Commitment & Hysteresis State (Prevents target thrashing / path confusion)
+        self.committed_target: Optional[Tuple[int, int]] = None
+        self.commitment_time: float = 0.0
+
     def initialize(self) -> bool:
         self.bus.subscribe("pose/state", self.on_pose)
         self.bus.subscribe("map/grid", self.on_grid)
@@ -37,8 +42,12 @@ class FrontierAgent(BaseAgent):
             tgy = event_msg.details.get("target_gy")
             if tgx is not None and tgy is not None:
                 self.blacklist_frontiers.add((tgx, tgy))
+                if self.committed_target == (tgx, tgy):
+                    self.committed_target = None
                 if len(self.blacklist_frontiers) > 30:
                     self.blacklist_frontiers.clear()
+        elif event_msg.event_type == "ROOM_COMPLETED":
+            self.committed_target = None
 
     def _get_room_at(self, gx: int, gy: int, room_labels: Optional[np.ndarray], radius: int = 4) -> int:
         if room_labels is None:
@@ -73,7 +82,15 @@ class FrontierAgent(BaseAgent):
             return None
 
         rx, ry = self.latest_pose.x, self.latest_pose.y
+        r_yaw = self.latest_pose.yaw
         rgx, rgy = self.grid.world_to_grid(rx, ry)
+
+        # Check if committed target was reached
+        if self.committed_target is not None:
+            cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
+            if math.hypot(cwx - rx, cwy - ry) < 0.35:
+                self.blacklist_frontiers.add(self.committed_target)
+                self.committed_target = None
 
         # Detect current room
         room_labels = self.latest_grid_msg.room_labels if self.latest_grid_msg else None
@@ -90,6 +107,7 @@ class FrontierAgent(BaseAgent):
                 self.explored_rooms.add(self.active_room_id)
                 self.active_room_id = current_detected_room
                 self.state = "INTRA_ROOM_SWEEP"
+                self.committed_target = None
                 self.bus.publish("mission/event", MissionEventMsg(
                     timestamp=current_time,
                     event_type="ROOM_ENTERED",
@@ -144,8 +162,10 @@ class FrontierAgent(BaseAgent):
         # Case A: Current room still has unexplored frontiers -> Clear it!
         if room_frontiers:
             self.state = "INTRA_ROOM_SWEEP"
-            target_frontier = self._score_frontiers(room_frontiers, rx, ry)
+            target_frontier = self._score_frontiers(room_frontiers, rx, ry, r_yaw)
             gx, gy, area = target_frontier
+            self.committed_target = (gx, gy)
+            self.commitment_time = current_time
             wx, wy = self.grid.grid_to_world(gx, gy)
             
             target_msg = FrontierTargetMsg(
@@ -180,6 +200,8 @@ class FrontierAgent(BaseAgent):
                 ))
 
             dgx, dgy = self.grid.world_to_grid(dw_target[0], dw_target[1])
+            self.committed_target = (dgx, dgy)
+            self.commitment_time = current_time
             target_msg = FrontierTargetMsg(
                 timestamp=current_time,
                 target_gx=dgx,
@@ -196,8 +218,10 @@ class FrontierAgent(BaseAgent):
         # Case C: Global exploration if other frontiers exist
         if other_frontiers:
             self.state = "GLOBAL_EXPLORATION"
-            target_frontier = self._score_frontiers(other_frontiers, rx, ry)
+            target_frontier = self._score_frontiers(other_frontiers, rx, ry, r_yaw)
             gx, gy, area = target_frontier
+            self.committed_target = (gx, gy)
+            self.commitment_time = current_time
             wx, wy = self.grid.grid_to_world(gx, gy)
             
             target_msg = FrontierTargetMsg(
@@ -216,20 +240,31 @@ class FrontierAgent(BaseAgent):
         self.state = "MISSION_COMPLETE"
         return None
 
-    def _score_frontiers(self, frontier_list, rx, ry):
+    def _score_frontiers(self, frontier_list, rx, ry, r_yaw: float = 0.0):
         best_f = None
         best_score = -float('inf')
         for f, dist in frontier_list:
             gx, gy, area = f
             wx, wy = self.grid.grid_to_world(gx, gy)
             
-            # Distance penalty
-            score = area - (dist * 4.0)
+            # Base score: area vs distance
+            score = float(area) - (dist * 3.5)
             
             # Novelty bonus: reward distance from historical positions
             if self.visited_positions:
                 min_vis_dist = min(math.hypot(wx - vx, wy - vy) for vx, vy in self.visited_positions)
                 score += min(min_vis_dist * 2.0, 10.0)
+
+            # Heading alignment bonus: strongly favor frontiers directly ahead, penalize 180-deg turns
+            target_angle = math.atan2(wy - ry, wx - rx)
+            angle_err = abs(norm_angle(target_angle - r_yaw))
+            score += math.cos(angle_err) * 6.0  # +6 for directly forward, -6 for directly behind
+
+            # Goal commitment & hysteresis bonus: heavily favor the currently pursued frontier
+            if self.committed_target is not None:
+                d_to_committed = math.hypot(gx - self.committed_target[0], gy - self.committed_target[1])
+                if d_to_committed <= 3.0:  # Same frontier cluster (within 15cm)
+                    score += 15.0  # Decisive commitment bonus to eliminate thrashing
                 
             if score > best_score:
                 best_score = score
