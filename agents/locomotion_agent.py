@@ -117,6 +117,9 @@ class LocomotionAgent(BaseAgent):
                 if avoidance_yaw != 0.0:
                     self.speed = 0.35
                     self.state_str = "AVOID"
+                    if (current_time - getattr(self, 'last_avoid_log_time', 0.0)) > 2.5:
+                        self.last_avoid_log_time = current_time
+                        print(f"  [LOCOMOTION] Proximity safety envelope: Repelling from obstacle cluster (steer bias: {avoidance_yaw:+.2f} rad)")
                 elif abs_err > 0.45:
                     self.speed = 0.45  # Continuous turn-while-walking
                     self.state_str = "TURN"
@@ -138,6 +141,7 @@ class LocomotionAgent(BaseAgent):
                     self.last_stuck_check_time = current_time
 
                 if self.stuck_ticks >= 2:  # Stuck for ~2 seconds
+                    print(f"  [LOCOMOTION] Watchdog detected obstacle stall at ({rx:.2f}, {ry:.2f}) -> Executing reverse recovery step")
                     self.recovery_countdown = 16  # 16 steps (0.8s) of reverse recovery
                     self.stuck_ticks = 0
                     self.waypoints = []

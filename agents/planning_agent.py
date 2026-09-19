@@ -67,6 +67,7 @@ class PlanningAgent(BaseAgent):
         # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
         world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False)
         if not world_path:
+            print(f"  [PLANNER] Target ({self.latest_target.target_wx:.2f}, {self.latest_target.target_wy:.2f}) unreachable! Blacklisting & replanning...")
             self.bus.publish("mission/event", MissionEventMsg(
                 timestamp=current_time,
                 event_type="PATH_UNREACHABLE",
@@ -84,6 +85,8 @@ class PlanningAgent(BaseAgent):
         self.last_replan_time = current_time
         self.replan_count += 1
         self.current_path = world_waypoints
+
+        print(f"  [PLANNER] A* Path computed: {len(world_waypoints)} safe waypoints -> Target ({self.latest_target.target_wx:.2f}, {self.latest_target.target_wy:.2f})")
 
         # Publish planned path
         self.bus.publish("plan/path", PathMsg(

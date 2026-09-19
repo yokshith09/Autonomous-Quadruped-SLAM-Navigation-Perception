@@ -91,10 +91,11 @@ class FrontierAgent(BaseAgent):
         # Check if committed target was reached
         if self.committed_target is not None:
             cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
-            if math.hypot(cwx - rx, cwy - ry) < 0.35:
+            if math.hypot(cwx - rx, cwy - ry) < 0.40:
                 if self.committed_doorway is not None:
                     self.visited_doorways.add(self.committed_doorway)
                     self.committed_doorway = None
+                    print(f"  [FRONTIER] Successfully transited through doorway to ({cwx:.2f}, {cwy:.2f})")
                 else:
                     self.blacklist_frontiers.add(self.committed_target)
                 self.committed_target = None
@@ -105,19 +106,22 @@ class FrontierAgent(BaseAgent):
         if current_detected_room > 0:
             if self.active_room_id <= 0:
                 self.active_room_id = current_detected_room
+                print(f"  [FRONTIER] Initialized in Room {self.active_room_id} -> Starting Intra-Room Sweep")
                 self.bus.publish("mission/event", MissionEventMsg(
                     timestamp=current_time,
                     event_type="ROOM_ENTERED",
                     details={"room_id": self.active_room_id}
                 ))
-            elif current_detected_room != self.active_room_id and self.state in ["INTER_ROOM_TRANSIT", "GLOBAL_EXPLORATION"]:
-                self.explored_rooms.add(self.active_room_id)
+            elif current_detected_room != self.active_room_id and current_detected_room not in self.explored_rooms:
+                if self.active_room_id > 0:
+                    self.explored_rooms.add(self.active_room_id)
                 if self.committed_doorway is not None:
                     self.visited_doorways.add(self.committed_doorway)
                     self.committed_doorway = None
                 self.active_room_id = current_detected_room
                 self.state = "INTRA_ROOM_SWEEP"
                 self.committed_target = None
+                print(f"  [FRONTIER] >>> ENTERED NEW ROOM {self.active_room_id} <<< Commencing INTRA_ROOM_SWEEP!")
                 self.bus.publish("mission/event", MissionEventMsg(
                     timestamp=current_time,
                     event_type="ROOM_ENTERED",
@@ -126,43 +130,53 @@ class FrontierAgent(BaseAgent):
         elif self.active_room_id <= 0:
             self.active_room_id = 1
 
-        # If currently transiting a doorway, maintain commitment until reaching or entering new room
+        # If currently transiting a doorway, maintain commitment until penetrating into the new room
         if self.state == "INTER_ROOM_TRANSIT" and self.committed_target is not None:
             cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
-            if math.hypot(cwx - rx, cwy - ry) >= 0.35:
-                return None
+            if math.hypot(cwx - rx, cwy - ry) >= 0.40:
+                return None  # Unconditionally hold doorway transit trajectory
 
         all_frontiers = self.grid.detect_frontiers()
         if not all_frontiers:
             self.state = "MISSION_COMPLETE"
+            print("  [FRONTIER] All frontiers cleared across entire map! MISSION_COMPLETE.")
             return None
 
-        # 1. Collect valid candidates, respecting blacklist
+        # 1. Collect valid candidates, respecting blacklist and explored rooms
         candidates = []
         for f in all_frontiers:
             gx, gy, area = f
             if (gx, gy) in self.blacklist_frontiers:
                 continue
+            f_room = self._get_room_at(gx, gy, room_labels)
+            if f_room in self.explored_rooms:
+                continue  # Never revisit frontiers in already cleared/explored rooms!
             wx, wy = self.grid.grid_to_world(gx, gy)
             dist = math.hypot(wx - rx, wy - ry)
             candidates.append((f, dist))
 
         if not candidates:
-            # If all frontiers were blacklisted, clear blacklist and re-try
-            if self.blacklist_frontiers:
+            # If all candidates are blacklisted but unvisited doorways exist, proceed to doorway transit
+            doorways = self.latest_grid_msg.doorways if self.latest_grid_msg else []
+            unvisited_doorways = [d for d in doorways if d not in self.visited_doorways]
+            if not unvisited_doorways and self.blacklist_frontiers:
                 self.blacklist_frontiers.clear()
                 for f in all_frontiers:
+                    f_room = self._get_room_at(f[0], f[1], room_labels)
+                    if f_room in self.explored_rooms:
+                        continue
                     wx, wy = self.grid.grid_to_world(f[0], f[1])
                     dist = math.hypot(wx - rx, wy - ry)
                     candidates.append((f, dist))
-            if not candidates:
+            if not candidates and not unvisited_doorways:
                 self.state = "MISSION_COMPLETE"
+                print("  [FRONTIER] All rooms and frontiers explored. MISSION_COMPLETE.")
                 return None
 
         # Filter by min_dist (prefer frontiers > min_dist, but fall back to closer if none exist)
         dist_candidates = [c for c in candidates if c[1] >= self.min_dist]
         if not dist_candidates:
-            dist_candidates = candidates  # Use all available candidates
+            dist_candidates = candidates
 
         # Classify into active room vs other rooms
         room_frontiers = []
@@ -171,14 +185,17 @@ class FrontierAgent(BaseAgent):
             gx, gy, area = f
             f_room = self._get_room_at(gx, gy, room_labels)
 
-            if self.active_room_id > 0 and f_room == self.active_room_id:
+            if f_room in self.explored_rooms:
+                continue
+
+            if self.active_room_id > 0 and self.active_room_id not in self.explored_rooms and f_room == self.active_room_id:
                 room_frontiers.append((f, dist))
             else:
                 other_frontiers.append((f, dist))
 
         # Decision Logic:
         # Case A: Current room still has unexplored frontiers -> Clear it!
-        if room_frontiers:
+        if room_frontiers and self.active_room_id not in self.explored_rooms:
             self.state = "INTRA_ROOM_SWEEP"
             target_frontier = self._score_frontiers(room_frontiers, rx, ry, r_yaw)
             gx, gy, area = target_frontier
@@ -196,6 +213,7 @@ class FrontierAgent(BaseAgent):
                 area=area,
                 is_doorway=False
             )
+            print(f"  [FRONTIER] [INTRA_ROOM_SWEEP] Target: ({wx:.2f}, {wy:.2f}) [Room {self.active_room_id}] | Dist: {math.hypot(wx-rx, wy-ry):.2f}m")
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
@@ -209,23 +227,36 @@ class FrontierAgent(BaseAgent):
             dw_target = unvisited_doorways[0]
             self.committed_doorway = dw_target
             
-            if self.active_room_id > 0:
+            if self.active_room_id > 0 and self.active_room_id not in self.explored_rooms:
                 self.explored_rooms.add(self.active_room_id)
+                print(f"  [FRONTIER] ★ Room {self.active_room_id} 100% EXPLORED! Marked closed. Gating transit to next room...")
                 self.bus.publish("mission/event", MissionEventMsg(
                     timestamp=current_time,
                     event_type="ROOM_COMPLETED",
                     details={"room_id": self.active_room_id}
                 ))
 
-            dgx, dgy = self.grid.world_to_grid(dw_target[0], dw_target[1])
+            # Compute doorway penetration vector: step 70cm through the doorway into the next room
+            dx = dw_target[0] - rx
+            dy = dw_target[1] - ry
+            d_norm = math.hypot(dx, dy)
+            if d_norm > 0.1:
+                ux, uy = dx / d_norm, dy / d_norm
+                target_wx = dw_target[0] + ux * 0.70
+                target_wy = dw_target[1] + uy * 0.70
+            else:
+                target_wx, target_wy = dw_target[0], dw_target[1]
+
+            dgx, dgy = self.grid.world_to_grid(target_wx, target_wy)
             self.committed_target = (dgx, dgy)
             self.commitment_time = current_time
+            print(f"  [FRONTIER] [INTER_ROOM_TRANSIT] Heading to Doorway ({dw_target[0]:.2f}, {dw_target[1]:.2f}) -> Target inside next room: ({target_wx:.2f}, {target_wy:.2f})")
             target_msg = FrontierTargetMsg(
                 timestamp=current_time,
                 target_gx=dgx,
                 target_gy=dgy,
-                target_wx=dw_target[0],
-                target_wy=dw_target[1],
+                target_wx=target_wx,
+                target_wy=target_wy,
                 room_id=-1,
                 area=50,
                 is_doorway=True
@@ -233,7 +264,7 @@ class FrontierAgent(BaseAgent):
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
-        # Case C: Global exploration if other frontiers exist
+        # Case C: Global exploration into other frontiers
         if other_frontiers:
             self.state = "GLOBAL_EXPLORATION"
             target_frontier = self._score_frontiers(other_frontiers, rx, ry, r_yaw)
@@ -242,16 +273,18 @@ class FrontierAgent(BaseAgent):
             self.commitment_time = current_time
             wx, wy = self.grid.grid_to_world(gx, gy)
             
+            f_room = self._get_room_at(gx, gy, room_labels)
             target_msg = FrontierTargetMsg(
                 timestamp=current_time,
                 target_gx=gx,
                 target_gy=gy,
                 target_wx=wx,
                 target_wy=wy,
-                room_id=-1,
+                room_id=f_room,
                 area=area,
                 is_doorway=False
             )
+            print(f"  [FRONTIER] [GLOBAL_EXPLORATION] Target: ({wx:.2f}, {wy:.2f}) [Room {f_room}] | Dist: {math.hypot(wx-rx, wy-ry):.2f}m")
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 

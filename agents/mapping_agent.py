@@ -53,19 +53,26 @@ class MappingAgent(BaseAgent):
         if max_val < 4:  # At least 20cm clearance
             return np.zeros_like(free_mask, dtype=np.int32), []
 
-        # 2. Threshold to get reliable room core regions
-        thresh = 0.45 * max_val
-        sure_fg = (dist_transform >= thresh).astype(np.uint8)
-
-        # 3. Label room marker components and track centroids persistently across updates
-        num_markers, markers, stats, cents = cv2.connectedComponentsWithStats(sure_fg)
-        
+        # 2. Adaptive multi-scale distance transform thresholding to separate distinct room cores
         valid_components = []
-        for i in range(1, num_markers):
-            if stats[i, cv2.CC_STAT_AREA] >= 10:
-                gx, gy = cents[i][0], cents[i][1]
-                wx, wy = self.grid.grid_to_world(int(round(gx)), int(round(gy)))
-                valid_components.append((i, (wx, wy)))
+        markers = np.zeros_like(free_mask, dtype=np.int32)
+        for t_ratio in [0.65, 0.60, 0.56, 0.50, 0.45, 0.40]:
+            thresh = t_ratio * max_val
+            sure_fg = (dist_transform >= thresh).astype(np.uint8)
+            num_markers, cur_markers, stats, cents = cv2.connectedComponentsWithStats(sure_fg)
+            comps = []
+            for i in range(1, num_markers):
+                if stats[i, cv2.CC_STAT_AREA] >= 12:
+                    gx, gy = cents[i][0], cents[i][1]
+                    wx, wy = self.grid.grid_to_world(int(round(gx)), int(round(gy)))
+                    comps.append((i, (wx, wy)))
+            if len(comps) >= 2:
+                valid_components = comps
+                markers = cur_markers
+                break
+            elif len(comps) == 1 and not valid_components:
+                valid_components = comps
+                markers = cur_markers
 
         num_rooms = len(valid_components)
         if num_rooms <= 1:
