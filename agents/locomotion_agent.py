@@ -183,3 +183,8 @@ class LocomotionAgent(BaseAgent):
                 speed=0.0,
                 state_str="IDLE"
             ))
+
+        if (current_time - getattr(self, 'last_status_log_time', 0.0)) > 2.5:
+            self.last_status_log_time = current_time
+            n_wps = len(self.waypoints) - self.wp_idx if self.waypoints else 0
+            print(f"  [LOCOMOTION] State: [{self.state_str}] | Speed: {self.speed:.2f} | Remaining Waypoints: {n_wps}")

@@ -77,5 +77,11 @@ class SLAMAgent(BaseAgent):
                 yaw=active_yaw,
                 is_ground_truth=self.use_ground_truth_nav
             ))
+
+            if (current_time - getattr(self, 'last_log_time', 0.0)) > 3.0:
+                self.last_log_time = current_time
+                n_kfs = len(self.pose_estimator.loop_manager.keyframes)
+                rmse = float(getattr(slam_pose, 'rmse', 0.0))
+                print(f"  [SLAM] 2D Scan Matching: Pose ({slam_pose.x:.2f}, {slam_pose.y:.2f}, {math.degrees(slam_pose.yaw):.1f}°) | Keyframes: {n_kfs} | ICP Residual: {rmse:.3f}m")
         except Exception as e:
             self.handle_error(e)

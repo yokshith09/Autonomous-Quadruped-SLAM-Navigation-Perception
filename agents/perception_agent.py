@@ -1,4 +1,4 @@
-﻿"""Perception Agent: RGB-D acquisition, pinhole 3D back-projection, and spatial gating."""
+"""Perception Agent: RGB-D acquisition, pinhole 3D back-projection, and spatial gating."""
 import numpy as np
 from typing import Optional, Tuple
 from .base import BaseAgent
@@ -59,6 +59,11 @@ class PerceptionAgent(BaseAgent):
             points_2d=sampled_2d,
             world_points_3d=pts_w
         ))
+
+        if (timestamp - getattr(self, 'last_log_time', 0.0)) > 3.0:
+            self.last_log_time = timestamp
+            min_d = float(np.min(dist_w)) if len(pts_w) > 0 else 99.0
+            print(f"  [PERCEPTION] RGB-D: {len(world_points):,d} pts -> Filtered Scan: {len(sampled_2d)} pts | Closest obstacle: {min_d:.2f}m")
 
     def step(self, current_time: float) -> None:
         if self.sim is None or self.depth_cam is None:

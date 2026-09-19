@@ -43,11 +43,14 @@ class FrontierAgent(BaseAgent):
             tgy = event_msg.details.get("target_gy")
             if tgx is not None and tgy is not None:
                 self.blacklist_frontiers.add((tgx, tgy))
-                if self.committed_target == (tgx, tgy):
-                    self.committed_target = None
-                    self.committed_doorway = None
-                if len(self.blacklist_frontiers) > 30:
-                    self.blacklist_frontiers.clear()
+            # Always drop stuck or unreachable targets to prevent deadlocks
+            if self.committed_target is not None:
+                self.blacklist_frontiers.add(self.committed_target)
+                self.committed_target = None
+                self.committed_doorway = None
+                print("  [FRONTIER] Cleared stalled target from watchdog alert. Re-evaluating alternatives.")
+            if len(self.blacklist_frontiers) > 30:
+                self.blacklist_frontiers.clear()
         elif event_msg.event_type == "ROOM_COMPLETED":
             self.committed_target = None
             self.committed_doorway = None
@@ -130,11 +133,31 @@ class FrontierAgent(BaseAgent):
         elif self.active_room_id <= 0:
             self.active_room_id = 1
 
-        # If currently transiting a doorway, maintain commitment until penetrating into the new room
+        # If currently transiting a doorway, maintain commitment until penetrating into the new room (with timeout watchdog)
         if self.state == "INTER_ROOM_TRANSIT" and self.committed_target is not None:
             cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
-            if math.hypot(cwx - rx, cwy - ry) >= 0.40:
-                return None  # Unconditionally hold doorway transit trajectory
+            dist_to_transit = math.hypot(cwx - rx, cwy - ry)
+            if (current_time - self.commitment_time) > 10.0:
+                print(f"  [FRONTIER] Doorway transit timed out (>10s) -> Aborting transit and falling back to open exploration.")
+                if self.committed_doorway is not None:
+                    self.visited_doorways.add(self.committed_doorway)
+                    self.committed_doorway = None
+                self.committed_target = None
+                self.state = "GLOBAL_EXPLORATION"
+            elif dist_to_transit >= 0.40:
+                # Keep active target published so PlanningAgent continuously drives LocomotionAgent without deadlock
+                target_msg = FrontierTargetMsg(
+                    timestamp=current_time,
+                    target_gx=self.committed_target[0],
+                    target_gy=self.committed_target[1],
+                    target_wx=cwx,
+                    target_wy=cwy,
+                    room_id=-1,
+                    area=50,
+                    is_doorway=True
+                )
+                self.bus.publish("frontier/target", target_msg)
+                return target_msg
 
         all_frontiers = self.grid.detect_frontiers()
         if not all_frontiers:
@@ -193,6 +216,20 @@ class FrontierAgent(BaseAgent):
             else:
                 other_frontiers.append((f, dist))
 
+        # Collect valid forward doorways (connecting to UNEXPLORED rooms only)
+        doorways = self.latest_grid_msg.doorways if self.latest_grid_msg else []
+        valid_doorways = []
+        for d in doorways:
+            if d in self.visited_doorways:
+                continue
+            dgx, dgy = self.grid.world_to_grid(d[0], d[1])
+            d_room = self._get_room_at(dgx, dgy, room_labels)
+            if d_room in self.explored_rooms:
+                continue
+            if not self.grid.is_free(dgx, dgy):
+                continue
+            valid_doorways.append(d)
+
         # Decision Logic:
         # Case A: Current room still has unexplored frontiers -> Clear it!
         if room_frontiers and self.active_room_id not in self.explored_rooms:
@@ -217,14 +254,11 @@ class FrontierAgent(BaseAgent):
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
-        # Case B: Current room is CLEARED! Transition to next room via Doorway
-        doorways = self.latest_grid_msg.doorways if self.latest_grid_msg else []
-        unvisited_doorways = [d for d in doorways if d not in self.visited_doorways]
-
-        if unvisited_doorways:
+        # Case B: Current room is CLEARED! Transition to next room via forward Doorway
+        if valid_doorways:
             self.state = "INTER_ROOM_TRANSIT"
-            unvisited_doorways.sort(key=lambda d: math.hypot(d[0] - rx, d[1] - ry))
-            dw_target = unvisited_doorways[0]
+            valid_doorways.sort(key=lambda d: math.hypot(d[0] - rx, d[1] - ry))
+            dw_target = valid_doorways[0]
             self.committed_doorway = dw_target
             
             if self.active_room_id > 0 and self.active_room_id not in self.explored_rooms:
@@ -248,6 +282,10 @@ class FrontierAgent(BaseAgent):
                 target_wx, target_wy = dw_target[0], dw_target[1]
 
             dgx, dgy = self.grid.world_to_grid(target_wx, target_wy)
+            if not self.grid.is_free(dgx, dgy):
+                dgx, dgy = self.grid.world_to_grid(dw_target[0], dw_target[1])
+                target_wx, target_wy = dw_target[0], dw_target[1]
+
             self.committed_target = (dgx, dgy)
             self.commitment_time = current_time
             print(f"  [FRONTIER] [INTER_ROOM_TRANSIT] Heading to Doorway ({dw_target[0]:.2f}, {dw_target[1]:.2f}) -> Target inside next room: ({target_wx:.2f}, {target_wy:.2f})")
@@ -324,6 +362,9 @@ class FrontierAgent(BaseAgent):
 
     def step(self, current_time: float) -> None:
         try:
-            self.select_frontier(current_time)
+            target = self.select_frontier(current_time)
+            if target is None and (current_time - getattr(self, 'last_log_time', 0.0)) > 3.0:
+                self.last_log_time = current_time
+                print(f"  [FRONTIER] State: [{self.state}] | Active: Room {self.active_room_id} | Explored Rooms: {list(self.explored_rooms)}")
         except Exception as e:
             self.handle_error(e)

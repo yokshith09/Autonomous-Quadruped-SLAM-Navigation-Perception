@@ -1,4 +1,4 @@
-﻿"""Supervisor Agent: System watchdog, Spatial Knowledge Graph custodian, and Episodic Memory manager."""
+"""Supervisor Agent: System watchdog, Spatial Knowledge Graph custodian, and Episodic Memory manager."""
 from typing import Optional, Dict, Any
 from .base import BaseAgent
 from .bus import MessageBus, MissionEventMsg, PoseMsg, GridMapMsg, PathMsg
@@ -70,6 +70,12 @@ class SupervisorAgent(BaseAgent):
                         description=f"Topological doorway bottleneck identified at ({dw[0]:.2f}, {dw[1]:.2f})",
                         coordinates={"x": dw[0], "y": dw[1]}
                     )
+
+        if (current_time - getattr(self, 'last_log_time', 0.0)) > 3.0:
+            self.last_log_time = current_time
+            n_events = len(self.episodic_memory.events)
+            n_rooms = len(self.knowledge_graph.rooms)
+            print(f"  [SUPERVISOR] Knowledge Graph: {n_rooms} rooms | Episodic Timeline: {n_events} key events")
 
     def export_mission_report(self) -> Dict[str, Any]:
         return {

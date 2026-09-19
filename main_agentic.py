@@ -64,6 +64,12 @@ def cleanup_sim_drawings(sim):
                 sim.removeDrawingObject(h)
             except Exception:
                 pass
+    # Sweep CoppeliaSim drawing handles from 0 to 128 to remove any leftover ghost lines from prior runs
+    for h_cand in range(128):
+        try:
+            sim.removeDrawingObject(h_cand)
+        except Exception:
+            pass
     traveled_drawing_handle = -1
     path_drawing_handle = -1
 
@@ -71,17 +77,11 @@ def cleanup_sim_drawings(sim):
 def init_sim_drawings(sim):
     global traveled_drawing_handle, path_drawing_handle
     cleanup_sim_drawings(sim)
-    try:
-        traveled_drawing_handle = sim.addDrawingObject(
-            sim.drawing_lines, 4, 0, -1, 99999, [0.0, 0.9, 0.2]  # Green 4px line for trail
-        )
-        sim.setStringNamedParam('quadruped_trail_handle', str(traveled_drawing_handle))
-    except Exception as e:
-        print(f"  [WARN] Failed to create traveled path drawing object: {e}")
-
+    # The trajectory is rendered in real time on the 2D HUD dashboard with zero clutter.
+    # We only draw the active, dynamically updating planned path waypoints in the 3D scene.
     try:
         path_drawing_handle = sim.addDrawingObject(
-            sim.drawing_lines, 3, 0, -1, 9999, [0.0, 1.0, 0.3]  # Bright green 3px line for planned path
+            sim.drawing_lines, 3, 0, -1, 9999, [0.1, 0.65, 1.0]  # Crisp cyan path
         )
         sim.setStringNamedParam('quadruped_path_handle', str(path_drawing_handle))
     except Exception as e:
@@ -89,12 +89,8 @@ def init_sim_drawings(sim):
 
 
 def update_traveled_trail(sim, p1, p2):
-    global traveled_drawing_handle
-    if traveled_drawing_handle != -1:
-        try:
-            sim.addDrawingObjectItem(traveled_drawing_handle, [p1[0], p1[1], 0.06, p2[0], p2[1], 0.06])
-        except Exception:
-            pass
+    # Deprecated to prevent floor clutter and ghost lines in CoppeliaSim across runs
+    pass
 
 
 def draw_planned_path_in_sim(sim, waypoints):

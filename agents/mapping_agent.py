@@ -44,7 +44,8 @@ class MappingAgent(BaseAgent):
         """
         free_mask = (self.grid.grid_log_odds <= self.grid.thresh_free).astype(np.uint8) * 255
         
-        if np.sum(free_mask) < 200:
+        num_free_cells = int(np.count_nonzero(free_mask))
+        if num_free_cells < 400:
             return np.zeros_like(free_mask, dtype=np.int32), []
 
         # 1. Distance transform on free space
@@ -124,13 +125,23 @@ class MappingAgent(BaseAgent):
             interface = (free_room_map > 0) & (shifted > 0) & (free_room_map != shifted)
             door_mask |= interface.astype(np.uint8)
 
+        # Eliminate boundary roll wrap-around artifacts
+        door_mask[0:3, :] = 0
+        door_mask[-3:, :] = 0
+        door_mask[:, 0:3] = 0
+        door_mask[:, -3:] = 0
+
+        # Require clearance: doorway bottleneck must be in safely navigable free space (>= 15cm from walls)
+        door_mask &= (dist_transform >= 3).astype(np.uint8)
+
         num_d, d_labels, d_stats, d_cents = cv2.connectedComponentsWithStats(door_mask)
         doorway_points = []
         for i in range(1, num_d):
-            if d_stats[i, cv2.CC_STAT_AREA] >= 2:
+            if d_stats[i, cv2.CC_STAT_AREA] >= 3:
                 dgx, dgy = int(round(d_cents[i][0])), int(round(d_cents[i][1]))
-                wx, wy = self.grid.grid_to_world(dgx, dgy)
-                doorway_points.append((wx, wy))
+                if self.grid.is_free(dgx, dgy):
+                    wx, wy = self.grid.grid_to_world(dgx, dgy)
+                    doorway_points.append((wx, wy))
 
         self.room_labels = voronoi_map
         self.doorways = doorway_points
@@ -166,5 +177,11 @@ class MappingAgent(BaseAgent):
                 room_labels=self.room_labels,
                 doorways=self.doorways
             ))
+
+            if (current_time - getattr(self, 'last_log_time', 0.0)) > 3.0:
+                self.last_log_time = current_time
+                n_rooms = len(self.room_centroids) if self.room_centroids else 1
+                n_dws = len(self.doorways)
+                print(f"  [MAPPING] Grid: {free:,d} free ({explored_pct:.1f}% explored) | {n_rooms} Rooms segmented | {n_dws} Doorways")
         except Exception as e:
             self.handle_error(e)
