@@ -251,32 +251,53 @@ In human-like / semantic SLAM:
 
 ---
 
-## 4. Edge AI Viability on Raspberry Pi 5: JEPA & LLaVA (VLM) Models
+## 4. Edge AI Viability on Raspberry Pi 5: Jev & Laya "System 1" Decision Models
 
-### 4.1 Model Taxonomy & Theoretical Principles
-- **JEPA (Joint Embedding Predictive Architecture, e.g., Meta I-JEPA / V-JEPA):**
-  - Self-supervised representation learning that predicts abstract latent features of masked scene patches without reconstructing pixels.
-  - Produces dense semantic feature embeddings ($\mathbf{z} \in \mathbb{R}^{768}$).
-- **LLaVA (Large Language and Vision Assistant):**
-  - Autoregressive multimodal foundation model combining a vision encoder (CLIP ViT-L/14) with a Large Language Model (Vicuna / LLaMA-3).
-  - Generates conversational natural language text conditioned on visual inputs.
+### 4.1 What are Jev and Laya?
+**Jev** (developed by TypeSafe AI, founded by former OpenAI researcher Diogo Almeida) and **Laya** (open-source Apache 2.0 by Convai Innovations / Layer3 Labs) represent the cutting-edge **"System 1" AI paradigm**. 
+
+Unlike standard Large Language Models (LLMs) that are autoregressive, slow, and generate free-form text:
+- **Jev & Laya are Non-Autoregressive Decision Engines:** They take state context, questions, and options, and return calibrated probabilities, scores, or structured choices in a single forward pass without token-by-token generation.
+- **Decision Primitives:**
+  - `Choice`: Probabilities across discrete semantic states (e.g. `["EXPLORE_ROOM", "TRANSIT_DOORWAY", "RECOVER_STUCK"]`).
+  - `Score`: Scalar rating on an ordered scale (e.g. candidate frontier quality score `0.0` to `10.0`).
+  - `Noul`: Calibrated Boolean verification (e.g. `is_robot_stuck?`, `is_slam_degraded?`).
+- **Laya Architecture:** Built on a 421M parameter **ModernBERT-large encoder** with a typed decision head, achieving ~33ms inference on GPU and ~120-180ms on CPU.
+- **Jev Architecture:** Proprietary hosted API / early-access decision model optimized for high-speed structured choices (70–500ms).
 
 ### 4.2 Hardware Constraint Analysis: Raspberry Pi 5
-- **Compute:** Quad-core ARM Cortex-A76 @ 2.4 GHz.
-- **Memory & Bandwidth:** 4GB / 8GB LPDDR4X-4267 with $\sim 17\text{ GB/s}$ memory bandwidth.
-- **Hardware Acceleration:** No CUDA GPU. Optional PCIe Gen 2/3 M.2 HAT with Hailo-8 (13–26 TOPS INT8) or Google Coral TPU (4 TOPS).
-- **Thermal Envelope:** Max $\sim 12\text{W}$ before thermal throttling degrades clock speeds.
+- **Compute:** Broadcom BCM2712, 4-core ARM Cortex-A76 @ 2.4 GHz.
+- **Memory & Bandwidth:** 4GB or 8GB LPDDR4X-4267 with $\sim 17\text{ GB/s}$ memory bandwidth.
+- **Hardware Acceleration:** VideoCore VII (no CUDA). Optional PCIe Gen 2/3 M.2 HAT with Hailo-8 (13–26 TOPS INT8).
+- **Power & Thermal Budget:** $\sim 12\text{W}$ max before thermal throttling.
 
-### 4.3 Agent Assignment & Execution Verdict on Raspberry Pi 5
+### 4.3 Where Can Jev or Laya Be Used in Our 7-Agent Quadruped Architecture?
 
-| Agent | Task | JEPA Suitability | LLaVA Suitability | Raspberry Pi 5 Execution Verdict |
-| :--- | :--- | :---: | :---: | :--- |
-| **`PerceptionAgent`** (10-20 Hz) | 3D Raycasting | ❌ Overkill | ❌ Impossible | Use fixed pinhole camera geometry ($<2\text{ms}$). |
-| **`SLAMAgent`** (10-20 Hz) | ICP Odometry | ❌ Non-metric | ❌ Latency fatal | Point-to-Line Metric ICP with IMU prior. |
-| **`SLAMAgent`** (0.5-1 Hz) | Loop Closure Keyframes | **✅ EXCELLENT** | ❌ Inefficient | **FEASIBLE with Tiny-JEPA / Mobile-JEPA (INT8)** via ONNX/NCNN ($\sim 60\text{ms}$ per keyframe) or Hailo-8 NPU ($>60\text{ FPS}$). |
-| **`MappingAgent`** (5-10 Hz) | Occupancy Grid | ❌ Non-metric | ❌ Unusable | Bayesian log-odds mapping ($4\text{ms}$). |
-| **`LocomotionAgent`** (20-50 Hz) | CPG Gait Control | ❌ Unusable | ❌ Catastrophic | Pure deterministic sinusoidal gait engine. |
-| **`SupervisorAgent`** (0.05-0.2 Hz) | High-Level Semantics | Optional | **✅ EXCELLENT** | **Full LLaVA-7B is UNUSABLE on Pi 5 CPU** (takes 25–45s per query due to 17 GB/s bandwidth bottleneck).<br>**FEASIBLE ALTERNATIVE:** **Moondream2 (1.86B)** or **SmolVLM-500M** quantized to 4-bit (takes $\sim 2\text{s}$ per query), running asynchronously when entering a new room. |
+| Pipeline Agent | Required Rate | Jev Suitability | Laya Suitability | Recommended Role & Hardware Verdict |
+| :--- | :---: | :---: | :---: | :--- |
+| **`PerceptionAgent`** (Depth raycasting) | 10–20 Hz | ❌ Unusable | ❌ Unusable | Sensor raycasting is pure 3D geometry; neural decision models do not output point clouds. |
+| **`SLAMAgent`** (ICP Odometry) | 10–20 Hz | ❌ Unusable | ❌ Unusable | Scan matching requires deterministic SVD point-to-line minimization. |
+| **`MappingAgent`** (Occupancy Grid) | 5–10 Hz | ❌ Unusable | ❌ Unusable | Bayesian log-odds mapping ($4\text{ms}$). |
+| **`LocomotionAgent`** (CPG Gait Engine) | 20–50 Hz | ❌ Latency fatal | ❌ Latency fatal | Sine-wave Central Pattern Generator (CPG) kinematics. |
+| **`SupervisorAgent`** (Mission State Transitions) | 0.2–1.0 Hz | **✅ EXCELLENT** | **✅ EXCELLENT** | **PRIMARY USE CASE:** Replaces fragile hardcoded `if-elif` heuristics with structured state decisions: `Choice(["SWEEP_ROOM", "TRANSIT_DOORWAY", "RECOVER_STUCK"])`. |
+| **`FrontierAgent`** (Frontier Selection) | 0.5–2.0 Hz | **✅ EXCELLENT** | **✅ EXCELLENT** | **EXCELLENT:** Scores candidate frontier utility: `Score(frontier_context, scale=(0, 10))` using distance, room boundary, and clearance. |
+| **Fault Diagnosis** (Degradation Detection) | 1–2 Hz | **✅ EXCELLENT** | **✅ EXCELLENT** | `Noul`: Returns probability `P(slam_slipping = True)` based on ICP RMSE and gyro divergence. |
+
+### 4.4 Can They Run on Raspberry Pi 5?
+
+1. **Jev (TypeSafe AI):**
+   - **Form:** Cloud-hosted API / Early Access.
+   - **Local Execution on Pi 5:** **NO.** Jev does not provide downloadable offline weights.
+   - **Cloud Connectivity from Pi 5:** **YES.** The Pi 5 can query Jev over WiFi/4G via REST or Python client for supervisory decisions every 2–5 seconds (latency: ~150–400ms round-trip).
+   - **Constraint:** Requires active network connectivity; cannot operate in disconnected subterranean/search-and-rescue environments.
+
+2. **Laya (Convai Innovations / Apache 2.0):**
+   - **Form:** Open-source weights (HuggingFace, ModernBERT-large 421M params).
+   - **Local Execution on Pi 5:** **YES, FULLY RUNS LOCALLY ON RASPBERRY PI 5.**
+   - **Memory Footprint:** In FP16: $\sim 840\text{ MB}$. In INT8 / ONNX: **$\sim 420\text{ MB}$** (fits easily in 4GB/8GB RAM).
+   - **Inference Speed on Pi 5 CPU:** Because it is non-autoregressive (single forward pass), inference on 4 Cortex-A76 cores using ONNX Runtime (ARM NEON) is **$\sim 120\text{ to } 220\text{ ms}$**!
+   - **Inference Speed with Hailo-8 M.2 HAT:** **$< 15\text{ ms}$** at $< 2\text{W}$!
+   - **Verdict:** **Laya is the ideal offline, onboard "System 1" decision engine for the quadruped Raspberry Pi 5.**
 
 ---
 

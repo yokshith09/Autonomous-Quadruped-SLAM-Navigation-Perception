@@ -106,9 +106,9 @@ def print_comparison_benchmark():
         ("Topological Rooms Discovered",  "N/A (Pure Metric)", rooms_str,          "Multi-Room Cleared"),
         ("Doorway Chokepoints Identified","N/A (Pure Metric)", doors_str,          "All Doors Linked"),
 
-        # --- Edge Hardware & AI Feasibility (Raspberry Pi 5) ---
-        ("Loop Closure Retrieval (JEPA)", "N/A",               "I-JEPA ViT-B",     "< 60 ms (INT8)"),
-        ("Edge VLM Semantics (LLaVA/Moon)","N/A",              "Moondream2 1.8B",  "~2.0 s / query"),
+        # --- Edge Hardware & System 1 Decision AI (Raspberry Pi 5) ---
+        ("Laya System 1 Decisions (Local)", "N/A",              "ModernBERT-421M",  "~140 ms (Pi 5 CPU)"),
+        ("Jev Typed Judgment (Cloud API)", "N/A",              "TypeSafe AI API",  "~250 ms (WiFi / 4G)"),
         ("Pi 5 Compute Load & Envelope",  "Desktop GPU (RTX)", "CPU 4x Cortex-A76","< 12 W Budget"),
     ]
 
