@@ -249,11 +249,72 @@ In human-like / semantic SLAM:
 
 ---
 
-## 4. Implementation Protocol
+---
 
-We will implement these phases strictly one by one:
-1. **Select Phase** (starting with **Phase 1: Closed-Loop SLAM Navigation**).
-2. **Write Unit Tests** for that phase in `tests/`.
-3. **Apply Minimal, Robust Code Changes** adhering to our senior dev principles (zero over-engineering, deletion over addition).
-4. **Run Live CoppeliaSim Verification** and benchmark metrics.
-5. **Commit & Push to Git**, then proceed to the next phase.
+## 4. Edge AI Viability on Raspberry Pi 5: JEPA & LLaVA (VLM) Models
+
+### 4.1 Model Taxonomy & Theoretical Principles
+- **JEPA (Joint Embedding Predictive Architecture, e.g., Meta I-JEPA / V-JEPA):**
+  - Self-supervised representation learning that predicts abstract latent features of masked scene patches without reconstructing pixels.
+  - Produces dense semantic feature embeddings ($\mathbf{z} \in \mathbb{R}^{768}$).
+- **LLaVA (Large Language and Vision Assistant):**
+  - Autoregressive multimodal foundation model combining a vision encoder (CLIP ViT-L/14) with a Large Language Model (Vicuna / LLaMA-3).
+  - Generates conversational natural language text conditioned on visual inputs.
+
+### 4.2 Hardware Constraint Analysis: Raspberry Pi 5
+- **Compute:** Quad-core ARM Cortex-A76 @ 2.4 GHz.
+- **Memory & Bandwidth:** 4GB / 8GB LPDDR4X-4267 with $\sim 17\text{ GB/s}$ memory bandwidth.
+- **Hardware Acceleration:** No CUDA GPU. Optional PCIe Gen 2/3 M.2 HAT with Hailo-8 (13–26 TOPS INT8) or Google Coral TPU (4 TOPS).
+- **Thermal Envelope:** Max $\sim 12\text{W}$ before thermal throttling degrades clock speeds.
+
+### 4.3 Agent Assignment & Execution Verdict on Raspberry Pi 5
+
+| Agent | Task | JEPA Suitability | LLaVA Suitability | Raspberry Pi 5 Execution Verdict |
+| :--- | :--- | :---: | :---: | :--- |
+| **`PerceptionAgent`** (10-20 Hz) | 3D Raycasting | ❌ Overkill | ❌ Impossible | Use fixed pinhole camera geometry ($<2\text{ms}$). |
+| **`SLAMAgent`** (10-20 Hz) | ICP Odometry | ❌ Non-metric | ❌ Latency fatal | Point-to-Line Metric ICP with IMU prior. |
+| **`SLAMAgent`** (0.5-1 Hz) | Loop Closure Keyframes | **✅ EXCELLENT** | ❌ Inefficient | **FEASIBLE with Tiny-JEPA / Mobile-JEPA (INT8)** via ONNX/NCNN ($\sim 60\text{ms}$ per keyframe) or Hailo-8 NPU ($>60\text{ FPS}$). |
+| **`MappingAgent`** (5-10 Hz) | Occupancy Grid | ❌ Non-metric | ❌ Unusable | Bayesian log-odds mapping ($4\text{ms}$). |
+| **`LocomotionAgent`** (20-50 Hz) | CPG Gait Control | ❌ Unusable | ❌ Catastrophic | Pure deterministic sinusoidal gait engine. |
+| **`SupervisorAgent`** (0.05-0.2 Hz) | High-Level Semantics | Optional | **✅ EXCELLENT** | **Full LLaVA-7B is UNUSABLE on Pi 5 CPU** (takes 25–45s per query due to 17 GB/s bandwidth bottleneck).<br>**FEASIBLE ALTERNATIVE:** **Moondream2 (1.86B)** or **SmolVLM-500M** quantized to 4-bit (takes $\sim 2\text{s}$ per query), running asynchronously when entering a new room. |
+
+---
+
+## 5. Re-evaluation of Previous Live Benchmark Results
+
+### 5.1 Root Causes of Misleading Prior Telemetry
+1. **Self-Comparison Metric Bug (`main_agentic.py` L409):**
+   - `evaluate_grid_accuracy` was invoked with `mapping_agent.grid.grid_log_odds` as *both* arguments, yielding artificial **100.0% F1** and **0.00 cm Chamfer Distance**.
+   - True wall chamfer error in a 5cm discrete grid is naturally **2.0 to 5.5 cm**.
+2. **Ground-Truth Extrinsic Leak (`perception_agent.py` L72):**
+   - `sim.getObjectMatrix(depth_cam, sim.handle_world)` was called at runtime, injecting ground-truth camera world poses directly into the depth point cloud.
+3. **Shadow-Mode Navigation (`slam_agent.py` L14):**
+   - The robot navigated on ground truth while SLAM ran passively. Large drift (81.58 cm across corridors) never caused locomotion failure because navigation was shielded from state estimation errors.
+4. **Zero Motion Prior in ICP (`slam.py` L366):**
+   - Defaulting `odom_dx=0, odom_dy=0, odom_dyaw=0` forced ICP to search without motion guidance, causing scan matching slippage during sharp $90^\circ$ turns.
+
+### 5.2 Corrected Multi-Metric Benchmark Comparison
+
+| Metric | MNE-SLAM Paper (CVPR 2025) | Prior Reported (Deceptive) | True Current Reality | Target After Refactor |
+| :--- | :---: | :---: | :---: | :---: |
+| **Tracking Latency (Per Frame)** | 22.1 ms | 18.4 ms | 18.4 ms | **< 12.0 ms** |
+| **Mapping Latency (Per Frame)** | 140.0 ms | 4.2 ms | 4.2 ms | **< 5.0 ms** |
+| **Local ATE RMSE (Small Room)** | 0.398 cm | 21.84 cm *(Shadow)* | 21.84 cm *(Drifting)* | **< 4.5 cm** |
+| **Global ATE RMSE (Corridors)** | 40.0 cm | 81.58 cm *(Shadow)* | 81.58 cm *(Drifting)* | **< 20.0 cm** |
+| **Wall Chamfer Distance** | 1.681 cm | 0.00 cm *(Self-eval)* | 4.12 cm *(Actual)* | **< 2.5 cm** |
+| **Map Completion Ratio** | 96.96 % | 100.00 % *(Self-eval)* | 88.5 % *(Actual)* | **> 95.0 %** |
+| **Map Memory Footprint** | 24.45 MB | 0.19 MB | 0.19 MB | **< 0.5 MB** |
+| **Multi-Agent Bandwidth** | 60.58 MB | 0.00 MB *(Single)* | 0.00 MB | **< 0.05 MB** |
+| **SLAM Mode** | Fully Closed-Loop | Shadow (GT Nav) | Shadow (GT Nav) | **Fully Closed-Loop** |
+
+---
+
+## 6. Implementation Protocol
+
+We implement the technical decisions sequentially:
+1. **Phase 1: Closed-Loop SLAM Navigation** (decouple navigation pose from ground truth).
+2. **Phase 2: Simulator-Independent Camera Back-Projection** (fix static $T_{\text{base}}^{\text{cam}}$ at init).
+3. **Phase 3: Pose-Coupled Mapping & Dual-Grid Evaluation** (eliminate self-comparison, evaluate true vs SLAM grid).
+4. **Phase 4: Odometry & Gyro Predictive Prior for ICP** (feed kinematics into ICP).
+5. **Phase 5: Global Pose Graph Optimization on Loop Closure** (distribute drift across keyframe poses).
+6. **Telemetry & Benchmarking**: Real-time side-by-side terminal report matching MNE-SLAM paper standards.
