@@ -108,6 +108,8 @@ def print_comparison_benchmark():
 
         # --- Edge Hardware & System 1 Decision AI (Raspberry Pi 5) ---
         ("Laya System 1 Decisions (Local)", "N/A",              "ModernBERT-421M",  "~140 ms (Pi 5 CPU)"),
+        ("Micro-Laya / MiniLM Decision",  "N/A",               "MiniLM-22M (INT8)","~10 ms (Pi 5 CPU)"),
+        ("Telemetry Decision MLP (Policy)","N/A",              "MLP-1.2M (<2 MB)",  "< 1.0 ms (Ultra-Fast)"),
         ("Jev Typed Judgment (Cloud API)", "N/A",              "TypeSafe AI API",  "~250 ms (WiFi / 4G)"),
         ("Pi 5 Compute Load & Envelope",  "Desktop GPU (RTX)", "CPU 4x Cortex-A76","< 12 W Budget"),
     ]

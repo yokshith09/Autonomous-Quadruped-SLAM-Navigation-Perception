@@ -299,7 +299,20 @@ Unlike standard Large Language Models (LLMs) that are autoregressive, slow, and 
    - **Inference Speed with Hailo-8 M.2 HAT:** **$< 15\text{ ms}$** at $< 2\text{W}$!
    - **Verdict:** **Laya is the ideal offline, onboard "System 1" decision engine for the quadruped Raspberry Pi 5.**
 
+### 4.5 Ultra-Lightweight & Micro System 1 Alternatives (< 30M parameters / < 1 MB)
+
+Because Laya (421M) is still relatively large for tight microsecond robotics loops, we can use ultra-lightweight, edge-native System 1 models that run in under **10 milliseconds** on the Raspberry Pi 5 CPU:
+
+| Model Architecture | Parameter Count | Model Size (INT8/ONNX) | Pi 5 CPU Latency | Pi 5 + Hailo-8 NPU | Best Use Case in Our Pipeline |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Micro-Laya (MiniLM-L6 / MobileBERT)** | 22M – 25M | **~22 MB** | **8 – 15 ms** | **< 1.0 ms** | Fast text/context prompt-based decision schema (Choice/Score/Noul). |
+| **ModernBERT-small** | ~28M | **~28 MB** | **10 – 18 ms** | **< 1.2 ms** | Compact non-autoregressive decision model with 8k context support. |
+| **Telemetry Decision MLP / TabNet** | 0.5M – 2M | **~1 – 4 MB** | **< 0.8 ms** | **< 0.1 ms** | Direct numeric telemetry input: maps `[clearance, drift, room_id, step]` to state transitions. |
+| **Gradient Boosted Trees (XGBoost / LightGBM)** | N/A (Trees) | **< 500 KB** | **< 0.05 ms** (50 µs) | N/A (CPU instant) | Microsecond calibrated action ranking & stuck detection; zero framework overhead. |
+| **MobileNetV4 / Fast-ViT (Visual System 1)** | 3.8M – 9M | **~6 – 15 MB** | **12 – 20 ms** | **~1.5 ms** | Direct visual obstacle / hazard classification from camera frame. |
+
 ---
+
 
 ## 5. Re-evaluation of Previous Live Benchmark Results
 
