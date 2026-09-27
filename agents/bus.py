@@ -20,8 +20,9 @@ class PoseMsg:
 @dataclass
 class ScanMsg:
     timestamp: float
-    points_2d: np.ndarray  # (N, 2) in robot base or head frame
+    points_2d: np.ndarray  # (N, 2) in robot base frame
     world_points_3d: Optional[np.ndarray] = None
+    base_points_3d: Optional[np.ndarray] = None
 
 
 @dataclass

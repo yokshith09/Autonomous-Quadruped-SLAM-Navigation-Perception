@@ -59,7 +59,14 @@ def initialize_sensors(sim, base):
     print(f"  Focal length: {focal_length:.1f}px", flush=True)
     print(f"  FOV: {math.degrees(KINECT_FOV):.1f} degrees", flush=True)
     print(f"  Camera Intrinsics: fx={camera_matrix['fx']:.4f}, fy={camera_matrix['fy']:.4f}, cx={camera_matrix['cx']:.4f}, cy={camera_matrix['cy']:.4f}", flush=True)
-    print("  ========================================\n", flush=True)
+    T_base_cam = None
+    if base is not None and depth_cam is not None:
+        try:
+            T_base_cam = sim.getObjectMatrix(depth_cam, base)
+            print("  [OK] Calibrated static camera-to-base extrinsics T_base_cam", flush=True)
+        except Exception as e:
+            print(f"  [WARN] Could not get T_base_cam relative to base: {e}", flush=True)
+    camera_matrix['T_base_cam'] = T_base_cam
 
     return depth_cam, rgb_cam, camera_matrix
 
@@ -189,6 +196,44 @@ def depth_to_world_points(depth_img, camera_matrix, cam_matrix):
 
     points_world = (R @ points_cam.T).T + T
     return points_world
+
+def depth_to_base_points(depth_img, camera_matrix, T_base_cam=None):
+    """Back-project depth image to 3D point cloud strictly in the robot base frame."""
+    if T_base_cam is None:
+        T_base_cam = camera_matrix.get('T_base_cam', None) if camera_matrix else None
+    
+    h, w = depth_img.shape
+    u_coords = np.arange(w)
+    v_coords = np.arange(h)
+    uu, vv = np.meshgrid(u_coords, v_coords)
+
+    fx = camera_matrix['fx']
+    fy = camera_matrix['fy']
+    cx = camera_matrix['cx']
+    cy = camera_matrix['cy']
+    z = depth_img
+
+    mask = (z > DEPTH_MIN_RANGE) & (z < DEPTH_MAX_RANGE)
+    if np.sum(mask) == 0:
+        return np.array([]).reshape(0, 3)
+
+    x_cam = -(uu[mask] - cx) * z[mask] / fx
+    y_cam = (vv[mask] - cy) * z[mask] / fy
+    z_cam = z[mask]
+    points_cam = np.column_stack([x_cam, y_cam, z_cam])
+
+    if T_base_cam is not None and len(T_base_cam) >= 12:
+        R = np.array([
+            [T_base_cam[0], T_base_cam[1], T_base_cam[2]],
+            [T_base_cam[4], T_base_cam[5], T_base_cam[6]],
+            [T_base_cam[8], T_base_cam[9], T_base_cam[10]]
+        ])
+        T = np.array([T_base_cam[3], T_base_cam[7], T_base_cam[11]])
+        points_base = (R @ points_cam.T).T + T
+    else:
+        points_base = points_cam
+
+    return points_base
 
 def get_depth_heatmap(depth_matrix):
     dh, dw = depth_matrix.shape

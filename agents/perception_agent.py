@@ -3,7 +3,7 @@ import numpy as np
 from typing import Optional, Tuple
 from .base import BaseAgent
 from .bus import MessageBus, RGBDMsg, ScanMsg
-from sensors import depth_to_world_points, grab_depth_frame, grab_rgb_frame
+from sensors import depth_to_base_points, grab_depth_frame, grab_rgb_frame
 
 
 class PerceptionAgent(BaseAgent):
@@ -13,17 +13,20 @@ class PerceptionAgent(BaseAgent):
         self.depth_cam = depth_cam
         self.rgb_cam = rgb_cam
         self.camera_matrix = camera_matrix
+        self.T_base_cam = camera_matrix.get('T_base_cam', None) if camera_matrix else None
         self.point_stride = 4
         self.self_mask_radius = 0.40  # 40cm radial deadzone to eliminate leg mapping
         self.min_height = 0.04
         self.max_height = 0.60
 
     def initialize(self) -> bool:
+        if self.camera_matrix and self.T_base_cam is None:
+            self.T_base_cam = self.camera_matrix.get('T_base_cam', None)
         self.is_running = True
         return True
 
-    def process_frame(self, depth_matrix: np.ndarray, rgb_matrix: Optional[np.ndarray], cam_pose_matrix: np.ndarray, robot_x: float, robot_y: float, timestamp: float):
-        """Process raw depth and RGB into filtered 3D points and 2D obstacle scans."""
+    def process_frame(self, depth_matrix: np.ndarray, rgb_matrix: Optional[np.ndarray], timestamp: float):
+        """Process raw depth and RGB into body-frame 3D points and 2D obstacle scans."""
         if depth_matrix is None:
             return
 
@@ -34,50 +37,45 @@ class PerceptionAgent(BaseAgent):
             depth_matrix=depth_matrix
         ))
 
-        world_points = depth_to_world_points(depth_matrix, self.camera_matrix, cam_pose_matrix)
-        if len(world_points) == 0:
+        # Project directly into robot base coordinate frame (zero world matrix reliance)
+        base_points = depth_to_base_points(depth_matrix, self.camera_matrix, self.T_base_cam)
+        if len(base_points) == 0:
             return
 
-        # Spatial band filtering: eliminate floor and ceiling returns
-        valid_mask = (world_points[:, 2] >= self.min_height) & (world_points[:, 2] <= self.max_height)
-        pts_w = world_points[valid_mask]
-        if len(pts_w) == 0:
+        # Spatial band filtering in robot body frame: eliminate floor and high reflections
+        valid_mask = (base_points[:, 2] >= self.min_height) & (base_points[:, 2] <= self.max_height)
+        pts_b = base_points[valid_mask]
+        if len(pts_b) == 0:
             return
 
-        # Radial self-masking: discard points within robot chassis/legs
-        dist_w = np.hypot(pts_w[:, 0] - robot_x, pts_w[:, 1] - robot_y)
-        pts_w = pts_w[dist_w > self.self_mask_radius]
-        if len(pts_w) == 0:
+        # Radial self-masking in robot base frame: discard returns within chassis/leg radius
+        dist_b = np.hypot(pts_b[:, 0], pts_b[:, 1])
+        pts_b = pts_b[dist_b > self.self_mask_radius]
+        if len(pts_b) == 0:
             return
 
         # Downsample for 2D scan matching
-        sampled_2d = pts_w[::self.point_stride, :2]
+        sampled_2d = pts_b[::self.point_stride, :2]
 
-        # Publish filtered scan
+        # Publish filtered body-frame scan
         self.bus.publish("sensor/scan", ScanMsg(
             timestamp=timestamp,
             points_2d=sampled_2d,
-            world_points_3d=pts_w
+            base_points_3d=pts_b,
+            world_points_3d=pts_b  # Backwards compatibility
         ))
 
         if (timestamp - getattr(self, 'last_log_time', 0.0)) > 3.0:
             self.last_log_time = timestamp
-            min_d = float(np.min(dist_w)) if len(pts_w) > 0 else 99.0
-            print(f"  [PERCEPTION] RGB-D: {len(world_points):,d} pts -> Filtered Scan: {len(sampled_2d)} pts | Closest obstacle: {min_d:.2f}m")
+            min_d = float(np.min(dist_b)) if len(pts_b) > 0 else 99.0
+            print(f"  [PERCEPTION] Body-frame Scan: {len(sampled_2d)} pts | Closest obstacle: {min_d:.2f}m")
 
     def step(self, current_time: float) -> None:
         if self.sim is None or self.depth_cam is None:
             return
         try:
-            raw_matrix = self.sim.getObjectMatrix(self.depth_cam, self.sim.handle_world)
             depth_mat = grab_depth_frame(self.sim, self.depth_cam, self.camera_matrix)
             rgb_mat = grab_rgb_frame(self.sim, self.rgb_cam, self.camera_matrix) if self.rgb_cam else None
-            
-            # Fetch latest pose from bus
-            latest_pose = self.bus.get_latest("pose/state")
-            rx = latest_pose.x if latest_pose else 0.0
-            ry = latest_pose.y if latest_pose else 0.0
-            
-            self.process_frame(depth_mat, rgb_mat, raw_matrix, rx, ry, current_time)
+            self.process_frame(depth_mat, rgb_mat, current_time)
         except Exception as e:
             self.handle_error(e)

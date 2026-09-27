@@ -33,8 +33,10 @@ We will implement these items sequentially, testing and verifying each one befor
 | **Phase 4** | **Odometry & IMU Predictive Prior for ICP** | Robust Localization | **P1** | Medium | Feed quadruped gait/IMU kinematics as an initial motion guess ($T_{\text{odom}}$) into Point-to-Line ICP to prevent scan-matching slips. |
 | **Phase 5** | **Pose Graph Optimization (PGO) on Loop Closure** | Global Consistency | **P1** | High | Apply non-linear least squares (Gauss-Newton) over keyframe poses on loop closure to distribute drift and correct double-walls. |
 | **Phase 6** | **Semantic Object Recognition ("Chair" & "Wall")** | Semantic SLAM & Knowledge | **P2** | Medium | Extract 3D object centroids from depth/RGB clusters to label semantic entities in `SpatialKnowledgeGraph`. |
+| **Phase 7** | **Micro System 1 Decision & Semantic Stack** | Edge AI & Fast Decisions | **P2** | Medium | Deploy 1.2M Telemetry Decision MLP in `SupervisorAgent` + MobileNetV4-Small in `PerceptionAgent` on Raspberry Pi 5. |
 
 ---
+
 
 ## 3. Detailed Nuance Breakdown & Engineering Specs
 

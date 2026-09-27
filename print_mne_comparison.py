@@ -13,6 +13,14 @@ import numpy as np
 
 def load_evaluation_report(report_path="accuracy_results/evaluation_summary_report.txt"):
     metrics = {}
+    json_path = "accuracy_results/latest_metrics.json"
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
     if not os.path.exists(report_path):
         return metrics
     try:

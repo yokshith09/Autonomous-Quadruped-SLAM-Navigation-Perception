@@ -97,10 +97,37 @@ def test_world_to_base_projection():
     print("PASSED")
 
 
+def test_depth_to_base_projection():
+    print("Running test_depth_to_base_projection...", end=" ")
+    from sensors import depth_to_base_points
+    cam_matrix = {'fx': 100.0, 'fy': 100.0, 'cx': 50.0, 'cy': 50.0}
+    # Synthetic depth: 100x100 array with 2.0 meters at center
+    depth_img = np.zeros((100, 100), dtype=np.float32)
+    depth_img[50, 50] = 2.0  # Exactly along optical axis
+
+    # Identity extrinsics
+    pts_base = depth_to_base_points(depth_img, cam_matrix)
+    assert len(pts_base) == 1
+    # Optical axis point should have x_cam=0, y_cam=0, z_cam=2.0
+    assert abs(pts_base[0, 0]) < 1e-4
+    assert abs(pts_base[0, 1]) < 1e-4
+    assert abs(pts_base[0, 2] - 2.0) < 1e-4
+
+    # With mounting translation: e.g. camera mounted at x=0.3m ahead, z=0.2m above base
+    # In CoppeliaSim standard 12-element matrix: [r11, r12, r13, tx, r21, r22, r23, ty, r31, r32, r33, tz]
+    T_mount = [1, 0, 0, 0.3, 0, 1, 0, 0.0, 0, 0, 1, 0.2]
+    pts_mounted = depth_to_base_points(depth_img, cam_matrix, T_base_cam=T_mount)
+    assert abs(pts_mounted[0, 0] - 0.3) < 1e-4
+    assert abs(pts_mounted[0, 1] - 0.0) < 1e-4
+    assert abs(pts_mounted[0, 2] - 2.2) < 1e-4
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING SLAM ACCURACY & LOOP CLOSURE UNIT TESTS ===")
     test_normal_estimation()
     test_point_to_line_icp_convergence()
     test_loop_closure_manager()
     test_world_to_base_projection()
+    test_depth_to_base_projection()
     print("=== ALL SLAM ACCURACY TESTS PASSED SUCCESSFULLY! ===")

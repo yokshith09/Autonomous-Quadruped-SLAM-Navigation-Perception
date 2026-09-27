@@ -33,6 +33,7 @@ from agents import (
 )
 from robot import LizardRobot, patch_coppelasim_scripts, norm_angle
 from sensors import initialize_sensors, get_depth_heatmap
+from grid import BayesianOccupancyGrid
 from viz import create_debug_dashboard
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory, evaluate_depth_perception
 
@@ -111,6 +112,7 @@ def main():
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum simulation steps")
     parser.add_argument("--max-time", type=float, default=MAX_TIME, help="Maximum mission time in seconds")
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
+    parser.add_argument("--ground-truth-nav", action="store_true", help="Bypass SLAM drift with ground-truth navigation (for ablation only)")
     args, _ = parser.parse_known_args()
 
     print("\n" + "=" * 75)
@@ -151,12 +153,18 @@ def main():
 
     # 2. Instantiate Autonomous Subsystem Agents
     perception_agent = PerceptionAgent(bus, sim, depth_cam, rgb_cam, camera_matrix, update_rate_hz=10.0)
-    slam_agent = SLAMAgent(bus, initial_x=init_x, initial_y=init_y, initial_yaw=init_heading, update_rate_hz=10.0)
+    slam_agent = SLAMAgent(
+        bus, initial_x=init_x, initial_y=init_y, initial_yaw=init_heading,
+        use_ground_truth_nav=args.ground_truth_nav, update_rate_hz=10.0
+    )
     mapping_agent = MappingAgent(bus, MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX, resolution=GRID_RES, update_rate_hz=10.0)
     frontier_agent = FrontierAgent(bus, grid_ref=mapping_agent.grid, update_rate_hz=1.0)
     planning_agent = PlanningAgent(bus, grid_ref=mapping_agent.grid, update_rate_hz=5.0)
     locomotion_agent = LocomotionAgent(bus, robot_driver=robot, update_rate_hz=20.0)
     supervisor_agent = SupervisorAgent(bus, update_rate_hz=2.0)
+
+    # Reference Ground-Truth Grid for rigorous numerical benchmarking (decoupled from SLAM grid)
+    true_grid = BayesianOccupancyGrid(MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX, resolution=GRID_RES)
 
     # Initialize all agents
     agents = [
@@ -166,13 +174,14 @@ def main():
     for agent in agents:
         agent.initialize()
 
-    # Pre-seed ground in robot vicinity
+    # Pre-seed ground in robot vicinity on both SLAM grid and True reference grid
     rgx, rgy = mapping_agent.grid.world_to_grid(init_x, init_y)
     for dy in range(-8, 9):
         for dx in range(-8, 9):
             gx, gy = rgx + dx, rgy + dy
             if 0 <= gx < mapping_agent.grid.width and 0 <= gy < mapping_agent.grid.height:
                 mapping_agent.grid.grid_log_odds[gy, gx] = mapping_agent.grid.l_min
+                true_grid.grid_log_odds[gy, gx] = true_grid.l_min
 
     sim.setStepping(True)
     sim.startSimulation()
@@ -233,6 +242,18 @@ def main():
 
             # Step 2: Mapping Agent (Bayesian raycasting & periodic room segmentation)
             mapping_agent.step(t)
+
+            # Update Reference True Grid with true pose (for rigorous, unbiased benchmark comparison)
+            scan = bus.get_latest("sensor/scan")
+            if scan is not None and getattr(scan, 'base_points_3d', None) is not None and step_count % 2 == 0:
+                pts_b = scan.base_points_3d
+                if len(pts_b) > 0:
+                    cos_gt, sin_gt = math.cos(true_heading), math.sin(true_heading)
+                    wx_gt = cos_gt * pts_b[:, 0] - sin_gt * pts_b[:, 1] + true_x
+                    wy_gt = sin_gt * pts_b[:, 0] + cos_gt * pts_b[:, 1] + true_y
+                    wz_gt = pts_b[:, 2]
+                    pts_w_gt = np.column_stack([wx_gt, wy_gt, wz_gt])
+                    true_grid.update_from_depth_points(pts_w_gt, (true_x, true_y))
 
             # Step 3: Frontier Agent (Hierarchical Room-by-Room selection)
             if step_count % 10 == 0:
@@ -399,14 +420,14 @@ def main():
                 slam_poses=np.array(slam_trajectory_poses[:len(true_trajectory_poses)]),
                 timestamps=np.array(trajectory_timestamps)
             )
-            np.save("captured_matrices/true_grid.npy", mapping_agent.grid.grid_log_odds)
+            np.save("captured_matrices/true_grid.npy", true_grid.grid_log_odds)
             np.save("captured_matrices/slam_grid.npy", mapping_agent.grid.grid_log_odds)
             print("  [SAVED] Trajectories and Grids for quantitative benchmarking.")
 
-            # Trigger automated accuracy evaluation
+            # Trigger automated accuracy evaluation (true reference grid vs active SLAM grid)
             try:
                 grid_metrics = evaluate_grid_accuracy(
-                    mapping_agent.grid.grid_log_odds, mapping_agent.grid.grid_log_odds,
+                    true_grid.grid_log_odds, mapping_agent.grid.grid_log_odds,
                     resolution=GRID_RES, tolerance_m=0.15, output_dir="accuracy_results"
                 )
                 min_len = min(len(true_trajectory_poses), len(slam_trajectory_poses))
@@ -415,6 +436,8 @@ def main():
                         true_trajectory_poses[:min_len], slam_trajectory_poses[:min_len],
                         timestamps=trajectory_timestamps[:min_len], output_dir="accuracy_results"
                     )
+                    with open("accuracy_results/latest_metrics.json", "w", encoding="utf-8") as f:
+                        json.dump({**grid_metrics, **traj_metrics}, f, indent=2)
                     print("\n  ========================================================")
                     print("          MULTI-AGENT ACCURACY & BENCHMARK SUMMARY        ")
                     print("  ========================================================")

@@ -3,16 +3,19 @@ import numpy as np
 import math
 from .base import BaseAgent
 from .bus import MessageBus, PoseMsg, ScanMsg
-from slam import ICPPoseEstimator, world_to_base_points, base_to_world_points
+from slam import ICPPoseEstimator, base_to_world_points
 
 
 class SLAMAgent(BaseAgent):
-    def __init__(self, bus: MessageBus, initial_x: float = 0.0, initial_y: float = 0.0, initial_yaw: float = 0.0, update_rate_hz: float = 10.0):
+    def __init__(self, bus: MessageBus, initial_x: float = 0.0, initial_y: float = 0.0, initial_yaw: float = 0.0, 
+                 use_ground_truth_nav: bool = False, update_rate_hz: float = 10.0):
         super().__init__("SLAMAgent", bus, update_rate_hz)
         self.pose_estimator = ICPPoseEstimator(initial_x, initial_y, initial_yaw)
         self.latest_scan: ScanMsg = None
-        self.use_ground_truth_nav = True  # Can bypass SLAM drift for perfect ground truth evaluation
+        self.use_ground_truth_nav = use_ground_truth_nav  # Closed-loop SLAM is default (False)
         self.latest_gt_pose = (initial_x, initial_y, initial_yaw)
+        self.last_step_time = 0.0
+        self.prev_est_pose = (initial_x, initial_y, initial_yaw)
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
@@ -32,14 +35,13 @@ class SLAMAgent(BaseAgent):
 
         try:
             gt_x, gt_y, gt_yaw = self.latest_gt_pose
-            sampled_w = self.latest_scan.points_2d
-
-            # Convert to IMU-stabilized base frame using current heading
-            head_pts = world_to_base_points(sampled_w, gt_x, gt_y, gt_yaw)
+            
+            # Points are already strictly in the robot base frame (kinematic extrinsics)
+            base_pts = self.latest_scan.points_2d
             
             # Run Point-to-Line Metric ICP with loop closure
             prev_closures = len(self.pose_estimator.loop_manager.loop_closures)
-            slam_pose = self.pose_estimator.update(head_pts, timestamp=current_time)
+            slam_pose = self.pose_estimator.update(base_pts, timestamp=current_time)
             
             # Check for new loop closures
             if len(self.pose_estimator.loop_manager.loop_closures) > prev_closures:
@@ -65,7 +67,7 @@ class SLAMAgent(BaseAgent):
                 rmse=float(getattr(slam_pose, 'rmse', 0.0))
             ))
 
-            # Active navigation pose
+            # Active navigation pose: SLAM estimate by default (closed-loop)
             active_x = gt_x if self.use_ground_truth_nav else slam_pose.x
             active_y = gt_y if self.use_ground_truth_nav else slam_pose.y
             active_yaw = gt_yaw if self.use_ground_truth_nav else slam_pose.yaw
@@ -75,13 +77,15 @@ class SLAMAgent(BaseAgent):
                 x=active_x,
                 y=active_y,
                 yaw=active_yaw,
-                is_ground_truth=self.use_ground_truth_nav
+                is_ground_truth=self.use_ground_truth_nav,
+                rmse=float(getattr(slam_pose, 'rmse', 0.0))
             ))
 
             if (current_time - getattr(self, 'last_log_time', 0.0)) > 3.0:
                 self.last_log_time = current_time
                 n_kfs = len(self.pose_estimator.loop_manager.keyframes)
                 rmse = float(getattr(slam_pose, 'rmse', 0.0))
-                print(f"  [SLAM] 2D Scan Matching: Pose ({slam_pose.x:.2f}, {slam_pose.y:.2f}, {math.degrees(slam_pose.yaw):.1f}°) | Keyframes: {n_kfs} | ICP Residual: {rmse:.3f}m")
+                mode_str = "GROUND_TRUTH" if self.use_ground_truth_nav else "CLOSED_LOOP_SLAM"
+                print(f"  [SLAM ({mode_str})] Pose ({slam_pose.x:.2f}, {slam_pose.y:.2f}, {math.degrees(slam_pose.yaw):.1f}°) | Keyframes: {n_kfs} | ICP Residual: {rmse:.3f}m")
         except Exception as e:
             self.handle_error(e)

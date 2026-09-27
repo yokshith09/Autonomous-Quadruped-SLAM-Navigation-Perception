@@ -152,10 +152,20 @@ class MappingAgent(BaseAgent):
             return
 
         try:
-            rx, ry = self.latest_pose.x, self.latest_pose.y
-            pts_w = self.latest_scan.world_points_3d
+            rx, ry, ryaw = self.latest_pose.x, self.latest_pose.y, self.latest_pose.yaw
+            pts_b = getattr(self.latest_scan, 'base_points_3d', None)
+            if pts_b is None:
+                pts_b = self.latest_scan.world_points_3d
 
-            if pts_w is not None and len(pts_w) > 0:
+            if pts_b is not None and len(pts_b) > 0:
+                # Transform body-frame points to estimated world frame using SLAM pose (x_hat, y_hat, theta_hat)
+                cos_y = math.cos(ryaw)
+                sin_y = math.sin(ryaw)
+                wx = cos_y * pts_b[:, 0] - sin_y * pts_b[:, 1] + rx
+                wy = sin_y * pts_b[:, 0] + cos_y * pts_b[:, 1] + ry
+                wz = pts_b[:, 2]
+                pts_w = np.column_stack([wx, wy, wz])
+                
                 # Update Bayesian Occupancy Grid via Bresenham raycasting
                 self.grid.update_from_depth_points(pts_w, (rx, ry))
 
