@@ -32,8 +32,9 @@ class SLAMAgent(BaseAgent):
 
     def on_actuation(self, act_msg: ActuationMsg):
         mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * act_msg.gyro_dyaw)
-        self.accum_odom_dx += act_msg.odom_forward * math.cos(mid_yaw)
-        self.accum_odom_dy += act_msg.odom_forward * math.sin(mid_yaw)
+        odom_lat = getattr(act_msg, "odom_lateral", 0.0)
+        self.accum_odom_dx += act_msg.odom_forward * math.cos(mid_yaw) - odom_lat * math.sin(mid_yaw)
+        self.accum_odom_dy += act_msg.odom_forward * math.sin(mid_yaw) + odom_lat * math.cos(mid_yaw)
         self.accum_odom_dyaw = wrap_angle(self.accum_odom_dyaw + act_msg.gyro_dyaw)
 
     def step(self, current_time: float) -> None:

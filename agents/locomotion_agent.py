@@ -69,14 +69,19 @@ class LocomotionAgent(BaseAgent):
 
         # 2. Waypoint tracking & navigation
         if self.waypoints and self.wp_idx < len(self.waypoints):
+            # Advance past start/intermediate waypoints already within reach or behind the next segment
+            while self.wp_idx < len(self.waypoints) - 1:
+                cur_d = math.hypot(self.waypoints[self.wp_idx][0] - rx, self.waypoints[self.wp_idx][1] - ry)
+                nxt_d = math.hypot(self.waypoints[self.wp_idx + 1][0] - rx, self.waypoints[self.wp_idx + 1][1] - ry)
+                if cur_d < max(self.wp_radius, 0.32) or nxt_d < cur_d:
+                    self.wp_idx += 1
+                else:
+                    break
+
             target_wx, target_wy = self.waypoints[self.wp_idx]
             dist_to_wp = math.hypot(target_wx - rx, target_wy - ry)
 
-            # Lookahead advance: advance if reached waypoint or already closer to the next waypoint
-            if dist_to_wp < self.wp_radius or (
-                self.wp_idx < len(self.waypoints) - 1 and
-                math.hypot(self.waypoints[self.wp_idx + 1][0] - rx, self.waypoints[self.wp_idx + 1][1] - ry) < dist_to_wp
-            ):
+            if dist_to_wp < self.wp_radius:
                 self.wp_idx += 1
                 if self.wp_idx >= len(self.waypoints):
                     self.speed = 0.0
@@ -97,13 +102,13 @@ class LocomotionAgent(BaseAgent):
                     x_b = pts[:, 0]
                     y_b = pts[:, 1]
 
-                    # Forward safety envelope: 38cm ahead, 26cm half-width
-                    crit = (x_b > 0.02) & (x_b < 0.38) & (np.abs(y_b) < 0.26)
+                    # Forward safety envelope: 15cm to 58cm ahead, 30cm half-width
+                    crit = (x_b > 0.15) & (x_b < 0.58) & (np.abs(y_b) < 0.30)
                     if np.any(crit):
                         close_yb = y_b[crit]
                         mean_yb = float(np.mean(close_yb))
                         # Steer laterally away from closest obstacle cluster
-                        avoidance_yaw = -0.35 if mean_yb >= 0 else 0.35
+                        avoidance_yaw = -0.60 if mean_yb >= 0 else 0.60
 
                 steer_target = norm_angle(target_heading + avoidance_yaw)
                 heading_err = norm_angle(steer_target - r_yaw)
@@ -111,11 +116,14 @@ class LocomotionAgent(BaseAgent):
 
                 # Continuous speed modulation
                 if avoidance_yaw != 0.0:
-                    self.speed = 0.35
+                    self.speed = 0.30
                     self.state_str = "AVOID"
                     if (current_time - getattr(self, 'last_avoid_log_time', 0.0)) > 2.5:
                         self.last_avoid_log_time = current_time
                         print(f"  [LOCOMOTION] Proximity safety envelope: Repelling from obstacle cluster (steer bias: {avoidance_yaw:+.2f} rad)")
+                elif abs_err > 0.85:
+                    self.speed = 0.12  # Turn on the spot instead of walking forward into obstacles
+                    self.state_str = "TURN"
                 elif abs_err > 0.45:
                     self.speed = 0.45  # Continuous turn-while-walking
                     self.state_str = "TURN"
@@ -148,7 +156,7 @@ class LocomotionAgent(BaseAgent):
                         details={"x": rx, "y": ry}
                     ))
 
-                d_fwd, dyaw_gyro = 0.16 * self.speed * 0.05, 0.0
+                d_fwd, d_lat, dyaw_gyro = 0.16 * self.speed * 0.05, 0.0, 0.0
                 if self.robot is not None:
                     try:
                         orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
@@ -157,6 +165,7 @@ class LocomotionAgent(BaseAgent):
                         dt_step = max(0.01, current_time - getattr(self, "_prev_cmd_time", current_time - 0.05))
                         self._prev_cmd_time = current_time
                         d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, self.speed)
+                        d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                     except Exception as e:
                         self.handle_error(e)
 
@@ -167,6 +176,7 @@ class LocomotionAgent(BaseAgent):
                     speed=self.speed,
                     state_str=self.state_str,
                     odom_forward=d_fwd,
+                    odom_lateral=d_lat,
                     gyro_dyaw=dyaw_gyro
                 ))
         else:

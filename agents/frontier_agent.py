@@ -165,6 +165,31 @@ class FrontierAgent(BaseAgent):
             print("  [FRONTIER] All frontiers cleared across entire map! MISSION_COMPLETE.")
             return None
 
+        # Hold committed frontier target until reached, cleared by camera rays, or 8s timeout
+        if self.state in ("INTRA_ROOM_SWEEP", "GLOBAL_EXPLORATION") and self.committed_target is not None:
+            cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
+            dist_to_comm = math.hypot(cwx - rx, cwy - ry)
+            still_has_frontier = any(
+                math.hypot(f[0] - self.committed_target[0], f[1] - self.committed_target[1]) <= 12.0
+                for f in all_frontiers
+            )
+            if (current_time - self.commitment_time) <= 8.0 and dist_to_comm >= 0.45 and still_has_frontier:
+                target_msg = FrontierTargetMsg(
+                    timestamp=current_time,
+                    target_gx=self.committed_target[0],
+                    target_gy=self.committed_target[1],
+                    target_wx=cwx,
+                    target_wy=cwy,
+                    room_id=self.active_room_id,
+                    area=30,
+                    is_doorway=False
+                )
+                self.bus.publish("frontier/target", target_msg)
+                return target_msg
+            else:
+                self.blacklist_frontiers.add(self.committed_target)
+                self.committed_target = None
+
         # 1. Collect valid candidates, respecting blacklist and explored rooms
         candidates = []
         for f in all_frontiers:

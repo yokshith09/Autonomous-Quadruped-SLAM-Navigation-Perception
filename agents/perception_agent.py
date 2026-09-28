@@ -15,7 +15,7 @@ class PerceptionAgent(BaseAgent):
         self.camera_matrix = camera_matrix
         self.T_base_cam = camera_matrix.get('T_base_cam', None) if camera_matrix else None
         self.point_stride = 4
-        self.self_mask_radius = 0.40  # 40cm radial deadzone to eliminate leg mapping
+        self.self_mask_radius = 0.22  # 22cm radial deadzone around base origin
         self.min_height = 0.04
         self.max_height = 0.60
 
@@ -42,32 +42,32 @@ class PerceptionAgent(BaseAgent):
         if len(base_points) == 0:
             return
 
-        # Spatial band filtering in robot body frame: eliminate floor and high reflections
-        valid_mask = (base_points[:, 2] >= self.min_height) & (base_points[:, 2] <= self.max_height)
-        pts_b = base_points[valid_mask]
-        if len(pts_b) == 0:
-            return
-
         # Radial self-masking in robot base frame: discard returns within chassis/leg radius
-        dist_b = np.hypot(pts_b[:, 0], pts_b[:, 1])
-        pts_b = pts_b[dist_b > self.self_mask_radius]
-        if len(pts_b) == 0:
+        dist_b = np.hypot(base_points[:, 0], base_points[:, 1])
+        map_mask = (dist_b > self.self_mask_radius) & (base_points[:, 2] >= -0.08) & (base_points[:, 2] <= self.max_height)
+        pts_map = base_points[map_mask]
+        if len(pts_map) == 0:
             return
 
-        # Downsample for 2D scan matching
-        sampled_2d = pts_b[::self.point_stride, :2]
+        # Obstacle band filtering for 2D scan matching & reactive avoidance
+        obs_mask = pts_map[:, 2] >= self.min_height
+        pts_obs = pts_map[obs_mask]
+        dist_obs = np.hypot(pts_obs[:, 0], pts_obs[:, 1]) if len(pts_obs) > 0 else np.array([99.0])
 
-        # Publish filtered body-frame scan
+        # Downsample obstacle points for 2D scan matching
+        sampled_2d = pts_obs[::self.point_stride, :2] if len(pts_obs) > 0 else np.empty((0, 2), dtype=np.float64)
+
+        # Publish filtered body-frame scan (base_points_3d includes ground + obstacles for raycasting)
         self.bus.publish("sensor/scan", ScanMsg(
             timestamp=timestamp,
             points_2d=sampled_2d,
-            base_points_3d=pts_b,
-            world_points_3d=pts_b  # Backwards compatibility
+            base_points_3d=pts_map,
+            world_points_3d=pts_map  # Backwards compatibility
         ))
 
         if (timestamp - getattr(self, 'last_log_time', 0.0)) > 3.0:
             self.last_log_time = timestamp
-            min_d = float(np.min(dist_b)) if len(pts_b) > 0 else 99.0
+            min_d = float(np.min(dist_obs)) if len(pts_obs) > 0 else 99.0
             print(f"  [PERCEPTION] Body-frame Scan: {len(sampled_2d)} pts | Closest obstacle: {min_d:.2f}m")
 
     def step(self, current_time: float) -> None:

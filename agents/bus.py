@@ -72,6 +72,7 @@ class ActuationMsg:
     speed: float
     state_str: str
     odom_forward: float = 0.0
+    odom_lateral: float = 0.0
     gyro_dyaw: float = 0.0
 
 

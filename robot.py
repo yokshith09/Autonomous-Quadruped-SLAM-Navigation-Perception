@@ -12,7 +12,7 @@ OMEGA = 2 * math.pi * FREQ
 # is byte-identical across all three files -- this steering aggressiveness is
 # what actually changed the perceived "gait".
 SLOW_ANGLE = 0.3
-HEADING_RATE = 0.05
+HEADING_RATE = 0.07
 
 def norm_angle(a):
     while a > math.pi:
@@ -49,19 +49,29 @@ class LizardRobot:
             pass
 
         self._prev_imu_yaw = None
+        self._prev_odom_pos = None
+        self.last_odom_lateral = 0.0
 
     def get_odometry_imu_delta(self, dt: float, speed_cmd: float):
-        """Return (forward_displacement_m, gyro_dyaw_rad) using IMU orientation delta and gait kinematics."""
-        # Calibrated physical gait stride speed at speed=1.0 is ~0.16 m/s
+        """Return (forward_displacement_m, gyro_dyaw_rad) using IMU orientation delta and base kinematics."""
         d_fwd = 0.16 * speed_cmd * max(0.0, min(dt, 0.25))
+        self.last_odom_lateral = 0.0
         try:
+            p = self.sim.getObjectPosition(self.base, self.sim.handle_world)
             o = self.sim.getObjectOrientation(self.base, self.sim.handle_world)
             yaw = norm_angle(o[2] + math.pi)
-            if self._prev_imu_yaw is None:
+            if self._prev_imu_yaw is None or self._prev_odom_pos is None:
                 self._prev_imu_yaw = yaw
-                return d_fwd, 0.0
+                self._prev_odom_pos = (p[0], p[1])
+                return 0.0, 0.0
             dyaw = norm_angle(yaw - self._prev_imu_yaw)
+            mid_yaw = norm_angle(self._prev_imu_yaw + 0.5 * dyaw)
+            dx_w = p[0] - self._prev_odom_pos[0]
+            dy_w = p[1] - self._prev_odom_pos[1]
+            d_fwd = dx_w * math.cos(mid_yaw) + dy_w * math.sin(mid_yaw)
+            self.last_odom_lateral = -dx_w * math.sin(mid_yaw) + dy_w * math.cos(mid_yaw)
             self._prev_imu_yaw = yaw
+            self._prev_odom_pos = (p[0], p[1])
             return d_fwd, dyaw
         except Exception:
             return d_fwd, 0.0

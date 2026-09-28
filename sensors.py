@@ -63,9 +63,11 @@ def initialize_sensors(sim, base):
     if base is not None and depth_cam is not None:
         try:
             raw_t = list(sim.getObjectMatrix(depth_cam, base))
+            world_t = list(sim.getObjectMatrix(depth_cam, sim.handle_world))
             # Align with LizardRobot forward walking frame (heading = o[2] + pi -> rotate XY by pi)
             for idx in range(8):
                 raw_t[idx] = -raw_t[idx]
+            raw_t[11] = world_t[11]
             T_base_cam = raw_t
             print("  [OK] Calibrated static camera-to-base extrinsics T_base_cam", flush=True)
         except Exception as e:

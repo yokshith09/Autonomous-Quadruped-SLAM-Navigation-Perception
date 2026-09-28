@@ -451,27 +451,17 @@ def main():
                         true_trajectory_poses[:min_len], slam_trajectory_poses[:min_len],
                         timestamps=trajectory_timestamps[:min_len], output_dir="accuracy_results"
                     )
+                    _, _, _, final_explored_pct = mapping_agent.grid.get_grid_stats()
                     with open("accuracy_results/latest_metrics.json", "w", encoding="utf-8") as f:
-                        json.dump({**grid_metrics, **traj_metrics}, f, indent=2)
-                    print("\n  ========================================================")
-                    print("          MULTI-AGENT ACCURACY & BENCHMARK SUMMARY        ")
-                    print("  ========================================================")
-                    print(f"  * Obstacle F1 Accuracy Score:      {grid_metrics['f1_score'] * 100:6.2f} %")
-                    print(f"  * Precision (SLAM Wall Accuracy):   {grid_metrics['precision'] * 100:6.2f} %")
-                    print(f"  * Recall (True Wall Coverage):     {grid_metrics['recall'] * 100:6.2f} %")
-                    print(f"  * Obstacle IoU:                    {grid_metrics['obstacle_iou'] * 100:6.2f} %")
-                    print(f"  * Mean Chamfer Wall Error:          {grid_metrics['chamfer_distance_meters'] * 100:6.2f} cm")
-                    print(f"  * Absolute Trajectory Error (RMSE): {traj_metrics['ate_rmse_meters'] * 100:6.2f} cm")
-                    print(f"  * Total Traveled Distance:         {traj_metrics['total_distance_traveled_m']:6.2f} m")
-                    print("  ========================================================\n", flush=True)
+                        json.dump({**grid_metrics, **traj_metrics, "explored_pct": float(final_explored_pct)}, f, indent=2)
             except Exception as e:
                 print(f"  [WARN] Benchmark evaluation skipped: {e}", flush=True)
 
-        # Always print the full MNE-SLAM & Edge AI comparison table to the VS Code terminal
+        # Print active run results to the VS Code terminal
         try:
             print_comparison_benchmark()
         except Exception as e:
-            print(f"  [WARN] Could not print MNE-SLAM comparison table: {e}", flush=True)
+            print(f"  [WARN] Could not print active run results table: {e}", flush=True)
 
     print("=" * 75)
     print("  MULTI-AGENT EXPLORATION MISSION COMPLETE")

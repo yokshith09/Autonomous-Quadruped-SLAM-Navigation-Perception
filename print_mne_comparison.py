@@ -80,62 +80,64 @@ def print_comparison_benchmark():
     kg_stats = load_knowledge_graph()
     traj_stats = load_trajectory_data()
 
-    # Extract live values or fallback to calibrated active run values
-    chamfer_m = grid_metrics.get("chamfer_distance_meters", None)
-    chamfer_str = f"{chamfer_m * 100.0:.2f} cm*" if chamfer_m is not None else "4.12 cm (est)"
-    f1_val = grid_metrics.get("f1_score", None)
-    f1_str = f"{f1_val * 100.0:.1f} %*" if f1_val is not None else "88.5 %"
-    
-    ate_cm = traj_stats.get("ate_rmse_cm", None)
-    ate_str = f"{ate_cm:.2f} cm" if ate_cm is not None else "21.84 cm"
-    max_ate_cm = traj_stats.get("max_ate_cm", None)
-    max_ate_str = f"{max_ate_cm:.2f} cm" if max_ate_cm is not None else "34.10 cm"
+    dist_m = traj_stats.get("total_dist_m", grid_metrics.get("total_distance_traveled_m"))
+    dist_str = f"{dist_m:.2f} m" if dist_m is not None else "N/A"
 
-    rooms_str = f"{kg_stats['rooms']} Rooms" if kg_stats['rooms'] > 0 else "1 Active Room"
-    doors_str = f"{kg_stats['doorways']} Doorways" if kg_stats['doorways'] > 0 else "1 Transition"
-    entities_str = f"{kg_stats['entities']} (Chair/Wall)" if kg_stats.get('entities', 0) > 0 else "Active"
+    explored_pct = grid_metrics.get("explored_pct")
+    explored_str = f"{explored_pct:.1f} %" if explored_pct is not None else "N/A"
 
-    w = 96
+    ate_cm = traj_stats.get("ate_rmse_cm")
+    if ate_cm is None and "ate_rmse_meters" in grid_metrics:
+        ate_cm = grid_metrics["ate_rmse_meters"] * 100.0
+    ate_str = f"{ate_cm:.2f} cm" if ate_cm is not None else "N/A"
+
+    max_ate_cm = traj_stats.get("max_ate_cm")
+    if max_ate_cm is None and "ate_max_meters" in grid_metrics:
+        max_ate_cm = grid_metrics["ate_max_meters"] * 100.0
+    max_ate_str = f"{max_ate_cm:.2f} cm" if max_ate_cm is not None else "N/A"
+
+    chamfer_m = grid_metrics.get("chamfer_distance_meters")
+    chamfer_str = f"{chamfer_m * 100.0:.2f} cm" if chamfer_m is not None else "N/A"
+
+    f1_val = grid_metrics.get("f1_score")
+    f1_str = f"{f1_val * 100.0:.1f} %" if f1_val is not None else "N/A"
+
+    prec_val = grid_metrics.get("precision")
+    rec_val = grid_metrics.get("recall")
+    pr_str = f"{prec_val * 100.0:.1f} % / {rec_val * 100.0:.1f} %" if (prec_val is not None and rec_val is not None) else "N/A"
+
+    iou_val = grid_metrics.get("obstacle_iou")
+    iou_str = f"{iou_val * 100.0:.1f} %" if iou_val is not None else "N/A"
+
+    rooms_str = f"{max(1, kg_stats['rooms'])} Rooms"
+    doors_str = f"{kg_stats['doorways']} Doorways"
+    entities_str = f"{kg_stats.get('entities', 0)} Detected (Chair/Wall)"
+
+    w = 68
     print("\n" + "=" * w)
-    print("        MNE-SLAM (CVPR 2025) vs. AUTONOMOUS QUADRUPED SLAM PIPELINE BENCHMARK")
+    print("         AUTONOMOUS SLAM & EXPLORATION: ACTIVE RUN RESULTS")
     print("=" * w)
-    print(f"{'Evaluation Metric':<32} | {'MNE-SLAM (CVPR 25)':<19} | {'Our Active Run':<18} | {'Target Objective':<16}")
+    print(f"{'Metric':<40} | {'Active Run Result':<24}")
     print("-" * w)
 
-    table = [
-        # --- Core SLAM Tracking & Accuracy ---
-        ("Tracking Latency (Per Frame)",  "22.1 ms",           "18.4 ms",          "< 12.0 ms"),
-        ("Mapping Latency (Per Frame)",   "140.0 ms",          "4.2 ms",           "< 5.0 ms"),
-        ("Local ATE RMSE (Small Room)",   "0.398 cm",          ate_str,            "< 4.5 cm"),
-        ("Global / Peak ATE (Corridors)", "40.0 cm",           max_ate_str,        "< 35.0 cm"),
-        ("Wall Chamfer Distance",         "1.681 cm",          chamfer_str,        "< 2.5 cm"),
-        ("Map Completion / F1 Score",     "96.96 %",           f1_str,             "> 80.0 %"),
-
-        # --- Computational & Bandwidth Footprint ---
-        ("Scene Map Memory Footprint",    "24.45 MB",          "0.19 MB",          "< 0.5 MB"),
-        ("P2P Communication Payload",     "60.58 MB",          "0.00 MB**",        "< 0.05 MB"),
-
-        # --- Semantic & Topological Discovery ---
-        ("Topological Rooms Discovered",  "N/A (Pure Metric)", rooms_str,          "Multi-Room Cleared"),
-        ("Doorway Chokepoints Identified","N/A (Pure Metric)", doors_str,          "All Doors Linked"),
-        ("Semantic Entities (Chair/Wall)","N/A (Pure Metric)", entities_str,       "3D Graph Linked"),
-
-        # --- Edge Hardware & System 1 Decision AI (Raspberry Pi 5) ---
-        ("Laya System 1 Decisions (Local)", "N/A",              "ModernBERT-421M",  "~140 ms (Pi 5 CPU)"),
-        ("Micro-Laya / MiniLM Decision",  "N/A",               "MiniLM-22M (INT8)","~10 ms (Pi 5 CPU)"),
-        ("Telemetry Decision MLP (Policy)","N/A",              "MLP-1.2M (<2 MB)",  "< 1.0 ms (Ultra-Fast)"),
-        ("Jev Typed Judgment (Cloud API)", "N/A",              "TypeSafe AI API",  "~250 ms (WiFi / 4G)"),
-        ("Pi 5 Compute Load & Envelope",  "Desktop GPU (RTX)", "CPU 4x Cortex-A76","< 12 W Budget"),
+    rows = [
+        ("Total Distance Traveled",           dist_str),
+        ("Explored Grid Coverage",            explored_str),
+        ("Local ATE RMSE (Trajectory Error)", ate_str),
+        ("Peak Trajectory Drift (Max ATE)",   max_ate_str),
+        ("Mean Wall Chamfer Error",           chamfer_str),
+        ("Obstacle Map F1 Score",             f1_str),
+        ("Map Precision / Recall",            pr_str),
+        ("Obstacle IoU",                      iou_str),
+        ("Topological Rooms Discovered",      rooms_str),
+        ("Doorway Chokepoints Identified",    doors_str),
+        ("Semantic Entities Mapped",          entities_str),
     ]
 
-    for name, mne_val, our_val, target in table:
-        print(f"{name:<32} | {mne_val:<19} | {our_val:<18} | {target:<16}")
+    for name, val in rows:
+        print(f"{name:<40} | {val:<24}")
 
-    print("-" * w)
-    print("  * Note: Prior 0.00cm Chamfer / 100% F1 was an evaluation artifact (comparing grid to itself).")
-    print("    Phase 3 introduces independent true reference grid vs. SLAM estimated grid evaluation.")
-    print("  ** Single-agent operational mode; multi-agent topological submap sync budget is < 50 KB.")
-    print("=" * w + "\n")
+    print("=" * w + "\n", flush=True)
 
 
 if __name__ == "__main__":

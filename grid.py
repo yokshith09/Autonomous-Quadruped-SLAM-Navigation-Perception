@@ -105,7 +105,7 @@ class BayesianOccupancyGrid:
             
             # distance from robot
             dist = math.hypot(px - robot_pos[0], py - robot_pos[1])
-            if dist < 0.65:
+            if dist < 0.22:
                 continue # Ignore robot's own body
             if not (self.x_min <= px <= self.x_max and self.y_min <= py <= self.y_max):
                 continue

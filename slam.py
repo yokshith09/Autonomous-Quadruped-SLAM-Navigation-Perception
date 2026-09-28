@@ -424,12 +424,6 @@ class ICPPoseEstimator:
 
         dx, dy = transform[:2, 2]
         dyaw = math.atan2(transform[1, 0], transform[0, 0])
-        if abs(odom_dyaw) > 1e-6:
-            # Fuse with IMU gyro prior: prevent collinear single-wall scans from twisting yaw > 10 deg
-            gyro_diff = wrap_angle(dyaw - odom_dyaw)
-            max_dev = math.radians(10.0)
-            if abs(gyro_diff) > max_dev:
-                dyaw = wrap_angle(odom_dyaw + math.copysign(max_dev, gyro_diff) * 0.25)
 
         valid = (
             correspondences >= 20
@@ -440,6 +434,23 @@ class ICPPoseEstimator:
         )
 
         if valid:
+            has_odom = (abs(odom_dx) > 1e-6 or abs(odom_dy) > 1e-6 or abs(odom_dyaw) > 1e-6)
+            if has_odom:
+                # Fuse with IMU gyro prior and reject lever-arm translation drift during turns
+                err_yaw = wrap_angle(dyaw - odom_dyaw)
+                max_yaw_corr = math.radians(0.5)
+                dyaw = wrap_angle(odom_dyaw + max(-max_yaw_corr, min(max_yaw_corr, err_yaw * 0.15)))
+                if abs(odom_dyaw) > math.radians(1.0):
+                    dx, dy = dx_local, dy_local
+                else:
+                    err_tx = dx - dx_local
+                    err_ty = dy - dy_local
+                    err_t = math.hypot(err_tx, err_ty)
+                    if err_t > 1e-6:
+                        scale = min(0.20, 0.004 / err_t)
+                        dx = dx_local + err_tx * scale
+                        dy = dy_local + err_ty * scale
+
             self.pose.x += dx * math.cos(self.pose.yaw) - dy * math.sin(self.pose.yaw)
             self.pose.y += dx * math.sin(self.pose.yaw) + dy * math.cos(self.pose.yaw)
             self.pose.yaw = wrap_angle(self.pose.yaw + dyaw)

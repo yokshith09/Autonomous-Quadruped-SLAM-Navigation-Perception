@@ -19,6 +19,7 @@ class PlanningAgent(BaseAgent):
         self.latest_target: Optional[FrontierTargetMsg] = None
         self.latest_pose: Optional[PoseMsg] = None
         self.current_path: List[Tuple[float, float]] = []
+        self.last_planned_goal: Optional[Tuple[int, int]] = None
 
     def initialize(self) -> bool:
         self.bus.subscribe("frontier/target", self.on_target)
@@ -32,6 +33,7 @@ class PlanningAgent(BaseAgent):
             self.current_path = []
             self.last_replan_time = -999.0
             self.latest_target = None
+            self.last_planned_goal = None
 
     def on_target(self, target_msg: FrontierTargetMsg):
         self.latest_target = target_msg
@@ -39,13 +41,18 @@ class PlanningAgent(BaseAgent):
     def on_pose(self, pose_msg: PoseMsg):
         self.latest_pose = pose_msg
 
+    def _is_path_blocked(self) -> bool:
+        if not self.current_path or self.grid is None:
+            return True
+        for wx, wy in self.current_path[1:]:
+            gx, gy = self.grid.world_to_grid(wx, wy)
+            if self.grid.is_occupied_inflated(gx, gy, radius_cells=3):
+                return True
+        return False
+
     def plan_path(self, current_time: float) -> Optional[List[Tuple[float, float]]]:
         if self.grid is None or self.latest_target is None or self.latest_pose is None:
             return None
-
-        # Cooldown guard: prevent CPU over-utilization
-        if (current_time - self.last_replan_time) < self.replan_cooldown:
-            return self.current_path
 
         rx, ry = self.latest_pose.x, self.latest_pose.y
         dist_to_goal = math.hypot(self.latest_target.target_wx - rx, self.latest_target.target_wy - ry)
@@ -53,8 +60,22 @@ class PlanningAgent(BaseAgent):
             self.latest_target = None
             return None
 
+        goal_raw = (self.latest_target.target_gx, self.latest_target.target_gy)
+        same_goal = (
+            self.last_planned_goal is not None and
+            math.hypot(goal_raw[0] - self.last_planned_goal[0], goal_raw[1] - self.last_planned_goal[1]) <= 2.0
+        )
+
+        # Keep active path if goal hasn't changed, path is clear of obstacles, and within 4.0s window
+        if same_goal and self.current_path and not self._is_path_blocked() and (current_time - self.last_replan_time) < 4.0:
+            return self.current_path
+
+        # Cooldown guard for same goal when unblocked
+        if same_goal and (current_time - self.last_replan_time) < self.replan_cooldown and not self._is_path_blocked():
+            return self.current_path
+
         start_gx, start_gy = self.grid.world_to_grid(rx, ry)
-        goal_gx, goal_gy = self.latest_target.target_gx, self.latest_target.target_gy
+        goal_gx, goal_gy = goal_raw
 
         # Ensure start and goal are on free navigable cells
         start_gx, start_gy = find_nearest_free(self.grid, start_gx, start_gy)
@@ -77,6 +98,7 @@ class PlanningAgent(BaseAgent):
                 }
             ))
             self.latest_target = None
+            self.current_path = []
             return None
 
         # Line-of-sight shortcut smoothing on world coordinates
@@ -85,6 +107,7 @@ class PlanningAgent(BaseAgent):
         self.last_replan_time = current_time
         self.replan_count += 1
         self.current_path = world_waypoints
+        self.last_planned_goal = goal_raw
 
         print(f"  [PLANNER] A* Path computed: {len(world_waypoints)} safe waypoints -> Target ({self.latest_target.target_wx:.2f}, {self.latest_target.target_wy:.2f})")
 
