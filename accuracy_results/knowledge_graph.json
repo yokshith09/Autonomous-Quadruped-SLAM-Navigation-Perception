@@ -18,13 +18,15 @@
       ],
       "doorways": [
         "doorway_1",
-        "doorway_2"
+        "doorway_2",
+        "doorway_3",
+        "doorway_4"
       ]
     },
     "2": {
       "room_id": 2,
       "name": "Room_2",
-      "status": "EXPLORING",
+      "status": "EXPLORED",
       "centroid": [
         0.0,
         0.0
@@ -37,11 +39,15 @@
         "wall_7",
         "chair_10",
         "chair_11",
-        "wall_14"
+        "wall_14",
+        "wall_16",
+        "chair_17"
       ],
       "doorways": [
         "doorway_1",
-        "doorway_2"
+        "doorway_2",
+        "doorway_3",
+        "doorway_4"
       ]
     },
     "3": {
@@ -53,7 +59,8 @@
         0.0
       ],
       "entities": [
-        "wall_15"
+        "wall_15",
+        "chair_18"
       ],
       "doorways": []
     }
@@ -84,6 +91,32 @@
       ],
       "width_m": 0.8,
       "is_traversed": false
+    },
+    "doorway_3": {
+      "door_id": "doorway_3",
+      "world_pos": [
+        2.75,
+        4.25
+      ],
+      "connects_rooms": [
+        1,
+        2
+      ],
+      "width_m": 0.8,
+      "is_traversed": false
+    },
+    "doorway_4": {
+      "door_id": "doorway_4",
+      "world_pos": [
+        2.1000000000000005,
+        4.450000000000001
+      ],
+      "connects_rooms": [
+        1,
+        2
+      ],
+      "width_m": 0.8,
+      "is_traversed": false
     }
   },
   "entities": {
@@ -97,8 +130,8 @@
       ],
       "room_id": 1,
       "confidence": 1.0,
-      "first_seen": 1790573022.150075,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574904.433677,
+      "last_seen": 1790574904.433677,
       "attributes": {}
     },
     "chair_2": {
@@ -111,8 +144,8 @@
       ],
       "room_id": 1,
       "confidence": 1.0,
-      "first_seen": 1790573022.150075,
-      "last_seen": 1790573022.150075,
+      "first_seen": 1790574904.433677,
+      "last_seen": 1790574904.433677,
       "attributes": {}
     },
     "chair_3": {
@@ -125,8 +158,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573024.144075,
-      "last_seen": 1790573043.2701027,
+      "first_seen": 1790574906.4589605,
+      "last_seen": 1790574906.4589605,
       "attributes": {}
     },
     "chair_4": {
@@ -139,8 +172,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573024.144075,
-      "last_seen": 1790573024.144075,
+      "first_seen": 1790574906.4599602,
+      "last_seen": 1790574906.4599602,
       "attributes": {}
     },
     "chair_5": {
@@ -153,8 +186,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573024.144075,
-      "last_seen": 1790573024.144075,
+      "first_seen": 1790574906.4599602,
+      "last_seen": 1790574906.4599602,
       "attributes": {}
     },
     "chair_6": {
@@ -167,8 +200,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573025.1661797,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574907.4728096,
+      "last_seen": 1790574907.4728096,
       "attributes": {}
     },
     "wall_7": {
@@ -181,8 +214,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573025.1661797,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574907.4748437,
+      "last_seen": 1790574907.4748437,
       "attributes": {}
     },
     "chair_8": {
@@ -195,8 +228,8 @@
       ],
       "room_id": 1,
       "confidence": 1.0,
-      "first_seen": 1790573026.1911385,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574908.4483073,
+      "last_seen": 1790574908.4483073,
       "attributes": {}
     },
     "chair_9": {
@@ -209,8 +242,8 @@
       ],
       "room_id": 1,
       "confidence": 1.0,
-      "first_seen": 1790573026.1911385,
-      "last_seen": 1790573041.2307787,
+      "first_seen": 1790574908.4493082,
+      "last_seen": 1790574908.4493082,
       "attributes": {}
     },
     "chair_10": {
@@ -223,8 +256,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573027.2820756,
-      "last_seen": 1790573031.4549413,
+      "first_seen": 1790574909.427183,
+      "last_seen": 1790574909.427183,
       "attributes": {}
     },
     "chair_11": {
@@ -237,8 +270,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573031.4549413,
-      "last_seen": 1790573035.204111,
+      "first_seen": 1790574913.7451777,
+      "last_seen": 1790574913.7451777,
       "attributes": {}
     },
     "wall_12": {
@@ -251,8 +284,8 @@
       ],
       "room_id": 1,
       "confidence": 1.0,
-      "first_seen": 1790573032.4690897,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574914.7505202,
+      "last_seen": 1790574914.7505202,
       "attributes": {}
     },
     "wall_13": {
@@ -265,8 +298,8 @@
       ],
       "room_id": 1,
       "confidence": 1.0,
-      "first_seen": 1790573036.2151606,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574918.4120834,
+      "last_seen": 1790574918.4120834,
       "attributes": {}
     },
     "wall_14": {
@@ -279,8 +312,8 @@
       ],
       "room_id": 2,
       "confidence": 1.0,
-      "first_seen": 1790573043.2701027,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574925.7605388,
+      "last_seen": 1790574925.7605388,
       "attributes": {}
     },
     "wall_15": {
@@ -293,8 +326,50 @@
       ],
       "room_id": 3,
       "confidence": 1.0,
-      "first_seen": 1790573044.3296971,
-      "last_seen": 1790573051.4603415,
+      "first_seen": 1790574926.9543161,
+      "last_seen": 1790574926.9543161,
+      "attributes": {}
+    },
+    "wall_16": {
+      "entity_id": "wall_16",
+      "class_name": "wall",
+      "world_pos": [
+        5.15,
+        3.8000000000000007,
+        0.4
+      ],
+      "room_id": 2,
+      "confidence": 1.0,
+      "first_seen": 1790574938.221038,
+      "last_seen": 1790574938.221038,
+      "attributes": {}
+    },
+    "chair_17": {
+      "entity_id": "chair_17",
+      "class_name": "chair",
+      "world_pos": [
+        5.200000000000001,
+        4.950000000000001,
+        0.4
+      ],
+      "room_id": 2,
+      "confidence": 1.0,
+      "first_seen": 1790574939.3108044,
+      "last_seen": 1790574939.3108044,
+      "attributes": {}
+    },
+    "chair_18": {
+      "entity_id": "chair_18",
+      "class_name": "chair",
+      "world_pos": [
+        1.75,
+        1.4000000000000004,
+        0.4
+      ],
+      "room_id": 3,
+      "confidence": 1.0,
+      "first_seen": 1790574946.3012862,
+      "last_seen": 1790574946.3012862,
       "attributes": {}
     }
   },
@@ -391,6 +466,41 @@
     },
     {
       "source": "doorway_2",
+      "relation": "LEADS_TO",
+      "target": "Room_2"
+    },
+    {
+      "source": "Room_1",
+      "relation": "CONNECTS_VIA",
+      "target": "doorway_3"
+    },
+    {
+      "source": "doorway_3",
+      "relation": "LEADS_TO",
+      "target": "Room_2"
+    },
+    {
+      "source": "wall_16",
+      "relation": "LOCATED_IN",
+      "target": "Room_2"
+    },
+    {
+      "source": "chair_17",
+      "relation": "LOCATED_IN",
+      "target": "Room_2"
+    },
+    {
+      "source": "chair_18",
+      "relation": "LOCATED_IN",
+      "target": "Room_3"
+    },
+    {
+      "source": "Room_1",
+      "relation": "CONNECTS_VIA",
+      "target": "doorway_4"
+    },
+    {
+      "source": "doorway_4",
       "relation": "LEADS_TO",
       "target": "Room_2"
     }

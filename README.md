@@ -4,10 +4,12 @@ Closed-loop 2D/3D SLAM, topological Voronoi room segmentation, semantic entity e
 
 ---
 
-## 1. Prerequisites
+## 1. Setup on a New PC (Clone & Install)
 
 ```powershell
-pip install numpy scipy opencv-python matplotlib jupyter coppeliasim-zmqremoteapi-client
+git clone <repo-url>
+cd Agentic_pipeline
+pip install -r requirements.txt
 ```
 
 Open **CoppeliaSim EDU v4.5+** and load `robot_working.ttt`.
@@ -19,15 +21,15 @@ Open **CoppeliaSim EDU v4.5+** and load `robot_working.ttt`.
 | Task | Command |
 | :--- | :--- |
 | **Run Unit Test Suite (16 tests)** | `python -m unittest discover tests -v` |
-| **Run Closed-Loop Multi-Agent SLAM (GUI)** | `python main_agentic.py --closed-loop-slam` |
-| **Run Closed-Loop Headless Benchmark** | `python main_agentic.py --headless --max-time 30.0` |
+| **Run Closed-Loop Multi-Agent SLAM (GUI + Terminal)** | `python main.py` |
+| **Run Closed-Loop Headless Benchmark** | `python main.py --headless --max-time 30.0` |
 | **Print MNE-SLAM (CVPR 2025) Benchmark Table** | `python print_mne_comparison.py` |
 | **Re-evaluate Saved Grids & Trajectories** | `python accuracy_evaluator.py` |
 | **Run Hardware / Scene Diagnostics** | `python diagnose_sim.py` |
 
 ---
 
-## 3. Architecture Overview
+## 3. Architecture & Documentation (`docs/`)
 
 - **`sensors.py`** — Calibrates static camera-to-base extrinsics $T_{\text{base}}^{\text{cam}}$ once at startup and back-projects depth frames directly into the robot body frame (`depth_to_base_points`).
 - **`slam.py`** — Point-to-Line Metric ICP fused with IMU gyro/gait odometry priors (`ICPPoseEstimator`) and harmonic SE(2) Pose Graph Optimization (`KeyframeLoopManager.optimize_pose_graph`).
@@ -40,4 +42,8 @@ Open **CoppeliaSim EDU v4.5+** and load `robot_working.ttt`.
   6. `LocomotionAgent`: Sinusoidal CPG quadruped gait, reactive obstacle repulsion, and anti-stuck recovery.
   7. `SupervisorAgent`: 4-layer `SpatialKnowledgeGraph` (`query_memory`) and `EpisodicMemory` custodian.
 
-See [`SLAM_NUANCES_AND_IMPLEMENTATION_ROADMAP.md`](SLAM_NUANCES_AND_IMPLEMENTATION_ROADMAP.md) for the complete engineering specification and Phase 7 Raspberry Pi 5 Micro System 1 (Laya / Jev / MLP) deployment roadmap.
+All specifications, reports, and architecture diagrams are organized under [`docs/`](docs/):
+- [`docs/SLAM_NUANCES_AND_IMPLEMENTATION_ROADMAP.md`](docs/SLAM_NUANCES_AND_IMPLEMENTATION_ROADMAP.md)
+- [`docs/system_architecture_diagram.html`](docs/system_architecture_diagram.html)
+- [`docs/panel2_report.pdf`](docs/panel2_report.pdf)
+- [`docs/panel_review2_ppt.pdf`](docs/panel_review2_ppt.pdf)
