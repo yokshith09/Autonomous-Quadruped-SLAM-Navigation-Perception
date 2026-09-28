@@ -251,6 +251,8 @@ def test_semantic_entity_extraction():
     assert "wall" in classes, f"Expected 'wall' in {classes}"
     assert "chair" in classes, f"Expected 'chair' in {classes}"
     assert len(sup.knowledge_graph.entities) >= 2
+    chairs = sup.knowledge_graph.query_memory("Where is the chair?")
+    assert len(chairs) >= 1 and chairs[0].class_name == "chair"
     print("PASSED")
 
 

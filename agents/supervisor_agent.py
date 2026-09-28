@@ -61,8 +61,11 @@ class SupervisorAgent(BaseAgent):
             cls_name = event_msg.details.get("class_name", "obstacle")
             pos = event_msg.details.get("position", (rx, ry, 0.4))
             room_id = event_msg.details.get("room_id", 1)
+            is_new = e_id not in self.knowledge_graph.entities
             self.knowledge_graph.get_or_create_room(room_id)
             self.knowledge_graph.add_entity(e_id, cls_name, pos, room_id=room_id)
+            if is_new and cls_name == "chair":
+                print(f"  [SUPERVISOR] Detected new object: {e_id} at ({pos[0]:.2f}, {pos[1]:.2f}) in Room {room_id}")
 
     def step(self, current_time: float) -> None:
         if self.latest_grid:

@@ -1,4 +1,4 @@
-﻿"""Spatial-Temporal Semantic Knowledge Graph (3D Scene Graph)."""
+"""Spatial-Temporal Semantic Knowledge Graph (3D Scene Graph)."""
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Any, Optional
 import time
@@ -109,6 +109,14 @@ class SpatialKnowledgeGraph:
         elif query_type == "unexplored_rooms":
             return [r for r in self.rooms.values() if r.status != "EXPLORED"]
         return []
+
+    def query_memory(self, question: str) -> List[EntityNode]:
+        """Natural-language keyword lookup over discovered entities (e.g. 'where is the chair?')."""
+        q = question.lower()
+        for cls_name in {e.class_name.lower() for e in self.entities.values()}:
+            if cls_name in q:
+                return self.query("find_by_class", class_name=cls_name)
+        return list(self.entities.values())
 
     def export_json(self) -> str:
         return json.dumps({

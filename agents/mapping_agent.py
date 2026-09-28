@@ -181,17 +181,19 @@ class MappingAgent(BaseAgent):
                 if ecls == cls_name and math.hypot(wx - ex, wy - ey) < 0.6:
                     existing_id = eid
                     break
-            if existing_id is None:
+            is_new = existing_id is None
+            if is_new:
                 existing_id = f"{cls_name}_{len(self._known_entities) + 1}"
                 self._known_entities.append((existing_id, cls_name, wx, wy))
 
             info = {"entity_id": existing_id, "class_name": cls_name, "position": (wx, wy, 0.4), "room_id": max(1, room_id)}
             detected.append(info)
-            self.bus.publish("mission/event", MissionEventMsg(
-                timestamp=current_time,
-                event_type="OBJECT_DETECTED",
-                details=info
-            ))
+            if is_new:
+                self.bus.publish("mission/event", MissionEventMsg(
+                    timestamp=current_time,
+                    event_type="OBJECT_DETECTED",
+                    details=info
+                ))
         return detected
 
     def step(self, current_time: float) -> None:

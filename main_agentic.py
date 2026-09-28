@@ -112,6 +112,7 @@ def main():
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum simulation steps")
     parser.add_argument("--max-time", type=float, default=MAX_TIME, help="Maximum mission time in seconds")
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
+    parser.add_argument("--closed-loop-slam", action="store_true", default=True, help="Navigate strictly using closed-loop SLAM pose (default)")
     parser.add_argument("--ground-truth-nav", action="store_true", help="Bypass SLAM drift with ground-truth navigation (for ablation only)")
     args, _ = parser.parse_known_args()
 
@@ -289,20 +290,28 @@ def main():
                 heatmap = get_depth_heatmap(last_depth)
 
                 w_pts = path_msg.waypoints if path_msg else []
+                active_pose = bus.get_latest("pose/state")
+                hud_x = active_pose.x if active_pose else true_x
+                hud_y = active_pose.y if active_pose else true_y
+                hud_yaw = active_pose.yaw if active_pose else true_heading
                 grid_img = mapping_agent.grid.to_debug_image(
-                    slam_pos=(true_x, true_y),
-                    slam_heading=true_heading,
+                    slam_pos=(hud_x, hud_y),
+                    slam_heading=hud_yaw,
                     frontiers=all_frontiers,
                     path=w_pts,
-                    trajectory=[(p[0], p[1]) for p in true_trajectory_poses[::5]],
+                    trajectory=[(p[0], p[1]) for p in slam_trajectory_poses[::5]] or [(true_x, true_y)],
                     scale=2
                 )
 
-                # Overlay Room Segmentation & Doorways
+                # Overlay Room Segmentation, Doorways & Semantic Objects
                 if grid_msg and grid_msg.doorways:
                     for dw in grid_msg.doorways:
                         dgx, dgy = mapping_agent.grid.world_to_grid(dw[0], dw[1])
                         cv2.circle(grid_img, (dgx * 2, dgy * 2), 4, (0, 255, 255), -1)
+                for ent in supervisor_agent.knowledge_graph.entities.values():
+                    if ent.class_name == "chair":
+                        egx, egy = mapping_agent.grid.world_to_grid(ent.world_pos[0], ent.world_pos[1])
+                        cv2.circle(grid_img, (egx * 2, egy * 2), 4, (255, 0, 255), -1)
 
                 state_label = f"{frontier_agent.state} [{active_room_str}]"
                 explored_pct = grid_msg.explored_pct if grid_msg else 0.0
