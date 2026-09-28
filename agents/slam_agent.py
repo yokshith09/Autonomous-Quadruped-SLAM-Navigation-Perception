@@ -1,9 +1,8 @@
 """SLAM Agent: IMU-stabilized scan-matching odometry and continuous pose estimation."""
-import numpy as np
 import math
 from .base import BaseAgent
-from .bus import MessageBus, PoseMsg, ScanMsg, ActuationMsg
-from slam import ICPPoseEstimator, base_to_world_points, wrap_angle
+from .bus import MessageBus, PoseMsg, ScanMsg, ActuationMsg, MissionEventMsg
+from slam import ICPPoseEstimator, wrap_angle
 
 
 class SLAMAgent(BaseAgent):
@@ -14,8 +13,6 @@ class SLAMAgent(BaseAgent):
         self.latest_scan: ScanMsg = None
         self.use_ground_truth_nav = use_ground_truth_nav  # Closed-loop SLAM is default (False)
         self.latest_gt_pose = (initial_x, initial_y, initial_yaw)
-        self.last_step_time = 0.0
-        self.prev_est_pose = (initial_x, initial_y, initial_yaw)
         self.accum_odom_dx = 0.0
         self.accum_odom_dy = 0.0
         self.accum_odom_dyaw = 0.0
@@ -65,7 +62,6 @@ class SLAMAgent(BaseAgent):
             # Check for new loop closures
             if len(self.pose_estimator.loop_manager.loop_closures) > prev_closures:
                 latest_c = self.pose_estimator.loop_manager.loop_closures[-1]
-                from .bus import MissionEventMsg
                 self.bus.publish("mission/event", MissionEventMsg(
                     timestamp=current_time,
                     event_type="LOOP_CLOSURE_DETECTED",

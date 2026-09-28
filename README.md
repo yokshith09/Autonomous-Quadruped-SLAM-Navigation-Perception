@@ -1,160 +1,43 @@
-# 🚀 How to Run the Project (Quick Start Guide)
+# Autonomous Quadruped Multi-Agent SLAM & Exploration Stack
 
-This guide contains **all the exact commands and steps** to run every script and tool in this repository.
+Closed-loop 2D/3D SLAM, topological Voronoi room segmentation, semantic entity extraction (`chair` / `wall`), and hierarchical room-by-room exploration for a quadruped robot in CoppeliaSim (`robot_working.ttt`).
 
 ---
 
-## ⚡ 1. Prerequisites & Installation
-
-Open **PowerShell** or **Command Prompt** and install the required dependencies:
+## 1. Prerequisites
 
 ```powershell
 pip install numpy scipy opencv-python matplotlib jupyter coppeliasim-zmqremoteapi-client
 ```
 
-> **Note:** Make sure **CoppeliaSim EDU v4.5+** is installed on your computer.
+Open **CoppeliaSim EDU v4.5+** and load `robot_working.ttt`.
 
 ---
 
-## 🎮 2. Quick Execution Order (Run in Sequence)
+## 2. Quick Start Commands
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          EXECUTION STEPS                               │
-│                                                                        │
-│   Step 1: Open CoppeliaSim & Load 'robot_working.ttt'                  │
-│     │                                                                  │
-│     ▼                                                                  │
-│   Step 2: Run Diagnostics (python diagnose_sim.py)                     │
-│     │                                                                  │
-│     ▼                                                                  │
-│   Step 3: Run Autonomous SLAM (python main.py)                         │
-│     │                                                                  │
-│     ▼                                                                  │
-│   Step 4: Run Evaluation Benchmark (python accuracy_evaluator.py)      │
-│     │                                                                  │
-│     ▼                                                                  │
-│   Step 5: View Interactive Notebook (jupyter notebook)                 │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🛠️ Step 1: Open the Simulation Scene in CoppeliaSim
-
-1. Launch **CoppeliaSim EDU**.
-2. Click **File ➔ Open scene...**
-3. Select:
-   ```text
-   robot_working.ttt
-   ```
-4. Keep CoppeliaSim open in the background (you do **not** need to manually click Play; `main.py` will start and step the simulation automatically).
-
----
-
-## 🔍 Step 2: Verify Scene Setup (Diagnostics)
-
-Before running the full mission, verify that the camera rig, joint motors, and depth sensors are responding correctly:
-
-```powershell
-python diagnose_sim.py
-```
-
-### Expected Output:
-```text
-=== CHECK 1: is the Kinect rig parented under /Base? ===
-  depth_cam is a descendant of /Base: True
-=== CHECK 2: are the leg/hip joints motor-enabled? ===
-  motor_enabled=1, ctrl_enabled=1 (All joints OK)
-=== CHECK 3: does the base move under gait alone? ===
-  Physics IS moving the robot.
-=== CHECK 4: is the depth sensor returning usable obstacle points? ===
-  World points in obstacle band [0.04m, 0.60m]: OK
-```
-
----
-
-## 🤖 Step 3: Run Autonomous SLAM & Exploration (`main.py`)
-
-Run the master autonomous exploration mission:
-
-```powershell
-python main.py
-```
-
-### What Happens:
-1. Connects to CoppeliaSim via ZeroMQ.
-2. The robot automatically starts walking and exploring unknown rooms.
-3. An **800×800 4-Panel Real-Time HUD** appears:
-   - **Top-Left:** Live RGB Camera Feed
-   - **Top-Right:** Calibrated Depth Heatmap (JET Colormap)
-   - **Bottom-Left:** Live 2D Occupancy Grid (Yellow path, Green traveled trail, Cyan true pose, Magenta SLAM pose)
-   - **Bottom-Right:** Live Telemetry (Position drift, F1 accuracy, ICP status, % explored)
-
-### Keyboard Controls:
-- Press **`q`** in the OpenCV window to stop exploration, save all matrices, and automatically trigger the evaluation benchmark.
-
----
-
-## 📊 Step 4: Run Quantitative Accuracy Evaluation (`accuracy_evaluator.py`)
-
-To evaluate or re-evaluate the map and trajectory accuracy from saved matrices:
-
-```powershell
-python accuracy_evaluator.py
-```
-
-### Output Files Generated in `accuracy_results/`:
-| File Name | Description |
+| Task | Command |
 | :--- | :--- |
-| **`evaluation_summary_report.txt`** | Full numerical report (F1 score, IoU, Chamfer error, ATE) |
-| **`numerical_map_accuracy_comparison.png`** | 4-panel visual comparison: Ground truth vs SLAM vs difference |
-| **`robot_movement_trajectory_analysis.png`** | Trajectory overlay, drift curves, and heading error vs time |
-| **`sensor_matrix_heatmap_analysis.png`** | Depth distribution histogram and RGB/depth sensor views |
+| **Run Unit Test Suite (16 tests)** | `python -m unittest discover tests -v` |
+| **Run Closed-Loop Multi-Agent SLAM (GUI)** | `python main_agentic.py --closed-loop-slam` |
+| **Run Closed-Loop Headless Benchmark** | `python main_agentic.py --headless --max-time 30.0` |
+| **Print MNE-SLAM (CVPR 2025) Benchmark Table** | `python print_mne_comparison.py` |
+| **Re-evaluate Saved Grids & Trajectories** | `python accuracy_evaluator.py` |
+| **Run Hardware / Scene Diagnostics** | `python diagnose_sim.py` |
 
 ---
 
-## 📓 Step 5: Run Interactive Jupyter Notebook (`map_accuracy.ipynb`)
+## 3. Architecture Overview
 
-To inspect maps, matrices, and plots interactively:
+- **`sensors.py`** — Calibrates static camera-to-base extrinsics $T_{\text{base}}^{\text{cam}}$ once at startup and back-projects depth frames directly into the robot body frame (`depth_to_base_points`).
+- **`slam.py`** — Point-to-Line Metric ICP fused with IMU gyro/gait odometry priors (`ICPPoseEstimator`) and harmonic SE(2) Pose Graph Optimization (`KeyframeLoopManager.optimize_pose_graph`).
+- **`agents/`** — 7 asynchronous agents communicating over `MessageBus`:
+  1. `PerceptionAgent`: Body-frame 3D/2D obstacle slicing (`z ∈ [0.04m, 0.60m]`, `r > 0.40m`).
+  2. `SLAMAgent`: Closed-loop pose estimation (`use_ground_truth_nav=False` by default).
+  3. `MappingAgent`: Pose-coupled Bayesian log-odds grid, Voronoi room segmentation, and `"chair"` / `"wall"` semantic entity extraction.
+  4. `FrontierAgent`: Hierarchical intra-room sweep and doorway transition state machine.
+  5. `PlanningAgent`: Safety-inflated $A^*$ path planner with line-of-sight smoothing.
+  6. `LocomotionAgent`: Sinusoidal CPG quadruped gait, reactive obstacle repulsion, and anti-stuck recovery.
+  7. `SupervisorAgent`: 4-layer `SpatialKnowledgeGraph` (`query_memory`) and `EpisodicMemory` custodian.
 
-```powershell
-jupyter notebook map_accuracy.ipynb
-```
-
-Click **Kernel ➔ Restart & Run All** to run all evaluation cells.
-
----
-
-## 🏃 Alternative: Run Dedicated Evaluation Script (`evaluate_slam.py`)
-
-If you want to run a dedicated benchmark session with automated trajectory and matrix logging:
-
-```powershell
-python evaluate_slam.py
-```
-
----
-
-## 📁 Where Are Output Files Saved?
-
-- **`captured_matrices/`**
-  - `true_grid.npy`: Ground-truth occupancy log-odds matrix
-  - `slam_grid.npy`: SLAM-generated occupancy log-odds matrix
-  - `trajectory_data.npz`: Poses $(x, y, \psi)$ and timestamps
-  - `matrix_data.npz`: Latest raw depth & RGB matrices
-  - `depth_matrix.txt`: Raw metric distance numbers in plain text
-
-- **`accuracy_results/`**
-  - All generated benchmark charts, difference overlays, and evaluation text reports.
-
----
-
-## ❓ Quick Troubleshooting
-
-| Issue | Cause | Fix |
-| :--- | :--- | :--- |
-| **Connection Refused / ZMQ Timeout** | CoppeliaSim is not running | Open CoppeliaSim and load `robot_working.ttt` first. |
-| **`Depth camera NOT found`** | Camera path mismatch | Run `python diagnose_sim.py` to inspect the tree. |
-| **Robot steps but does not translate** | Scene scripts blocking physics | `main.py` automatically patches this. Make sure you run `python main.py` rather than clicking Play in CoppeliaSim without the script. |
-| **OpenCV window doesn't respond** | Window needs focus | Click inside the `NavPulse Debug Dashboard` window, then press **`q`** to exit cleanly. |
+See [`SLAM_NUANCES_AND_IMPLEMENTATION_ROADMAP.md`](SLAM_NUANCES_AND_IMPLEMENTATION_ROADMAP.md) for the complete engineering specification and Phase 7 Raspberry Pi 5 Micro System 1 (Laya / Jev / MLP) deployment roadmap.

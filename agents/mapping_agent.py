@@ -5,7 +5,7 @@ import cv2
 from scipy.ndimage import distance_transform_edt
 from typing import List, Tuple, Dict, Optional
 from .base import BaseAgent
-from .bus import MessageBus, GridMapMsg, ScanMsg, PoseMsg
+from .bus import MessageBus, GridMapMsg, ScanMsg, PoseMsg, MissionEventMsg
 from grid import BayesianOccupancyGrid, GRID_RES
 
 
@@ -22,9 +22,10 @@ class MappingAgent(BaseAgent):
         self.segmentation_interval = 20  # Re-segment rooms periodically
         self.step_counter = 0
 
-        # Persistent Room Identity Tracking (Prevents room IDs from flipping across updates)
+        # Persistent Room & Semantic Entity Identity Tracking
         self.room_centroids: Dict[int, Tuple[float, float]] = {}
         self.next_room_id: int = 1
+        self._known_entities: List[Tuple[str, str, float, float]] = []
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
@@ -149,12 +150,9 @@ class MappingAgent(BaseAgent):
 
     def extract_semantic_entities(self, current_time: float = 0.0) -> List[Dict[str, object]]:
         """Extract semantic 'wall' and 'chair' obstacle clusters from occupancy grid."""
-        from .bus import MissionEventMsg
         occ_mask = (self.grid.grid_log_odds >= self.grid.thresh_occ).astype(np.uint8)
         num_c, _, stats, cents = cv2.connectedComponentsWithStats(occ_mask)
         detected = []
-        if not hasattr(self, "_known_entities"):
-            self._known_entities = []
 
         for i in range(1, num_c):
             area = int(stats[i, cv2.CC_STAT_AREA])
