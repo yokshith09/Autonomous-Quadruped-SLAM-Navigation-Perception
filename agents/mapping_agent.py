@@ -201,6 +201,8 @@ class MappingAgent(BaseAgent):
             return
 
         try:
+            import time as _time
+            t_start = _time.perf_counter()
             rx, ry, ryaw = self.latest_pose.x, self.latest_pose.y, self.latest_pose.yaw
             pts_b = getattr(self.latest_scan, 'base_points_3d', None)
             if pts_b is None:
@@ -224,6 +226,9 @@ class MappingAgent(BaseAgent):
                 self.segment_rooms()
                 self.extract_semantic_entities(current_time)
 
+            if not hasattr(self, "map_times_ms"):
+                self.map_times_ms = []
+            self.map_times_ms.append((_time.perf_counter() - t_start) * 1000.0)
             free, occ, unk, explored_pct = self.grid.get_grid_stats()
 
             # Publish updated Grid Map Message

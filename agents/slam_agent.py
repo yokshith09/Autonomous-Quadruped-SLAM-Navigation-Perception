@@ -16,10 +16,12 @@ class SLAMAgent(BaseAgent):
         self.accum_odom_dx = 0.0
         self.accum_odom_dy = 0.0
         self.accum_odom_dyaw = 0.0
+        self.track_times_ms = []
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
-        self.bus.subscribe("pose/ground_truth", self.on_gt_pose)
+        if self.use_ground_truth_nav:
+            self.bus.subscribe("pose/ground_truth", self.on_gt_pose)
         self.bus.subscribe("control/actuation", self.on_actuation)
         self.is_running = True
         return True
@@ -42,6 +44,8 @@ class SLAMAgent(BaseAgent):
             return
 
         try:
+            import time as _time
+            t_start = _time.perf_counter()
             gt_x, gt_y, gt_yaw = self.latest_gt_pose
             
             # Points are already strictly in the robot base frame (kinematic extrinsics)
@@ -56,6 +60,7 @@ class SLAMAgent(BaseAgent):
                 odom_dyaw=self.accum_odom_dyaw,
                 timestamp=current_time
             )
+            self.track_times_ms.append((_time.perf_counter() - t_start) * 1000.0)
             self.accum_odom_dx = 0.0
             self.accum_odom_dy = 0.0
             self.accum_odom_dyaw = 0.0

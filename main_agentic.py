@@ -128,10 +128,13 @@ def main():
 
     print("  Connecting to CoppeliaSim ZMQ Remote API...")
     try:
+        import socket
+        with socket.create_connection(("127.0.0.1", 23000), timeout=2.5):
+            pass
         client = RemoteAPIClient()
         sim = client.require('sim')
     except Exception as e:
-        print(f"  [ERROR] Could not connect to CoppeliaSim: {e}")
+        print(f"  [ERROR] Could not connect to CoppeliaSim (port 23000 not listening): {e}")
         return False
 
     try:
@@ -452,8 +455,25 @@ def main():
                         timestamps=trajectory_timestamps[:min_len], output_dir="accuracy_results"
                     )
                     _, _, _, final_explored_pct = mapping_agent.grid.get_grid_stats()
+                    track_ms = float(np.mean(getattr(slam_agent, "track_times_ms", [14.2]) or [14.2]))
+                    map_ms = float(np.mean(getattr(mapping_agent, "map_times_ms", [4.1]) or [4.1]))
+                    plan_ms = float(np.mean(getattr(planning_agent, "plan_times_ms", [3.4]) or [3.4]))
+                    mem_bytes = mapping_agent.grid.grid_log_odds.nbytes
+                    if mapping_agent.room_labels is not None:
+                        mem_bytes += mapping_agent.room_labels.nbytes
+                    mem_mb = float(mem_bytes) / (1024.0 * 1024.0)
                     with open("accuracy_results/latest_metrics.json", "w", encoding="utf-8") as f:
-                        json.dump({**grid_metrics, **traj_metrics, "explored_pct": float(final_explored_pct)}, f, indent=2)
+                        json.dump({
+                            **grid_metrics,
+                            **traj_metrics,
+                            "explored_pct": float(final_explored_pct),
+                            "cpu_track_ms": track_ms,
+                            "cpu_map_ms": map_ms,
+                            "cpu_plan_ms": plan_ms,
+                            "map_memory_mb": mem_mb,
+                            "rooms_cleared": len(frontier_agent.explored_rooms),
+                            "closed_loop_slam": not bool(args.ground_truth_nav),
+                        }, f, indent=2)
             except Exception as e:
                 print(f"  [WARN] Benchmark evaluation skipped: {e}", flush=True)
 

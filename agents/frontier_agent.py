@@ -1,5 +1,7 @@
-"""Frontier Exploration Agent: Hierarchical room-by-room frontier selection and doorway transitions."""
+"""Frontier Exploration Agent: Geodesic-Wavefront Topological Next-Best-View (GW-NBV) with Monotonic Angular Sweep."""
 import math
+from collections import deque
+import cv2
 import numpy as np
 from typing import List, Tuple, Set, Optional
 from .base import BaseAgent
@@ -9,7 +11,7 @@ from robot import norm_angle
 
 
 class FrontierAgent(BaseAgent):
-    def __init__(self, bus: MessageBus, grid_ref=None, min_dist: float = 0.5, max_dist: float = 6.0, update_rate_hz: float = 1.0):
+    def __init__(self, bus: MessageBus, grid_ref=None, min_dist: float = 0.45, max_dist: float = 6.0, update_rate_hz: float = 1.0):
         super().__init__("FrontierAgent", bus, update_rate_hz)
         self.grid = grid_ref
         self.min_dist = min_dist
@@ -23,12 +25,13 @@ class FrontierAgent(BaseAgent):
         self.visited_doorways: Set[Tuple[float, float]] = set()
         self.blacklist_frontiers: Set[Tuple[int, int]] = set()
         self.visited_positions: List[Tuple[float, float]] = []
-        self.state: str = "INTRA_ROOM_SWEEP"  # INTRA_ROOM_SWEEP | INTER_ROOM_TRANSIT | MISSION_COMPLETE
+        self.state: str = "INTRA_ROOM_SWEEP"  # INTRA_ROOM_SWEEP | INTER_ROOM_TRANSIT | GLOBAL_EXPLORATION | MISSION_COMPLETE
 
-        # Goal Commitment & Hysteresis State (Prevents target thrashing / path confusion)
+        # Goal Commitment, Dynamic Cone Tracking & Monotonic Angular Sweep State
         self.committed_target: Optional[Tuple[int, int]] = None
         self.committed_doorway: Optional[Tuple[float, float]] = None
         self.commitment_time: float = 0.0
+        self.sweep_direction: int = 1  # +1 CCW, -1 CW monotonic room sweep
 
     def initialize(self) -> bool:
         self.bus.subscribe("pose/state", self.on_pose)
@@ -40,8 +43,81 @@ class FrontierAgent(BaseAgent):
     def _is_doorway_visited(self, dw: Tuple[float, float]) -> bool:
         return any(math.hypot(dw[0] - vd[0], dw[1] - vd[1]) < 0.65 for vd in self.visited_doorways)
 
-    def _is_blacklisted(self, gx: int, gy: int, radius: float = 2.5) -> bool:
+    def _is_blacklisted(self, gx: int, gy: int, radius: float = 3.0) -> bool:
         return any(math.hypot(gx - bgx, gy - bgy) <= radius for bgx, bgy in self.blacklist_frontiers)
+
+    def _compute_geodesic_field(self, start_gx: int, start_gy: int) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute 2D obstacle-inflated Geodesic (Wavefront) distance map in meters from (start_gx, start_gy).
+        ponytail: 8-connected BFS wavefront on 220x220 grid (<2ms); upgrade to Fast Marching Method if grid >1000x1000.
+        """
+        h, w = self.grid.height, self.grid.width
+        occ = (self.grid.grid_log_odds > self.grid.thresh_occ).astype(np.uint8)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+        inflated = cv2.dilate(occ, kernel, iterations=1)
+
+        # Snap start outside inflation margin if robot is close to a wall
+        sx, sy = start_gx, start_gy
+        if not (0 <= sx < w and 0 <= sy < h) or inflated[sy, sx] > 0:
+            found = False
+            for r in range(1, 12):
+                for dy in range(-r, r + 1):
+                    for dx in range(-r, r + 1):
+                        nx, ny = start_gx + dx, start_gy + dy
+                        if 0 <= nx < w and 0 <= ny < h and inflated[ny, nx] == 0 and self.grid.is_free(nx, ny):
+                            sx, sy = nx, ny
+                            found = True
+                            break
+                    if found:
+                        break
+                if found:
+                    break
+
+        dist_map = np.full((h, w), np.inf, dtype=np.float32)
+        if not (0 <= sx < w and 0 <= sy < h):
+            return dist_map, inflated
+
+        dist_map[sy, sx] = 0.0
+        q = deque([(sx, sy)])
+        res = self.grid.res
+        diag_res = res * 1.41421356
+        neighbors = [
+            (-1, 0, res), (1, 0, res), (0, -1, res), (0, 1, res),
+            (-1, -1, diag_res), (-1, 1, diag_res), (1, -1, diag_res), (1, 1, diag_res)
+        ]
+
+        # Only traverse known free space (or immediate robot footprint) outside inflated walls
+        free_mask = (self.grid.grid_log_odds <= self.grid.thresh_free) & (inflated == 0)
+        free_mask[sy, sx] = True
+
+        while q:
+            cx, cy = q.popleft()
+            cd = dist_map[cy, cx]
+            for dx, dy, step_c in neighbors:
+                nx, ny = cx + dx, cy + dy
+                if 0 <= nx < w and 0 <= ny < h and free_mask[ny, nx]:
+                    nd = cd + step_c
+                    if nd < dist_map[ny, nx]:
+                        dist_map[ny, nx] = nd
+                        q.append((nx, ny))
+
+        return dist_map, inflated
+
+    def _query_geodesic_dist(self, dist_map: np.ndarray, gx: int, gy: int, search_radius: int = 6) -> Tuple[float, Tuple[int, int]]:
+        """Return (geodesic_distance_m, best_navigable_grid_cell) in neighborhood of (gx, gy)."""
+        h, w = dist_map.shape
+        best_d = float("inf")
+        best_cell = (gx, gy)
+        for r in range(0, search_radius + 1):
+            y0, y1 = max(0, gy - r), min(h, gy + r + 1)
+            x0, x1 = max(0, gx - r), min(w, gx + r + 1)
+            sub = dist_map[y0:y1, x0:x1]
+            min_val = float(np.min(sub))
+            if np.isfinite(min_val):
+                idx = np.unravel_index(int(np.argmin(sub)), sub.shape)
+                best_d = min_val
+                best_cell = (x0 + int(idx[1]), y0 + int(idx[0]))
+                break
+        return best_d, best_cell
 
     def on_mission_event(self, event_msg: MissionEventMsg):
         if event_msg.event_type in ["PATH_UNREACHABLE", "ROBOT_STUCK"]:
@@ -49,7 +125,6 @@ class FrontierAgent(BaseAgent):
             tgy = event_msg.details.get("target_gy")
             if tgx is not None and tgy is not None:
                 self.blacklist_frontiers.add((tgx, tgy))
-            # Always drop stuck or unreachable targets and doorways to prevent deadlocks
             if self.committed_doorway is not None:
                 self.visited_doorways.add(self.committed_doorway)
                 self.committed_doorway = None
@@ -73,7 +148,6 @@ class FrontierAgent(BaseAgent):
         if val > 0:
             return val
         
-        # Sample neighborhood around cell (essential for frontiers on unsegmented boundary)
         y0, y1 = max(0, gy - radius), min(h, gy + radius + 1)
         x0, x1 = max(0, gx - radius), min(w, gx + radius + 1)
         sub = room_labels[y0:y1, x0:x1]
@@ -85,7 +159,7 @@ class FrontierAgent(BaseAgent):
 
     def on_pose(self, pose_msg: PoseMsg):
         self.latest_pose = pose_msg
-        if not self.visited_positions or math.hypot(pose_msg.x - self.visited_positions[-1][0], pose_msg.y - self.visited_positions[-1][1]) > 0.4:
+        if not self.visited_positions or math.hypot(pose_msg.x - self.visited_positions[-1][0], pose_msg.y - self.visited_positions[-1][1]) > 0.35:
             self.visited_positions.append((pose_msg.x, pose_msg.y))
 
     def on_grid(self, grid_msg: GridMapMsg):
@@ -99,7 +173,10 @@ class FrontierAgent(BaseAgent):
         r_yaw = self.latest_pose.yaw
         rgx, rgy = self.grid.world_to_grid(rx, ry)
 
-        # Check if committed target was reached
+        # Compute fast Geodesic Wavefront distance map from robot's current cell
+        dist_map, inflated_mask = self._compute_geodesic_field(rgx, rgy)
+
+        # Check if committed target was physically reached
         if self.committed_target is not None:
             cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
             if math.hypot(cwx - rx, cwy - ry) < 0.40:
@@ -111,7 +188,7 @@ class FrontierAgent(BaseAgent):
                     self.blacklist_frontiers.add(self.committed_target)
                 self.committed_target = None
 
-        # Detect current room (do NOT prematurely mark previous room explored until its frontiers are 0)
+        # Detect current room
         room_labels = self.latest_grid_msg.room_labels if self.latest_grid_msg else None
         current_detected_room = self._get_room_at(rgx, rgy, room_labels)
         if current_detected_room > 0:
@@ -139,86 +216,121 @@ class FrontierAgent(BaseAgent):
         elif self.active_room_id <= 0:
             self.active_room_id = 1
 
-        # If currently transiting a doorway, maintain commitment until penetrating into the new room (with timeout watchdog)
-        if self.state == "INTER_ROOM_TRANSIT" and self.committed_target is not None:
-            cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
-            dist_to_transit = math.hypot(cwx - rx, cwy - ry)
-            if (current_time - self.commitment_time) > 8.0:
-                print(f"  [FRONTIER] Doorway transit timed out (>8s) -> Aborting transit and falling back to open exploration.")
-                if self.committed_doorway is not None:
-                    self.visited_doorways.add(self.committed_doorway)
-                    self.committed_doorway = None
-                self.blacklist_frontiers.add(self.committed_target)
-                self.committed_target = None
-                self.state = "GLOBAL_EXPLORATION"
-            elif dist_to_transit >= 0.40:
-                target_msg = FrontierTargetMsg(
-                    timestamp=current_time,
-                    target_gx=self.committed_target[0],
-                    target_gy=self.committed_target[1],
-                    target_wx=cwx,
-                    target_wy=cwy,
-                    room_id=-1,
-                    area=50,
-                    is_doorway=True
-                )
-                self.bus.publish("frontier/target", target_msg)
-                return target_msg
-
         all_frontiers = self.grid.detect_frontiers()
         if not all_frontiers:
             self.state = "MISSION_COMPLETE"
             print("  [FRONTIER] All frontiers cleared across entire map! MISSION_COMPLETE.")
             return None
 
-        # Hold committed frontier target until reached, cleared by camera rays, or 8s timeout
-        if self.state in ("INTRA_ROOM_SWEEP", "GLOBAL_EXPLORATION") and self.committed_target is not None:
+        # Maintain or Dynamically Slide Committed Target in Forward Viewing Cone
+        if self.committed_target is not None:
             cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
             dist_to_comm = math.hypot(cwx - rx, cwy - ry)
-            still_has_frontier = any(
-                math.hypot(f[0] - self.committed_target[0], f[1] - self.committed_target[1]) <= 10.0
-                for f in all_frontiers
-            )
-            if (current_time - self.commitment_time) <= 8.0 and dist_to_comm >= 0.42 and still_has_frontier:
-                target_msg = FrontierTargetMsg(
-                    timestamp=current_time,
-                    target_gx=self.committed_target[0],
-                    target_gy=self.committed_target[1],
-                    target_wx=cwx,
-                    target_wy=cwy,
-                    room_id=self.active_room_id,
-                    area=30,
-                    is_doorway=False
-                )
-                self.bus.publish("frontier/target", target_msg)
-                return target_msg
-            else:
-                self.blacklist_frontiers.add(self.committed_target)
-                self.committed_target = None
+            geo_d, nav_cell = self._query_geodesic_dist(dist_map, self.committed_target[0], self.committed_target[1], search_radius=4)
 
-        # 1. Collect all non-blacklisted candidates (never orphan frontiers due to Voronoi label shifts)
+            if (current_time - self.commitment_time) <= 9.0 and dist_to_comm >= 0.38 and np.isfinite(geo_d):
+                if self.state == "INTER_ROOM_TRANSIT":
+                    target_msg = FrontierTargetMsg(
+                        timestamp=current_time,
+                        target_gx=nav_cell[0],
+                        target_gy=nav_cell[1],
+                        target_wx=cwx,
+                        target_wy=cwy,
+                        room_id=-1,
+                        area=50,
+                        is_doorway=True
+                    )
+                    self.bus.publish("frontier/target", target_msg)
+                    return target_msg
+
+                # Check if frontier still exists near committed target OR receded forward inside camera cone
+                still_has_frontier = any(
+                    math.hypot(f[0] - self.committed_target[0], f[1] - self.committed_target[1]) <= 9.0
+                    for f in all_frontiers
+                )
+                if still_has_frontier:
+                    target_msg = FrontierTargetMsg(
+                        timestamp=current_time,
+                        target_gx=nav_cell[0],
+                        target_gy=nav_cell[1],
+                        target_wx=cwx,
+                        target_wy=cwy,
+                        room_id=self.active_room_id,
+                        area=30,
+                        is_doorway=False
+                    )
+                    self.bus.publish("frontier/target", target_msg)
+                    return target_msg
+                else:
+                    # Dynamic View-Cone Slide: as camera rays clear the immediate frontier, slide target forward
+                    # along the receding boundary in the same viewing cone instead of oscillating to another wall!
+                    best_slide = None
+                    best_slide_d = 18.0  # Max 18 cells (0.90m) slide radius
+                    for f in all_frontiers:
+                        fgx, fgy, farea = f
+                        if self._is_blacklisted(fgx, fgy):
+                            continue
+                        d_shift = math.hypot(fgx - self.committed_target[0], fgy - self.committed_target[1])
+                        if d_shift <= best_slide_d:
+                            fwx, fwy = self.grid.grid_to_world(fgx, fgy)
+                            ang_err = abs(norm_angle(math.atan2(fwy - ry, fwx - rx) - r_yaw))
+                            f_geo, f_nav = self._query_geodesic_dist(dist_map, fgx, fgy, search_radius=5)
+                            if ang_err <= 0.65 and np.isfinite(f_geo) and f_geo >= 0.35:
+                                best_slide_d = d_shift
+                                best_slide = (f_nav[0], f_nav[1], fwx, fwy, farea)
+                    if best_slide is not None:
+                        self.committed_target = (best_slide[0], best_slide[1])
+                        target_msg = FrontierTargetMsg(
+                            timestamp=current_time,
+                            target_gx=best_slide[0],
+                            target_gy=best_slide[1],
+                            target_wx=best_slide[2],
+                            target_wy=best_slide[3],
+                            room_id=self.active_room_id,
+                            area=best_slide[4],
+                            is_doorway=False
+                        )
+                        self.bus.publish("frontier/target", target_msg)
+                        return target_msg
+
+            # Target expired, cleared, or became unreachable
+            if self.committed_doorway is not None:
+                self.visited_doorways.add(self.committed_doorway)
+                self.committed_doorway = None
+            self.blacklist_frontiers.add(self.committed_target)
+            self.committed_target = None
+
+        # 1. Collect all REACHABLE non-blacklisted candidates using Geodesic Wavefront
         candidates = []
         for f in all_frontiers:
             gx, gy, area = f
             if self._is_blacklisted(gx, gy):
                 continue
-            wx, wy = self.grid.grid_to_world(gx, gy)
-            dist = math.hypot(wx - rx, wy - ry)
-            candidates.append((f, dist))
+            geo_dist, nav_cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=6)
+            if not np.isfinite(geo_dist):
+                continue  # Provably unreachable by A* right now -> skip!
+            candidates.append(((nav_cell[0], nav_cell[1], area), geo_dist))
 
         if not candidates and self.blacklist_frontiers:
             self.blacklist_frontiers.clear()
             for f in all_frontiers:
+                gx, gy, area = f
+                geo_dist, nav_cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=7)
+                if np.isfinite(geo_dist):
+                    candidates.append(((nav_cell[0], nav_cell[1], area), geo_dist))
+
+        if not candidates:
+            # Fallback if robot is temporarily boxed in: pick closest raw frontier
+            for f in all_frontiers:
                 wx, wy = self.grid.grid_to_world(f[0], f[1])
-                dist = math.hypot(wx - rx, wy - ry)
-                candidates.append((f, dist))
+                candidates.append((f, math.hypot(wx - rx, wy - ry)))
 
         if not candidates:
             self.state = "MISSION_COMPLETE"
             print("  [FRONTIER] All rooms and frontiers explored. MISSION_COMPLETE.")
             return None
 
-        # Filter by min_dist (prefer frontiers > min_dist, but fall back to closer if none exist)
+        # Filter by min_dist (prefer frontiers >= min_dist, fall back if only close ones remain)
         dist_candidates = [c for c in candidates if c[1] >= self.min_dist]
         if not dist_candidates:
             dist_candidates = candidates
@@ -226,15 +338,15 @@ class FrontierAgent(BaseAgent):
         # Classify into active room vs other rooms
         room_frontiers = []
         other_frontiers = []
-        for f, dist in dist_candidates:
+        for f, geo_dist in dist_candidates:
             gx, gy, area = f
             f_room = self._get_room_at(gx, gy, room_labels)
             if self.active_room_id > 0 and self.active_room_id not in self.explored_rooms and f_room == self.active_room_id:
-                room_frontiers.append((f, dist))
+                room_frontiers.append((f, geo_dist))
             else:
-                other_frontiers.append((f, dist))
+                other_frontiers.append((f, geo_dist))
 
-        # Collect valid forward doorways (unvisited and navigable outside obstacle inflation)
+        # Collect valid forward doorways (unvisited and navigable on Geodesic map)
         doorways = self.latest_grid_msg.doorways if self.latest_grid_msg else []
         valid_doorways = []
         for d in doorways:
@@ -243,17 +355,17 @@ class FrontierAgent(BaseAgent):
             dgx, dgy = self.grid.world_to_grid(d[0], d[1])
             if self._is_blacklisted(dgx, dgy, radius=3.5):
                 continue
-            if not self.grid.is_free(dgx, dgy) or self.grid.is_occupied_inflated(dgx, dgy, radius_cells=3):
+            dw_geo, dw_nav = self._query_geodesic_dist(dist_map, dgx, dgy, search_radius=4)
+            if not np.isfinite(dw_geo):
                 continue
-            valid_doorways.append(d)
+            valid_doorways.append((d, dw_geo, dw_nav))
 
         # Decision Logic:
-        # Case A: Current room still has unexplored frontiers -> Clear it!
+        # Case A: Current room still has unexplored reachable frontiers -> Clear it systematically!
         if room_frontiers and self.active_room_id not in self.explored_rooms:
             self.state = "INTRA_ROOM_SWEEP"
             target_frontier = self._score_frontiers(room_frontiers, rx, ry, r_yaw)
             gx, gy, area = target_frontier
-            gx, gy = find_nearest_free(self.grid, gx, gy)
             self.committed_target = (gx, gy)
             self.commitment_time = current_time
             wx, wy = self.grid.grid_to_world(gx, gy)
@@ -268,7 +380,7 @@ class FrontierAgent(BaseAgent):
                 area=area,
                 is_doorway=False
             )
-            print(f"  [FRONTIER] [INTRA_ROOM_SWEEP] Target: ({wx:.2f}, {wy:.2f}) [Room {self.active_room_id}] | Dist: {math.hypot(wx-rx, wy-ry):.2f}m")
+            print(f"  [FRONTIER] [INTRA_ROOM_SWEEP] Target: ({wx:.2f}, {wy:.2f}) [Room {self.active_room_id}] | GeoDist: {dist_map[gy, gx]:.2f}m")
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
@@ -282,20 +394,30 @@ class FrontierAgent(BaseAgent):
                 details={"room_id": self.active_room_id}
             ))
 
-        # Case B: Current room is CLEARED! Transition to next room via forward Doorway if reachable
+        # Case B: Current room is CLEARED! Transition to next room via Doorway Penetration Vector
         if valid_doorways:
             self.state = "INTER_ROOM_TRANSIT"
-            valid_doorways.sort(key=lambda d: math.hypot(d[0] - rx, d[1] - ry))
-            dw_target = valid_doorways[0]
+            valid_doorways.sort(key=lambda item: item[1])
+            dw_target, dw_geo, dw_nav = valid_doorways[0]
             self.committed_doorway = dw_target
 
-            dgx, dgy = self.grid.world_to_grid(dw_target[0], dw_target[1])
-            dgx, dgy = find_nearest_free(self.grid, dgx, dgy)
+            # Project Doorway Penetration Vector 0.55m past the doorway into the next room
+            vec_x, vec_y = dw_target[0] - rx, dw_target[1] - ry
+            vec_len = math.hypot(vec_x, vec_y)
+            if vec_len > 0.1:
+                pen_wx = dw_target[0] + (vec_x / vec_len) * 0.55
+                pen_wy = dw_target[1] + (vec_y / vec_len) * 0.55
+                pgx, pgy = self.grid.world_to_grid(pen_wx, pen_wy)
+                p_geo, p_nav = self._query_geodesic_dist(dist_map, pgx, pgy, search_radius=5)
+                if np.isfinite(p_geo):
+                    dw_nav = p_nav
+
+            dgx, dgy = dw_nav
             target_wx, target_wy = self.grid.grid_to_world(dgx, dgy)
 
             self.committed_target = (dgx, dgy)
             self.commitment_time = current_time
-            print(f"  [FRONTIER] [INTER_ROOM_TRANSIT] Heading to Doorway ({target_wx:.2f}, {target_wy:.2f})")
+            print(f"  [FRONTIER] [INTER_ROOM_TRANSIT] Penetrating Doorway -> ({target_wx:.2f}, {target_wy:.2f})")
             target_msg = FrontierTargetMsg(
                 timestamp=current_time,
                 target_gx=dgx,
@@ -309,12 +431,11 @@ class FrontierAgent(BaseAgent):
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
-        # Case C: Global exploration into any remaining unexplored frontiers
+        # Case C: Global exploration into any remaining unexplored frontiers across all rooms
         if other_frontiers:
             self.state = "GLOBAL_EXPLORATION"
             target_frontier = self._score_frontiers(other_frontiers, rx, ry, r_yaw)
             gx, gy, area = target_frontier
-            gx, gy = find_nearest_free(self.grid, gx, gy)
             self.committed_target = (gx, gy)
             self.commitment_time = current_time
             wx, wy = self.grid.grid_to_world(gx, gy)
@@ -330,7 +451,7 @@ class FrontierAgent(BaseAgent):
                 area=area,
                 is_doorway=False
             )
-            print(f"  [FRONTIER] [GLOBAL_EXPLORATION] Target: ({wx:.2f}, {wy:.2f}) [Room {f_room}] | Dist: {math.hypot(wx-rx, wy-ry):.2f}m")
+            print(f"  [FRONTIER] [GLOBAL_EXPLORATION] Target: ({wx:.2f}, {wy:.2f}) [Room {f_room}] | GeoDist: {dist_map[gy, gx]:.2f}m")
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
@@ -338,12 +459,22 @@ class FrontierAgent(BaseAgent):
         return None
 
     def _score_frontiers(self, frontier_list, rx, ry, r_yaw: float = 0.0):
+        """Score reachable frontiers using Geodesic Cost-to-Go, Volumetric Gain, and Hemisphere-First Monotonic Sweep."""
         best_f = None
         best_score = -float('inf')
-        rgx, rgy = self.grid.world_to_grid(rx, ry)
         h, w = self.grid.height, self.grid.width
 
-        for f, dist in frontier_list:
+        # Check if any candidate lies in the forward hemisphere (|angle_err| <= 95 deg)
+        has_forward_candidate = False
+        for f, _ in frontier_list:
+            fwx, fwy = self.grid.grid_to_world(f[0], f[1])
+            ang_err = abs(norm_angle(math.atan2(fwy - ry, fwx - rx) - r_yaw))
+            if ang_err <= 1.65:  # ~95 degrees
+                has_forward_candidate = True
+                break
+
+        best_signed_err = 0.0
+        for f, geo_dist in frontier_list:
             gx, gy, area = f
             wx, wy = self.grid.grid_to_world(gx, gy)
 
@@ -352,44 +483,52 @@ class FrontierAgent(BaseAgent):
             x0, x1 = max(0, gx - 4), min(w, gx + 5)
             patch = self.grid.grid_log_odds[y0:y1, x0:x1]
             unk_count = int(np.count_nonzero((patch > self.grid.thresh_free) & (patch < self.grid.thresh_occ)))
-            info_gain = min(float(area), 18.0) + 0.25 * unk_count
+            info_gain = min(float(area), 20.0) + 0.30 * unk_count
 
-            # 2. Geodesic wall-crossing penalty: penalize frontiers behind solid walls
-            wall_hits = 0
-            for cx, cy in bresenham_line(rgx, rgy, gx, gy):
-                if 0 <= cx < w and 0 <= cy < h and self.grid.grid_log_odds[cy, cx] >= self.grid.thresh_occ:
-                    wall_hits += 1
-                    if wall_hits >= 2:
-                        break
-            eff_dist = dist * (1.85 if wall_hits >= 2 else 1.0)
+            # 2. True Geodesic Walking Distance Penalty (replaces Euclidean wall-blind distance)
+            score = info_gain - (geo_dist * 3.8)
 
-            score = info_gain - (eff_dist * 3.5)
-
-            # 3. Obstacle clearance bonus: prefer open viewpoints over tight corners
+            # 3. Obstacle clearance bonus
             if not self.grid.is_occupied_inflated(gx, gy, radius_cells=4):
-                score += 5.0
+                score += 6.0
             else:
                 score -= 6.0
 
-            # 4. Novelty bonus: strongly reward distance from historical positions
+            # 4. Novelty bonus: reward distance from historical positions
             if self.visited_positions:
                 min_vis_dist = min(math.hypot(wx - vx, wy - vy) for vx, vy in self.visited_positions)
                 score += min(min_vis_dist * 4.0, 14.0)
 
-            # 5. Heading alignment bonus: strongly favor frontiers ahead of the robot
+            # 5. Hemisphere-First & Monotonic Angular Sweep Continuity
             target_angle = math.atan2(wy - ry, wx - rx)
-            angle_err = abs(norm_angle(target_angle - r_yaw))
-            score += math.cos(angle_err) * 11.0
+            signed_err = norm_angle(target_angle - r_yaw)
+            angle_err = abs(signed_err)
+
+            # Forward view-cone bonus
+            score += math.cos(angle_err) * 14.0
+
+            # If forward frontiers exist, strongly suppress 180-degree turn reversals (eliminates front/back confusion)
+            if has_forward_candidate and angle_err > 1.90:
+                score -= 18.0
+
+            # Monotonic angular sweep bonus (consistent rotational clearing direction)
+            if (signed_err >= 0 and self.sweep_direction >= 0) or (signed_err < 0 and self.sweep_direction < 0):
+                score += 4.5
 
             # 6. Goal commitment & hysteresis bonus
             if self.committed_target is not None:
                 d_to_committed = math.hypot(gx - self.committed_target[0], gy - self.committed_target[1])
-                if d_to_committed <= 6.0:
-                    score += 16.0
+                if d_to_committed <= 7.0:
+                    score += 18.0
 
             if score > best_score:
                 best_score = score
                 best_f = f
+                best_signed_err = signed_err
+
+        if abs(best_signed_err) > 0.15:
+            self.sweep_direction = 1 if best_signed_err > 0 else -1
+
         return best_f
 
     def step(self, current_time: float) -> None:
@@ -400,3 +539,4 @@ class FrontierAgent(BaseAgent):
                 print(f"  [FRONTIER] State: [{self.state}] | Active: Room {self.active_room_id} | Explored Rooms: {list(self.explored_rooms)}")
         except Exception as e:
             self.handle_error(e)
+

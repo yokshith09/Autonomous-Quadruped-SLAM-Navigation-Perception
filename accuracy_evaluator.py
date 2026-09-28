@@ -117,6 +117,9 @@ def evaluate_grid_accuracy(
     slam_pts_y, slam_pts_x = np.where(slam_occ == 1)
     
     chamfer_dist_m = 0.0
+    acc_dist_m = 0.0
+    comp_dist_m = 0.0
+    comp_ratio_5cm = 0.0
     hausdorff_95_m = 0.0
     
     if len(true_pts_x) > 0 and len(slam_pts_x) > 0:
@@ -130,14 +133,20 @@ def evaluate_grid_accuracy(
             dists_slam_to_true, _ = tree_true.query(slam_pts)
             dists_true_to_slam, _ = tree_slam.query(true_pts)
             
-            chamfer_dist_m = float(0.5 * (np.mean(dists_slam_to_true) + np.mean(dists_true_to_slam)))
+            acc_dist_m = float(np.mean(dists_slam_to_true))
+            comp_dist_m = float(np.mean(dists_true_to_slam))
+            chamfer_dist_m = float(0.5 * (acc_dist_m + comp_dist_m))
+            comp_ratio_5cm = float(np.mean(dists_true_to_slam <= 0.05))
             all_dists = np.concatenate([dists_slam_to_true, dists_true_to_slam])
             hausdorff_95_m = float(np.percentile(all_dists, 95))
         else:
             # Fallback distance transform
             dist_map_true = cv2.distanceTransform((1 - true_occ).astype(np.uint8), cv2.DIST_L2, 3) * resolution
             dist_map_slam = cv2.distanceTransform((1 - slam_occ).astype(np.uint8), cv2.DIST_L2, 3) * resolution
-            chamfer_dist_m = float(0.5 * (np.mean(dist_map_true[slam_occ == 1]) + np.mean(dist_map_slam[true_occ == 1])))
+            acc_dist_m = float(np.mean(dist_map_true[slam_occ == 1]))
+            comp_dist_m = float(np.mean(dist_map_slam[true_occ == 1]))
+            chamfer_dist_m = float(0.5 * (acc_dist_m + comp_dist_m))
+            comp_ratio_5cm = float(np.mean(dist_map_slam[true_occ == 1] <= 0.05))
             hausdorff_95_m = float(np.percentile(dist_map_true[slam_occ == 1], 95)) if np.any(slam_occ == 1) else 0.0
 
     metrics = {
@@ -148,6 +157,9 @@ def evaluate_grid_accuracy(
         'tolerant_iou': float(tolerant_iou),
         'free_space_iou': float(free_iou),
         'overall_grid_accuracy': float(overall_accuracy),
+        'accuracy_meters': float(acc_dist_m),
+        'completion_meters': float(comp_dist_m),
+        'completion_ratio_5cm': float(comp_ratio_5cm),
         'chamfer_distance_meters': float(chamfer_dist_m),
         'hausdorff_95_meters': float(hausdorff_95_m),
         'total_true_obstacle_cells': total_true_occ,
@@ -280,11 +292,15 @@ def evaluate_trajectory(
         
     true_p = true_p[:min_len]
     slam_p = slam_p[:min_len]
+    if timestamps is not None:
+        timestamps = np.asarray(timestamps, dtype=np.float64)[:min_len]
     
     # 1. Absolute Trajectory Error (ATE) in 2D Euclidean Distance
     pos_errors = np.hypot(slam_p[:, 0] - true_p[:, 0], slam_p[:, 1] - true_p[:, 1])
     ate_rmse = float(np.sqrt(np.mean(pos_errors ** 2)))
     ate_mean = float(np.mean(pos_errors))
+    ate_median = float(np.median(pos_errors))
+    ate_std = float(np.std(pos_errors))
     ate_max = float(np.max(pos_errors))
     
     # 2. Heading Error
@@ -304,17 +320,29 @@ def evaluate_trajectory(
     step_dists_slam = np.hypot(diffs_slam[:, 0], diffs_slam[:, 1])
     total_dist_slam = float(np.sum(step_dists_slam))
     
-    # 4. Relative Pose Error (RPE) - Translational Drift Rate (% of total distance)
+    # 4. Relative Pose Error (RPE) - Frame-to-frame local translational & rotational RMSE
+    rpe_trans_errors = np.hypot(diffs_slam[:, 0] - diffs_true[:, 0], diffs_slam[:, 1] - diffs_true[:, 1])
+    rpe_trans_rmse = float(np.sqrt(np.mean(rpe_trans_errors ** 2))) if len(rpe_trans_errors) > 0 else 0.0
+    dyaw_true = norm_angle_np(np.diff(true_p[:, 2]))
+    dyaw_slam = norm_angle_np(np.diff(slam_p[:, 2]))
+    rpe_rot_errors_deg = np.degrees(np.abs(norm_angle_np(dyaw_slam - dyaw_true)))
+    rpe_rot_rmse_deg = float(np.sqrt(np.mean(rpe_rot_errors_deg ** 2))) if len(rpe_rot_errors_deg) > 0 else 0.0
+
+    # 5. Translational Drift Rate (% of total distance)
     drift_rate_pct = (ate_rmse / total_dist_true * 100.0) if total_dist_true > 0 else 0.0
     
-    # 5. Path Efficiency (Direct Euclidean Start-to-End vs Traveled)
+    # 6. Path Efficiency (Direct Euclidean Start-to-End vs Traveled)
     net_displacement = float(np.hypot(true_p[-1, 0] - true_p[0, 0], true_p[-1, 1] - true_p[0, 1]))
     path_efficiency = (net_displacement / total_dist_true) if total_dist_true > 0 else 1.0
 
     metrics = {
         'ate_rmse_meters': ate_rmse,
         'ate_mean_meters': ate_mean,
+        'ate_median_meters': ate_median,
+        'ate_std_meters': ate_std,
         'ate_max_meters': ate_max,
+        'rpe_trans_rmse_meters': rpe_trans_rmse,
+        'rpe_rot_rmse_deg': rpe_rot_rmse_deg,
         'mean_heading_error_deg': mean_yaw_error_deg,
         'max_heading_error_deg': max_yaw_error_deg,
         'total_distance_traveled_m': total_dist_true,

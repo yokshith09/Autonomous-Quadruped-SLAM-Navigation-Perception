@@ -86,6 +86,7 @@ class PlanningAgent(BaseAgent):
             return None
 
         # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
+        t_p0 = time.perf_counter()
         world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False)
         if not world_path:
             print(f"  [PLANNER] Target ({self.latest_target.target_wx:.2f}, {self.latest_target.target_wy:.2f}) unreachable! Blacklisting & replanning...")
@@ -103,6 +104,9 @@ class PlanningAgent(BaseAgent):
 
         # Line-of-sight shortcut smoothing on world coordinates
         world_waypoints = smooth_path(self.grid, world_path)
+        if not hasattr(self, "plan_times_ms"):
+            self.plan_times_ms = []
+        self.plan_times_ms.append((time.perf_counter() - t_p0) * 1000.0)
 
         self.last_replan_time = current_time
         self.replan_count += 1
