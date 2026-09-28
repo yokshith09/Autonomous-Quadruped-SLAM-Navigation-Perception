@@ -48,6 +48,24 @@ class LizardRobot:
         except Exception:
             pass
 
+        self._prev_imu_yaw = None
+
+    def get_odometry_imu_delta(self, dt: float, speed_cmd: float):
+        """Return (forward_displacement_m, gyro_dyaw_rad) using IMU orientation delta and gait kinematics."""
+        # Calibrated physical gait stride speed at speed=1.0 is ~0.16 m/s
+        d_fwd = 0.16 * speed_cmd * max(0.0, min(dt, 0.25))
+        try:
+            o = self.sim.getObjectOrientation(self.base, self.sim.handle_world)
+            yaw = norm_angle(o[2] + math.pi)
+            if self._prev_imu_yaw is None:
+                self._prev_imu_yaw = yaw
+                return d_fwd, 0.0
+            dyaw = norm_angle(yaw - self._prev_imu_yaw)
+            self._prev_imu_yaw = yaw
+            return d_fwd, dyaw
+        except Exception:
+            return d_fwd, 0.0
+
     def get_pose(self):
         p = self.sim.getObjectPosition(self.base, self.sim.handle_world)
         o = self.sim.getObjectOrientation(self.base, self.sim.handle_world)

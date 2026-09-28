@@ -2,8 +2,8 @@
 import numpy as np
 import math
 from .base import BaseAgent
-from .bus import MessageBus, PoseMsg, ScanMsg
-from slam import ICPPoseEstimator, base_to_world_points
+from .bus import MessageBus, PoseMsg, ScanMsg, ActuationMsg
+from slam import ICPPoseEstimator, base_to_world_points, wrap_angle
 
 
 class SLAMAgent(BaseAgent):
@@ -16,10 +16,14 @@ class SLAMAgent(BaseAgent):
         self.latest_gt_pose = (initial_x, initial_y, initial_yaw)
         self.last_step_time = 0.0
         self.prev_est_pose = (initial_x, initial_y, initial_yaw)
+        self.accum_odom_dx = 0.0
+        self.accum_odom_dy = 0.0
+        self.accum_odom_dyaw = 0.0
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
         self.bus.subscribe("pose/ground_truth", self.on_gt_pose)
+        self.bus.subscribe("control/actuation", self.on_actuation)
         self.is_running = True
         return True
 
@@ -28,6 +32,12 @@ class SLAMAgent(BaseAgent):
 
     def on_gt_pose(self, pose_msg: PoseMsg):
         self.latest_gt_pose = (pose_msg.x, pose_msg.y, pose_msg.yaw)
+
+    def on_actuation(self, act_msg: ActuationMsg):
+        mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * act_msg.gyro_dyaw)
+        self.accum_odom_dx += act_msg.odom_forward * math.cos(mid_yaw)
+        self.accum_odom_dy += act_msg.odom_forward * math.sin(mid_yaw)
+        self.accum_odom_dyaw = wrap_angle(self.accum_odom_dyaw + act_msg.gyro_dyaw)
 
     def step(self, current_time: float) -> None:
         if self.latest_scan is None or len(self.latest_scan.points_2d) == 0:
@@ -39,9 +49,18 @@ class SLAMAgent(BaseAgent):
             # Points are already strictly in the robot base frame (kinematic extrinsics)
             base_pts = self.latest_scan.points_2d
             
-            # Run Point-to-Line Metric ICP with loop closure
+            # Run Point-to-Line Metric ICP with kinematic odometry & gyro prior + loop closure PGO
             prev_closures = len(self.pose_estimator.loop_manager.loop_closures)
-            slam_pose = self.pose_estimator.update(base_pts, timestamp=current_time)
+            slam_pose = self.pose_estimator.update(
+                base_pts,
+                odom_dx=self.accum_odom_dx,
+                odom_dy=self.accum_odom_dy,
+                odom_dyaw=self.accum_odom_dyaw,
+                timestamp=current_time
+            )
+            self.accum_odom_dx = 0.0
+            self.accum_odom_dy = 0.0
+            self.accum_odom_dyaw = 0.0
             
             # Check for new loop closures
             if len(self.pose_estimator.loop_manager.loop_closures) > prev_closures:

@@ -62,7 +62,11 @@ def initialize_sensors(sim, base):
     T_base_cam = None
     if base is not None and depth_cam is not None:
         try:
-            T_base_cam = sim.getObjectMatrix(depth_cam, base)
+            raw_t = list(sim.getObjectMatrix(depth_cam, base))
+            # Align with LizardRobot forward walking frame (heading = o[2] + pi -> rotate XY by pi)
+            for idx in range(8):
+                raw_t[idx] = -raw_t[idx]
+            T_base_cam = raw_t
             print("  [OK] Calibrated static camera-to-base extrinsics T_base_cam", flush=True)
         except Exception as e:
             print(f"  [WARN] Could not get T_base_cam relative to base: {e}", flush=True)

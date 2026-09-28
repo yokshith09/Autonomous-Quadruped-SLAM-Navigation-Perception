@@ -337,6 +337,26 @@ class KeyframeLoopManager:
 
         return None
 
+    def optimize_pose_graph(self, matched_kf: Keyframe, err_dx: float, err_dy: float, err_dyaw: float) -> int:
+        """Relax keyframe poses along the loop chain via harmonic SE(2) error distribution."""
+        # ponytail: harmonic chain PGO, upgrade to sparse Gauss-Newton if multi-loop cross-links overlap
+        try:
+            anchor_idx = next(i for i, kf in enumerate(self.keyframes) if kf.keyframe_id == matched_kf.keyframe_id)
+        except StopIteration:
+            return 0
+        span = len(self.keyframes) - 1 - anchor_idx
+        if span <= 0:
+            return 0
+        for i in range(anchor_idx + 1, len(self.keyframes)):
+            alpha = (i - anchor_idx) / float(span)
+            kf = self.keyframes[i]
+            kf.x += alpha * err_dx
+            kf.y += alpha * err_dy
+            kf.yaw = wrap_angle(kf.yaw + alpha * err_dyaw)
+        last_kf = self.keyframes[-1]
+        self.last_kf_pose = (last_kf.x, last_kf.y, last_kf.yaw)
+        return span
+
 
 @dataclass
 class PoseEstimate:
@@ -404,6 +424,13 @@ class ICPPoseEstimator:
 
         dx, dy = transform[:2, 2]
         dyaw = math.atan2(transform[1, 0], transform[0, 0])
+        if abs(odom_dyaw) > 1e-6:
+            # Fuse with IMU gyro prior: prevent collinear single-wall scans from twisting yaw > 10 deg
+            gyro_diff = wrap_angle(dyaw - odom_dyaw)
+            max_dev = math.radians(10.0)
+            if abs(gyro_diff) > max_dev:
+                dyaw = wrap_angle(odom_dyaw + math.copysign(max_dev, gyro_diff) * 0.25)
+
         valid = (
             correspondences >= 20
             and np.isfinite(rmse)
@@ -426,11 +453,11 @@ class ICPPoseEstimator:
             if self.loop_manager.should_add_keyframe(self.pose.x, self.pose.y, self.pose.yaw):
                 self.loop_manager.add_keyframe(timestamp, self.pose.x, self.pose.y, self.pose.yaw, scan)
 
-            # Check loop closure
+            # Check loop closure & run Pose Graph Optimization
             closure = self.loop_manager.detect_loop_closure(timestamp, self.pose.x, self.pose.y, self.pose.yaw, scan)
             if closure:
                 matched_kf, err_dx, err_dy, err_dyaw = closure
-                # Correct drift smoothly (50% damping factor)
+                self.loop_manager.optimize_pose_graph(matched_kf, err_dx, err_dy, err_dyaw)
                 self.pose.x += err_dx * 0.5
                 self.pose.y += err_dy * 0.5
                 self.pose.yaw = wrap_angle(self.pose.yaw + err_dyaw * 0.5)
@@ -438,6 +465,8 @@ class ICPPoseEstimator:
             self.pose.x += odom_dx
             self.pose.y += odom_dy
             self.pose.yaw = wrap_angle(self.pose.yaw + odom_dyaw)
+            self.previous_scan = scan
+            self.previous_normals = estimate_normals_2d(scan)
             self.pose.rmse = float("inf")
             self.pose.correspondences = correspondences
             self.pose.accepted = False

@@ -71,6 +71,8 @@ class ActuationMsg:
     heading_error: float
     speed: float
     state_str: str
+    odom_forward: float = 0.0
+    gyro_dyaw: float = 0.0
 
 
 @dataclass

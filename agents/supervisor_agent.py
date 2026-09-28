@@ -56,6 +56,13 @@ class SupervisorAgent(BaseAgent):
             r_a = event_msg.details.get("room_a", 1)
             r_b = event_msg.details.get("room_b", 2)
             self.knowledge_graph.add_doorway(d_id, pos, r_a, r_b)
+        elif event_msg.event_type == "OBJECT_DETECTED":
+            e_id = event_msg.details.get("entity_id", "obj_1")
+            cls_name = event_msg.details.get("class_name", "obstacle")
+            pos = event_msg.details.get("position", (rx, ry, 0.4))
+            room_id = event_msg.details.get("room_id", 1)
+            self.knowledge_graph.get_or_create_room(room_id)
+            self.knowledge_graph.add_entity(e_id, cls_name, pos, room_id=room_id)
 
     def step(self, current_time: float) -> None:
         if self.latest_grid:

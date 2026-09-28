@@ -147,6 +147,53 @@ class MappingAgent(BaseAgent):
         self.doorways = doorway_points
         return voronoi_map, doorway_points
 
+    def extract_semantic_entities(self, current_time: float = 0.0) -> List[Dict[str, object]]:
+        """Extract semantic 'wall' and 'chair' obstacle clusters from occupancy grid."""
+        from .bus import MissionEventMsg
+        occ_mask = (self.grid.grid_log_odds >= self.grid.thresh_occ).astype(np.uint8)
+        num_c, _, stats, cents = cv2.connectedComponentsWithStats(occ_mask)
+        detected = []
+        if not hasattr(self, "_known_entities"):
+            self._known_entities = []
+
+        for i in range(1, num_c):
+            area = int(stats[i, cv2.CC_STAT_AREA])
+            if area < 3:
+                continue
+            w_m = stats[i, cv2.CC_STAT_WIDTH] * self.grid.res
+            h_m = stats[i, cv2.CC_STAT_HEIGHT] * self.grid.res
+            span_m = math.hypot(w_m, h_m)
+            if span_m >= 1.2:
+                cls_name = "wall"
+            elif 0.18 <= span_m <= 1.05:
+                cls_name = "chair"
+            else:
+                continue
+
+            gx = max(0, min(self.grid.width - 1, int(round(cents[i][0]))))
+            gy = max(0, min(self.grid.height - 1, int(round(cents[i][1]))))
+            wx, wy = self.grid.grid_to_world(gx, gy)
+            room_id = int(self.room_labels[gy, gx]) if self.room_labels is not None and self.room_labels[gy, gx] > 0 else 1
+
+            # Deduplicate within 0.6m radius for same class
+            existing_id = None
+            for eid, ecls, ex, ey in self._known_entities:
+                if ecls == cls_name and math.hypot(wx - ex, wy - ey) < 0.6:
+                    existing_id = eid
+                    break
+            if existing_id is None:
+                existing_id = f"{cls_name}_{len(self._known_entities) + 1}"
+                self._known_entities.append((existing_id, cls_name, wx, wy))
+
+            info = {"entity_id": existing_id, "class_name": cls_name, "position": (wx, wy, 0.4), "room_id": max(1, room_id)}
+            detected.append(info)
+            self.bus.publish("mission/event", MissionEventMsg(
+                timestamp=current_time,
+                event_type="OBJECT_DETECTED",
+                details=info
+            ))
+        return detected
+
     def step(self, current_time: float) -> None:
         if self.latest_scan is None or self.latest_pose is None:
             return
@@ -169,10 +216,11 @@ class MappingAgent(BaseAgent):
                 # Update Bayesian Occupancy Grid via Bresenham raycasting
                 self.grid.update_from_depth_points(pts_w, (rx, ry))
 
-            # Periodic Room Segmentation
+            # Periodic Room Segmentation & Semantic Entity Extraction
             self.step_counter += 1
             if self.step_counter % self.segmentation_interval == 0:
                 self.segment_rooms()
+                self.extract_semantic_entities(current_time)
 
             free, occ, unk, explored_pct = self.grid.get_grid_stats()
 

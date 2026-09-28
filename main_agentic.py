@@ -355,10 +355,10 @@ def main():
                 else:
                     live_ate_rmse = 0.0
 
-                # Compute live map accuracy metrics
+                # Compute live map accuracy metrics (true reference grid vs SLAM grid)
                 try:
                     live_grid_metrics = evaluate_grid_accuracy(
-                        mapping_agent.grid.grid_log_odds, mapping_agent.grid.grid_log_odds,
+                        true_grid.grid_log_odds, mapping_agent.grid.grid_log_odds,
                         resolution=GRID_RES, tolerance_m=0.15, save_plots=False
                     )
                 except Exception:

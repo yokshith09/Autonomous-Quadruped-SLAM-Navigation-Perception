@@ -187,16 +187,18 @@ def test_locomotion_agent():
     assert loco.speed > 0.0
     assert loco.state_str == "WALK"
 
-    # 3. Test reactive obstacle repulsion
-    # Add obstacle point 20cm ahead slightly to the left
+    # 3. Test reactive obstacle repulsion at non-zero world pose (body-frame scan)
+    loco.on_pose(PoseMsg(timestamp=1.2, x=5.0, y=-3.0, yaw=1.2))
+    loco.on_path(PathMsg(timestamp=1.2, waypoints=[(6.0, -2.0), (7.0, -1.0)]))
+    # Add obstacle point 20cm ahead slightly to the left in robot body frame
     scan = ScanMsg(timestamp=1.2, points_2d=np.array([[0.20, 0.08]]))
     loco.on_scan(scan)
     loco.step(current_time=1.2)
-    assert loco.state_str == "AVOID"
+    assert loco.state_str == "AVOID", f"Expected AVOID at non-zero pose, got {loco.state_str}"
 
     # 4. Test anti-stuck detection
     loco.last_stuck_check_time = 0.0
-    loco.last_stuck_pos = (0.0, 0.0)
+    loco.last_stuck_pos = (5.0, -3.0)
     # Simulate staying stuck at same position over consecutive intervals
     loco.step(current_time=2.5)
     loco.step(current_time=3.6)
@@ -229,6 +231,38 @@ def test_frontier_boundary_room_association():
     print("PASSED")
 
 
+def test_semantic_entity_extraction():
+    print("Running test_semantic_entity_extraction...", end=" ")
+    bus = MessageBus()
+    ma = MappingAgent(bus, -5.0, 5.0, -5.0, 5.0, 0.1)
+    sup = SupervisorAgent(bus)
+    ma.initialize()
+    sup.initialize()
+
+    # Clear free space in center
+    ma.grid.grid_log_odds[20:80, 20:80] = ma.grid.l_min
+    # Add a long wall (>= 1.2m -> 15 cells at 0.1m res)
+    ma.grid.grid_log_odds[20, 20:40] = ma.grid.l_max
+    # Add a compact chair cluster (3x3 cells = 0.3m x 0.3m inside room)
+    ma.grid.grid_log_odds[50:53, 50:53] = ma.grid.l_max
+
+    entities = ma.extract_semantic_entities(current_time=1.0)
+    classes = {e["class_name"] for e in entities}
+    assert "wall" in classes, f"Expected 'wall' in {classes}"
+    assert "chair" in classes, f"Expected 'chair' in {classes}"
+    assert len(sup.knowledge_graph.entities) >= 2
+    print("PASSED")
+
+
+def load_tests(loader, standard_tests, pattern):
+    import unittest
+    suite = unittest.TestSuite()
+    for name, obj in list(globals().items()):
+        if name.startswith("test_") and callable(obj):
+            suite.addTest(unittest.FunctionTestCase(obj))
+    return suite
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()
@@ -239,4 +273,7 @@ if __name__ == "__main__":
     test_planning_agent()
     test_locomotion_agent()
     test_frontier_boundary_room_association()
+    test_semantic_entity_extraction()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
+
+

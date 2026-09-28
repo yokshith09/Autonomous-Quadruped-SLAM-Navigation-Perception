@@ -93,13 +93,9 @@ class LocomotionAgent(BaseAgent):
                 avoidance_yaw = 0.0
                 if self.latest_scan is not None and self.latest_scan.points_2d is not None and len(self.latest_scan.points_2d) > 0:
                     pts = self.latest_scan.points_2d
-                    dxs = pts[:, 0] - rx
-                    dys = pts[:, 1] - ry
-                    cos_y = math.cos(r_yaw)
-                    sin_y = math.sin(r_yaw)
                     # Coordinates in robot body frame: forward (x_b), lateral (y_b)
-                    x_b = dxs * cos_y + dys * sin_y
-                    y_b = -dxs * sin_y + dys * cos_y
+                    x_b = pts[:, 0]
+                    y_b = pts[:, 1]
 
                     # Forward safety envelope: 38cm ahead, 26cm half-width
                     crit = (x_b > 0.02) & (x_b < 0.38) & (np.abs(y_b) < 0.26)
@@ -152,11 +148,15 @@ class LocomotionAgent(BaseAgent):
                         details={"x": rx, "y": ry}
                     ))
 
+                d_fwd, dyaw_gyro = 0.16 * self.speed * 0.05, 0.0
                 if self.robot is not None:
                     try:
                         orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
                         self.robot.steer_heading(orient, r_yaw, steer_target)
                         self.robot.apply_gait(current_time, self.speed)
+                        dt_step = max(0.01, current_time - getattr(self, "_prev_cmd_time", current_time - 0.05))
+                        self._prev_cmd_time = current_time
+                        d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, self.speed)
                     except Exception as e:
                         self.handle_error(e)
 
@@ -165,15 +165,19 @@ class LocomotionAgent(BaseAgent):
                     joint_targets={},
                     heading_error=heading_err,
                     speed=self.speed,
-                    state_str=self.state_str
+                    state_str=self.state_str,
+                    odom_forward=d_fwd,
+                    gyro_dyaw=dyaw_gyro
                 ))
         else:
             # When no waypoints are active: hold position stably (DO NOT spin in circles)
             self.speed = 0.0
             self.state_str = "IDLE"
+            d_fwd, dyaw_gyro = 0.0, 0.0
             if self.robot is not None:
                 try:
                     self.robot.apply_gait(current_time, 0.0)
+                    _, dyaw_gyro = self.robot.get_odometry_imu_delta(0.05, 0.0)
                 except Exception:
                     pass
             self.bus.publish("control/actuation", ActuationMsg(
@@ -181,7 +185,9 @@ class LocomotionAgent(BaseAgent):
                 joint_targets={},
                 heading_error=0.0,
                 speed=0.0,
-                state_str="IDLE"
+                state_str="IDLE",
+                odom_forward=d_fwd,
+                gyro_dyaw=dyaw_gyro
             ))
 
         if (current_time - getattr(self, 'last_status_log_time', 0.0)) > 2.5:

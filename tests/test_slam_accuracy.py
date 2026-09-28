@@ -123,6 +123,70 @@ def test_depth_to_base_projection():
     print("PASSED")
 
 
+def test_icp_odometry_prior_and_recovery():
+    print("Running test_icp_odometry_prior_and_recovery...", end=" ")
+    wall_x = np.linspace(0.5, 3.0, 60)
+    wall_1 = np.column_stack([wall_x, np.zeros_like(wall_x)])
+    wall_y = np.linspace(0.0, 2.5, 60)
+    wall_2 = np.column_stack([np.full_like(wall_y, 3.0), wall_y])
+    base_scan = np.vstack([wall_1, wall_2])
+
+    est = ICPPoseEstimator(0.0, 0.0, 0.0)
+    est.update(base_scan, timestamp=1.0)
+
+    # Simulate a sharp 35-deg turn where ICP fails/rejects on an outlier frame,
+    # followed by a normal frame at the new heading.
+    rot_35 = math.radians(35.0)
+    R_inv = np.array([[math.cos(-rot_35), -math.sin(-rot_35)],
+                      [math.sin(-rot_35),  math.cos(-rot_35)]])
+    turned_scan = base_scan @ R_inv.T
+
+    # Force a rejected ICP frame with huge outlier offset, bridged by gyro odom_dyaw
+    corrupted_scan = turned_scan + np.array([5.0, 5.0])
+    p2 = est.update(corrupted_scan, odom_dx=0.0, odom_dy=0.0, odom_dyaw=rot_35, timestamp=2.0)
+    assert not p2.accepted
+    assert abs(wrap_angle(p2.yaw - rot_35)) < 1e-4
+
+    # Now feed a valid scan at the turned orientation (shifted slightly by 2cm from corrupted_scan's true frame)
+    # Wait: if previous_scan was updated to turned_scan on fallback, let's test consecutive valid scans after rejection:
+    p2b = est.update(turned_scan, odom_dx=0.0, odom_dy=0.0, odom_dyaw=0.0, timestamp=2.5)
+    next_scan = turned_scan - np.array([0.05, 0.0])
+    p3 = est.update(next_scan, odom_dx=0.05 * math.cos(rot_35), odom_dy=0.05 * math.sin(rot_35), odom_dyaw=0.0, timestamp=3.0)
+    assert p3.accepted, "ICP failed to recover after a rejected scan frame!"
+    print("PASSED")
+
+
+def test_pose_graph_optimization():
+    print("Running test_pose_graph_optimization...", end=" ")
+    mgr = KeyframeLoopManager(keyframe_dist=0.5, min_loop_time_diff=5.0)
+    dummy_scan = np.column_stack([np.linspace(0, 2, 40), np.zeros(40)])
+    kf1 = mgr.add_keyframe(0.0, 0.0, 0.0, 0.0, dummy_scan)
+    kf2 = mgr.add_keyframe(2.0, 1.0, 0.0, 0.0, dummy_scan)
+    kf3 = mgr.add_keyframe(4.0, 2.0, 0.0, 0.0, dummy_scan)
+    kf4 = mgr.add_keyframe(6.0, 1.0, 1.0, 0.0, dummy_scan)
+
+    # Optimize loop between kf1 (idx 0) and current end of chain with error (-0.3, -0.6, -0.09)
+    n_opt = mgr.optimize_pose_graph(kf1, err_dx=-0.3, err_dy=-0.6, err_dyaw=-0.09)
+    assert n_opt == 3
+    # Anchor kf1 must not move
+    assert abs(kf1.x - 0.0) < 1e-6
+    # Intermediate keyframes should receive proportional harmonic corrections (1/3, 2/3, 3/3)
+    assert abs(kf2.x - (1.0 - 0.1)) < 1e-5
+    assert abs(kf3.x - (2.0 - 0.2)) < 1e-5
+    assert abs(kf4.x - (1.0 - 0.3)) < 1e-5
+    assert abs(kf4.y - (1.0 - 0.6)) < 1e-5
+    print("PASSED")
+
+
+def load_tests(loader, standard_tests, pattern):
+    import unittest
+    suite = unittest.TestSuite()
+    for name, obj in list(globals().items()):
+        if name.startswith("test_") and callable(obj):
+            suite.addTest(unittest.FunctionTestCase(obj))
+    return suite
+
+
 if __name__ == "__main__":
     print("=== RUNNING SLAM ACCURACY & LOOP CLOSURE UNIT TESTS ===")
     test_normal_estimation()
@@ -130,4 +194,8 @@ if __name__ == "__main__":
     test_loop_closure_manager()
     test_world_to_base_projection()
     test_depth_to_base_projection()
+    test_icp_odometry_prior_and_recovery()
+    test_pose_graph_optimization()
     print("=== ALL SLAM ACCURACY TESTS PASSED SUCCESSFULLY! ===")
+
+
