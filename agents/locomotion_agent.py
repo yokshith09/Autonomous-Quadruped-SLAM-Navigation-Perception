@@ -8,7 +8,7 @@ from robot import LizardRobot, norm_angle
 
 
 class LocomotionAgent(BaseAgent):
-    def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.25, update_rate_hz: float = 20.0):
+    def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.18, update_rate_hz: float = 20.0):
         super().__init__("LocomotionAgent", bus, update_rate_hz)
         self.robot = robot_driver
         self.wp_radius = wp_radius
@@ -47,15 +47,20 @@ class LocomotionAgent(BaseAgent):
             return
 
         rx, ry, r_yaw = self.latest_pose.x, self.latest_pose.y, self.latest_pose.yaw
+        dt_step = max(0.01, current_time - getattr(self, "_prev_cmd_time", current_time - 0.05))
+        self._prev_cmd_time = current_time
 
         # 1. Anti-stuck active recovery maneuver (reverse step)
         if self.recovery_countdown > 0:
             self.recovery_countdown -= 1
-            self.speed = -0.5  # Reverse gait swing
+            self.speed = -0.6  # Reverse gait swing
             self.state_str = "RECOVER_BACKUP"
+            d_fwd, d_lat, dyaw_gyro = -0.10 * 0.05, 0.0, 0.0
             if self.robot is not None:
                 try:
                     self.robot.apply_gait(current_time, self.speed)
+                    d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, self.speed)
+                    d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                 except Exception as e:
                     self.handle_error(e)
             self.bus.publish("control/actuation", ActuationMsg(
@@ -63,17 +68,30 @@ class LocomotionAgent(BaseAgent):
                 joint_targets={},
                 heading_error=0.0,
                 speed=self.speed,
-                state_str=self.state_str
+                state_str=self.state_str,
+                odom_forward=d_fwd,
+                odom_lateral=d_lat,
+                gyro_dyaw=dyaw_gyro
             ))
             return
 
-        # 2. Waypoint tracking & navigation
+        # 2. Waypoint tracking & navigation (tight adherence to the planned blue line)
         if self.waypoints and self.wp_idx < len(self.waypoints):
-            # Advance past start/intermediate waypoints already within reach or behind the next segment
+            # Only skip the start cell (wp_idx == 0) if the robot is already standing on it
+            if self.wp_idx == 0 and len(self.waypoints) > 1:
+                if math.hypot(self.waypoints[0][0] - rx, self.waypoints[0][1] - ry) < 0.24:
+                    self.wp_idx = 1
+
+            # Advance if within wp_radius or if waypoint was just passed behind the robot
             while self.wp_idx < len(self.waypoints) - 1:
-                cur_d = math.hypot(self.waypoints[self.wp_idx][0] - rx, self.waypoints[self.wp_idx][1] - ry)
-                nxt_d = math.hypot(self.waypoints[self.wp_idx + 1][0] - rx, self.waypoints[self.wp_idx + 1][1] - ry)
-                if cur_d < max(self.wp_radius, 0.32) or nxt_d < cur_d:
+                wx, wy = self.waypoints[self.wp_idx]
+                nx, ny = self.waypoints[self.wp_idx + 1]
+                cur_d = math.hypot(wx - rx, wy - ry)
+                # Vector from current waypoint to next waypoint vs robot to current waypoint
+                seg_dx, seg_dy = nx - wx, ny - wy
+                to_wp_dx, to_wp_dy = wx - rx, wy - ry
+                passed_wp = (seg_dx * to_wp_dx + seg_dy * to_wp_dy) < 0.0 and cur_d < 0.26
+                if cur_d < self.wp_radius or passed_wp:
                     self.wp_idx += 1
                 else:
                     break
@@ -94,44 +112,38 @@ class LocomotionAgent(BaseAgent):
             if self.waypoints and self.wp_idx < len(self.waypoints):
                 target_heading = math.atan2(target_wy - ry, target_wx - rx)
 
-                # Reactive obstacle repulsion using 2D sensory scan
+                # Close-range bumper safety envelope (only directly in front of chassis so A* path is respected)
                 avoidance_yaw = 0.0
                 if self.latest_scan is not None and self.latest_scan.points_2d is not None and len(self.latest_scan.points_2d) > 0:
                     pts = self.latest_scan.points_2d
-                    # Coordinates in robot body frame: forward (x_b), lateral (y_b)
                     x_b = pts[:, 0]
                     y_b = pts[:, 1]
 
-                    # Forward safety envelope: 15cm to 58cm ahead, 30cm half-width
-                    crit = (x_b > 0.15) & (x_b < 0.58) & (np.abs(y_b) < 0.30)
+                    crit = (x_b > 0.15) & (x_b < 0.34) & (np.abs(y_b) < 0.18)
                     if np.any(crit):
                         close_yb = y_b[crit]
                         mean_yb = float(np.mean(close_yb))
-                        # Steer laterally away from closest obstacle cluster
-                        avoidance_yaw = -0.60 if mean_yb >= 0 else 0.60
+                        avoidance_yaw = -0.35 if mean_yb >= 0 else 0.35
 
                 steer_target = norm_angle(target_heading + avoidance_yaw)
                 heading_err = norm_angle(steer_target - r_yaw)
                 abs_err = abs(heading_err)
 
-                # Continuous speed modulation
+                # High-efficiency speed modulation
                 if avoidance_yaw != 0.0:
-                    self.speed = 0.30
+                    self.speed = 0.60
                     self.state_str = "AVOID"
                     if (current_time - getattr(self, 'last_avoid_log_time', 0.0)) > 2.5:
                         self.last_avoid_log_time = current_time
                         print(f"  [LOCOMOTION] Proximity safety envelope: Repelling from obstacle cluster (steer bias: {avoidance_yaw:+.2f} rad)")
-                elif abs_err > 0.85:
-                    self.speed = 0.12  # Turn on the spot instead of walking forward into obstacles
+                elif abs_err > 0.95:
+                    self.speed = 0.35  # Fast turn-in-place
                     self.state_str = "TURN"
                 elif abs_err > 0.45:
-                    self.speed = 0.45  # Continuous turn-while-walking
+                    self.speed = 0.75  # Continuous turn-while-walking
                     self.state_str = "TURN"
-                elif abs_err > 0.20:
-                    self.speed = 0.75  # Arc turn
-                    self.state_str = "WALK"
                 else:
-                    self.speed = 1.0   # Full forward walk
+                    self.speed = 1.0   # Full forward walk along the path line
                     self.state_str = "WALK"
 
                 # Anti-stuck watchdog: verify physical progress every 1.0s
@@ -146,7 +158,7 @@ class LocomotionAgent(BaseAgent):
 
                 if self.stuck_ticks >= 2:  # Stuck for ~2 seconds
                     print(f"  [LOCOMOTION] Watchdog detected obstacle stall at ({rx:.2f}, {ry:.2f}) -> Executing reverse recovery step")
-                    self.recovery_countdown = 16  # 16 steps (0.8s) of reverse recovery
+                    self.recovery_countdown = 14
                     self.stuck_ticks = 0
                     self.waypoints = []
                     self.wp_idx = 0
@@ -156,14 +168,12 @@ class LocomotionAgent(BaseAgent):
                         details={"x": rx, "y": ry}
                     ))
 
-                d_fwd, d_lat, dyaw_gyro = 0.16 * self.speed * 0.05, 0.0, 0.0
+                d_fwd, d_lat, dyaw_gyro = 0.22 * self.speed * 0.05, 0.0, 0.0
                 if self.robot is not None:
                     try:
                         orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
                         self.robot.steer_heading(orient, r_yaw, steer_target)
                         self.robot.apply_gait(current_time, self.speed)
-                        dt_step = max(0.01, current_time - getattr(self, "_prev_cmd_time", current_time - 0.05))
-                        self._prev_cmd_time = current_time
                         d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, self.speed)
                         d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                     except Exception as e:
@@ -183,11 +193,12 @@ class LocomotionAgent(BaseAgent):
             # When no waypoints are active: hold position stably (DO NOT spin in circles)
             self.speed = 0.0
             self.state_str = "IDLE"
-            d_fwd, dyaw_gyro = 0.0, 0.0
+            d_fwd, d_lat, dyaw_gyro = 0.0, 0.0, 0.0
             if self.robot is not None:
                 try:
                     self.robot.apply_gait(current_time, 0.0)
-                    _, dyaw_gyro = self.robot.get_odometry_imu_delta(0.05, 0.0)
+                    d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, 0.0)
+                    d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                 except Exception:
                     pass
             self.bus.publish("control/actuation", ActuationMsg(
@@ -197,6 +208,7 @@ class LocomotionAgent(BaseAgent):
                 speed=0.0,
                 state_str="IDLE",
                 odom_forward=d_fwd,
+                odom_lateral=d_lat,
                 gyro_dyaw=dyaw_gyro
             ))
 

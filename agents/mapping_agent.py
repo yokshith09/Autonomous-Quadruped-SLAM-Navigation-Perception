@@ -56,15 +56,16 @@ class MappingAgent(BaseAgent):
             return np.zeros_like(free_mask, dtype=np.int32), []
 
         # 2. Adaptive multi-scale distance transform thresholding to separate distinct room cores
+        min_core_area = 80 if self.grid.res <= 0.06 else 12
         valid_components = []
         markers = np.zeros_like(free_mask, dtype=np.int32)
-        for t_ratio in [0.65, 0.60, 0.56, 0.50, 0.45, 0.40]:
+        for t_ratio in [0.62, 0.56, 0.50, 0.45, 0.40]:
             thresh = t_ratio * max_val
             sure_fg = (dist_transform >= thresh).astype(np.uint8)
             num_markers, cur_markers, stats, cents = cv2.connectedComponentsWithStats(sure_fg)
             comps = []
             for i in range(1, num_markers):
-                if stats[i, cv2.CC_STAT_AREA] >= 12:
+                if stats[i, cv2.CC_STAT_AREA] >= min_core_area:
                     gx, gy = cents[i][0], cents[i][1]
                     wx, wy = self.grid.grid_to_world(int(round(gx)), int(round(gy)))
                     comps.append((i, (wx, wy)))
@@ -132,8 +133,9 @@ class MappingAgent(BaseAgent):
         door_mask[:, 0:3] = 0
         door_mask[:, -3:] = 0
 
-        # Require clearance: doorway bottleneck must be in safely navigable free space (>= 15cm from walls)
-        door_mask &= (dist_transform >= 3).astype(np.uint8)
+        # Require navigable clearance (>= 25cm on 5cm grid so A* can pass through)
+        min_door_dist = 5 if self.grid.res <= 0.06 else 3
+        door_mask &= (dist_transform >= min_door_dist).astype(np.uint8)
 
         num_d, d_labels, d_stats, d_cents = cv2.connectedComponentsWithStats(door_mask)
         doorway_points = []

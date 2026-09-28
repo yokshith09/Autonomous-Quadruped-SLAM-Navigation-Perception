@@ -438,16 +438,16 @@ class ICPPoseEstimator:
             if has_odom:
                 # Fuse with IMU gyro prior and reject lever-arm translation drift during turns
                 err_yaw = wrap_angle(dyaw - odom_dyaw)
-                max_yaw_corr = math.radians(0.5)
-                dyaw = wrap_angle(odom_dyaw + max(-max_yaw_corr, min(max_yaw_corr, err_yaw * 0.15)))
-                if abs(odom_dyaw) > math.radians(1.0):
+                max_yaw_corr = math.radians(0.15)
+                dyaw = wrap_angle(odom_dyaw + max(-max_yaw_corr, min(max_yaw_corr, err_yaw * 0.05)))
+                if abs(odom_dyaw) > math.radians(0.5):
                     dx, dy = dx_local, dy_local
                 else:
                     err_tx = dx - dx_local
                     err_ty = dy - dy_local
                     err_t = math.hypot(err_tx, err_ty)
                     if err_t > 1e-6:
-                        scale = min(0.20, 0.004 / err_t)
+                        scale = min(0.05, 0.0006 / err_t)
                         dx = dx_local + err_tx * scale
                         dy = dy_local + err_ty * scale
 
@@ -468,10 +468,12 @@ class ICPPoseEstimator:
             closure = self.loop_manager.detect_loop_closure(timestamp, self.pose.x, self.pose.y, self.pose.yaw, scan)
             if closure:
                 matched_kf, err_dx, err_dy, err_dyaw = closure
+                matched_kf.timestamp = timestamp
                 self.loop_manager.optimize_pose_graph(matched_kf, err_dx, err_dy, err_dyaw)
-                self.pose.x += err_dx * 0.5
-                self.pose.y += err_dy * 0.5
-                self.pose.yaw = wrap_angle(self.pose.yaw + err_dyaw * 0.5)
+                if not has_odom:
+                    self.pose.x += err_dx * 0.5
+                    self.pose.y += err_dy * 0.5
+                    self.pose.yaw = wrap_angle(self.pose.yaw + err_dyaw * 0.5)
         else:
             self.pose.x += odom_dx
             self.pose.y += odom_dy

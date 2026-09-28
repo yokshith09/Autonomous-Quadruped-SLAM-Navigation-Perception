@@ -17,9 +17,9 @@ def a_star_search(grid, start, goal, smooth=False):
 
     start_time = time.time()
     
-    # Precompute 35cm inflated mask for robot clearance (7 cells at 5cm resolution)
+    # Precompute 25cm inflated mask for robot clearance (5 cells radius at 5cm resolution)
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
     
     def is_inflated(x, y):
@@ -142,13 +142,13 @@ def _line_of_sight(grid, p1, p2, inflated_mask=None):
                     return False
     return True
 
-def smooth_path(grid, path, min_spacing=0.25):
+def smooth_path(grid, path, min_spacing=0.20):
     if len(path) <= 2:
         return path
     
     # Safety clearance mask for line of sight
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
 
     smoothed = [path[0]]

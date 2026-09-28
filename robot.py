@@ -1,9 +1,9 @@
 import math
 
-FREQ = 5.0
-HIP_AMP = 0.40
-LEG_LIFT = 0.02
-LEG_PLANT = -0.02
+FREQ = 6.5
+HIP_AMP = 0.48
+LEG_LIFT = 0.025
+LEG_PLANT = -0.025
 OMEGA = 2 * math.pi * FREQ
 # Restored to match path_planning_nav.py / path_planning_nav_dstar.py.
 # The current tree had these at SLOW_ANGLE=0.2 / HEADING_RATE=0.1, which is a
@@ -11,8 +11,8 @@ OMEGA = 2 * math.pi * FREQ
 # smaller heading error than either previous version used. apply_gait() itself
 # is byte-identical across all three files -- this steering aggressiveness is
 # what actually changed the perceived "gait".
-SLOW_ANGLE = 0.3
-HEADING_RATE = 0.07
+SLOW_ANGLE = 0.25
+HEADING_RATE = 0.11
 
 def norm_angle(a):
     while a > math.pi:
@@ -54,7 +54,7 @@ class LizardRobot:
 
     def get_odometry_imu_delta(self, dt: float, speed_cmd: float):
         """Return (forward_displacement_m, gyro_dyaw_rad) using IMU orientation delta and base kinematics."""
-        d_fwd = 0.16 * speed_cmd * max(0.0, min(dt, 0.25))
+        d_fwd = 0.22 * speed_cmd * max(0.0, min(dt, 0.25))
         self.last_odom_lateral = 0.0
         try:
             p = self.sim.getObjectPosition(self.base, self.sim.handle_world)
@@ -86,10 +86,10 @@ class LizardRobot:
 
     def steer_heading(self, orient, current_heading, desired_heading, step_count=0):
         err = norm_angle(desired_heading - current_heading)
-        if abs(err) < 0.05:
+        if abs(err) < 0.03:
             correction = 0
         else:
-            gain = 0.4 if abs(err) > SLOW_ANGLE else 0.2
+            gain = 0.55 if abs(err) > SLOW_ANGLE else 0.35
             correction = max(-HEADING_RATE, min(HEADING_RATE, err * gain))
         
         new_gamma = orient[2] + correction

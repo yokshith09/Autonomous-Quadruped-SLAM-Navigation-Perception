@@ -182,15 +182,28 @@ class BayesianOccupancyGrid:
         free_dilated = cv2.dilate(is_free_mask.astype(np.uint8), kernel)
         frontier_edges = (free_dilated == 1) & is_unknown_mask
         
-        # 3. Cluster into regions using connectedComponents
+        # 3. Cluster into regions using connectedComponents and snap to medoid cell
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(frontier_edges.astype(np.uint8), connectivity=8)
         
         frontiers = []
         for i in range(1, num_labels):
             area = int(stats[i, cv2.CC_STAT_AREA])
-            if area >= 3: # Filter out tiny noise clusters
-                cx, cy = int(centroids[i][0]), int(centroids[i][1])
-                frontiers.append((cx, cy, area))
+            if area < 3:
+                continue
+            ys, xs = np.where(labels == i)
+            if len(xs) == 0:
+                continue
+            # Subdivide very long frontier ribbons (> 28 cells) into two viewpoints
+            if area > 28 and len(xs) >= 6:
+                mid = len(xs) // 2
+                for sub_xs, sub_ys in [(xs[:mid], ys[:mid]), (xs[mid:], ys[mid:])]:
+                    mx, my = float(np.mean(sub_xs)), float(np.mean(sub_ys))
+                    idx = int(np.argmin((sub_xs - mx) ** 2 + (sub_ys - my) ** 2))
+                    frontiers.append((int(sub_xs[idx]), int(sub_ys[idx]), len(sub_xs)))
+            else:
+                cx, cy = float(centroids[i][0]), float(centroids[i][1])
+                idx = int(np.argmin((xs - cx) ** 2 + (ys - cy) ** 2))
+                frontiers.append((int(xs[idx]), int(ys[idx]), area))
                 
         return frontiers
 
