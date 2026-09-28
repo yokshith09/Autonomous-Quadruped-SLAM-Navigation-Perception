@@ -36,6 +36,12 @@ from sensors import initialize_sensors, get_depth_heatmap
 from grid import BayesianOccupancyGrid
 from viz import create_debug_dashboard
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory, evaluate_depth_perception
+from print_mne_comparison import print_comparison_benchmark
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 MAX_TIME = 900.0
 MAP_X_MIN, MAP_X_MAX = -5.5, 5.5
@@ -457,13 +463,19 @@ def main():
                     print(f"  * Mean Chamfer Wall Error:          {grid_metrics['chamfer_distance_meters'] * 100:6.2f} cm")
                     print(f"  * Absolute Trajectory Error (RMSE): {traj_metrics['ate_rmse_meters'] * 100:6.2f} cm")
                     print(f"  * Total Traveled Distance:         {traj_metrics['total_distance_traveled_m']:6.2f} m")
-                    print("  ========================================================\n")
+                    print("  ========================================================\n", flush=True)
             except Exception as e:
-                print(f"  [WARN] Benchmark evaluation skipped: {e}")
+                print(f"  [WARN] Benchmark evaluation skipped: {e}", flush=True)
+
+        # Always print the full MNE-SLAM & Edge AI comparison table to the VS Code terminal
+        try:
+            print_comparison_benchmark()
+        except Exception as e:
+            print(f"  [WARN] Could not print MNE-SLAM comparison table: {e}", flush=True)
 
     print("=" * 75)
     print("  MULTI-AGENT EXPLORATION MISSION COMPLETE")
-    print("=" * 75)
+    print("=" * 75, flush=True)
     return True
 
 
