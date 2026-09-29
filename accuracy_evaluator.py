@@ -564,40 +564,45 @@ def run_full_evaluation_pipeline(
     """
     Scans the project data directory, loads all available matrices and trajectories,
     and runs the full suite of numerical evaluations.
+
+    SCIENTIFIC EVALUATION PATH — uses REAL ground-truth data only.
+    Expects true_grid.npy and slam_grid.npy saved by the simulation.
+    If those files are absent, reports "Ground truth unavailable" rather than
+    manufacturing synthetic comparison data.
+
+    See _demo_synthetic_test() for a clearly separated synthetic/unit-test function.
     """
     print("\n" + "=" * 75)
     print("  RUNNING FULL NUMERICAL ACCURACY & SLAM EVALUATION PIPELINE")
     print("=" * 75)
-    
+
     results = {}
-    
-    # 1. Evaluate Occupancy Grid Matrices
-    grid_candidates = [
-        os.path.join(data_dir, 'grid.npy'),
-        'captured_matrices/grid.npy',
-        '../captured_matrices/grid.npy'
-    ]
-    grid_path = next((p for p in grid_candidates if os.path.exists(p)), None)
-    
-    if grid_path:
-        print(f"  [1/3] Loading Occupancy Grid Matrix from: {grid_path}")
-        loaded_grid = np.load(grid_path)
-        
-        # True grid vs SLAM grid
-        true_grid = loaded_grid.copy()
-        M = np.float32([[1, 0, 1], [0, 1, 1]])
-        slam_grid = cv2.warpAffine(true_grid, M, (true_grid.shape[1], true_grid.shape[0]), borderMode=cv2.BORDER_REPLICATE)
-        noise = np.random.normal(0, 0.05, true_grid.shape).astype(np.float32)
-        slam_grid += noise
-        
-        grid_metrics = evaluate_grid_accuracy(true_grid, slam_grid, resolution=0.05, tolerance_m=0.15, output_dir=output_dir)
+
+    # 1. Evaluate Occupancy Grid Matrices (REAL data only)
+    true_grid_path = os.path.join(data_dir, 'true_grid.npy')
+    slam_grid_path = os.path.join(data_dir, 'slam_grid.npy')
+
+    if os.path.exists(true_grid_path) and os.path.exists(slam_grid_path):
+        print(f"  [1/3] Loading Ground-Truth Grid:  {true_grid_path}")
+        print(f"         Loading SLAM Grid:          {slam_grid_path}")
+        true_grid = np.load(true_grid_path)
+        slam_grid = np.load(slam_grid_path)
+        grid_metrics = evaluate_grid_accuracy(
+            true_grid, slam_grid, resolution=0.05, tolerance_m=0.15,
+            output_dir=output_dir, save_plots=True
+        )
         results['grid_metrics'] = grid_metrics
         print(f"    -> Obstacle F1 Score:       {grid_metrics['f1_score'] * 100:.2f} %")
         print(f"    -> Precision (SLAM Walls):   {grid_metrics['precision'] * 100:.2f} %")
         print(f"    -> Recall (True Walls):      {grid_metrics['recall'] * 100:.2f} %")
         print(f"    -> Mean Chamfer Wall Error: {grid_metrics['chamfer_distance_meters'] * 100:.2f} cm")
     else:
-        print("  [1/3] No raw grid.npy found; skipping direct grid matrix evaluation.")
+        print("  [1/3] Ground truth occupancy grids not found.")
+        print(f"         Expected: {true_grid_path}")
+        print(f"                   {slam_grid_path}")
+        print("         Status: Ground truth unavailable — skipping grid matrix evaluation.")
+        print("         NOTE: Metrics from the last simulation run are in accuracy_results/latest_metrics.json")
+        print("         NOTE: Run the simulation with save_grids=True to regenerate these files.")
 
     # 2. Evaluate Depth & RGB Matrices
     npz_candidates = [
@@ -606,13 +611,13 @@ def run_full_evaluation_pipeline(
         '../captured_matrices/matrix_data.npz'
     ]
     npz_path = next((p for p in npz_candidates if os.path.exists(p)), None)
-    
+
     if npz_path:
         print(f"\n  [2/3] Loading Sensor Matrices from: {npz_path}")
         data = np.load(npz_path)
         depth_m = data['depth']
         rgb_m = data['rgb'] if 'rgb' in data else None
-        
+
         perception_metrics = evaluate_depth_perception(depth_m, rgb_m, output_dir=output_dir)
         results['perception_metrics'] = perception_metrics
         print(f"    -> Depth Matrix Shape:       {perception_metrics['sensor_resolution_w']}x{perception_metrics['sensor_resolution_h']}")
@@ -625,7 +630,7 @@ def run_full_evaluation_pipeline(
     print("\n  [3/3] Generating Version Comparison Benchmark Scorecard")
     comparison_table = generate_version_comparison_table()
     print(comparison_table)
-    
+
     report_path = os.path.join(output_dir, 'evaluation_summary_report.txt')
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(comparison_table)
@@ -637,9 +642,64 @@ def run_full_evaluation_pipeline(
             f.write("\n\nPERCEPTION METRICS:\n")
             for k, v in results['perception_metrics'].items():
                 f.write(f"  {k}: {v}\n")
-                
+
     print(f"  [OK] Saved evaluation report to: {report_path}")
     print("=" * 75 + "\n")
+    return results
+
+
+def _demo_synthetic_test(
+    data_dir: str = 'captured_matrices',
+    output_dir: str = 'accuracy_results'
+) -> Dict[str, Union[float, Dict]]:
+    """
+    SYNTHETIC DEMO / UNIT-TEST ONLY — NOT for scientific benchmarking.
+
+    Loads a real grid.npy (single-grid format), then applies a known artificial
+    translation + Gaussian noise to simulate SLAM drift for unit-testing alignment
+    algorithm behaviour.
+
+    This function is intentionally SEPARATED from run_full_evaluation_pipeline()
+    to guarantee the scientific evaluation path never uses manufactured data.
+
+    DO NOT include output of this function in published results.
+    """
+    print("\n[DEMO/TEST] _demo_synthetic_test — SYNTHETIC DATA — NOT FOR SCIENTIFIC USE")
+    results = {}
+
+    grid_candidates = [
+        os.path.join(data_dir, 'grid.npy'),
+        'captured_matrices/grid.npy',
+        '../captured_matrices/grid.npy'
+    ]
+    grid_path = next((p for p in grid_candidates if os.path.exists(p)), None)
+
+    if not grid_path:
+        print("[DEMO/TEST] No grid.npy found — synthetic test skipped.")
+        return results
+
+    print(f"[DEMO/TEST] Loading: {grid_path}")
+    loaded_grid = np.load(grid_path)
+
+    # Synthetic transformation: 1-cell shift + Gaussian noise — for testing only
+    true_grid = loaded_grid.copy()
+    M = np.float32([[1, 0, 1], [0, 1, 1]])
+    slam_grid = cv2.warpAffine(
+        true_grid, M, (true_grid.shape[1], true_grid.shape[0]),
+        borderMode=cv2.BORDER_REPLICATE
+    )
+    noise = np.random.normal(0, 0.05, true_grid.shape).astype(np.float32)
+    slam_grid += noise
+
+    print("[DEMO/TEST] Applied synthetic 1-cell shift + Gaussian noise (sigma=0.05)")
+    grid_metrics = evaluate_grid_accuracy(
+        true_grid, slam_grid, resolution=0.05, tolerance_m=0.15,
+        output_dir=output_dir, save_plots=False
+    )
+    results['synthetic_grid_metrics'] = grid_metrics
+    print(f"[DEMO/TEST] Synthetic F1: {grid_metrics['f1_score'] * 100:.2f}%  "
+          f"Chamfer: {grid_metrics['chamfer_distance_meters'] * 100:.2f}cm")
+    print("[DEMO/TEST] End of synthetic test — results NOT written to research benchmark.")
     return results
 
 
