@@ -268,11 +268,16 @@ def print_full_evaluation_suite():
     mem_mb = m.get("map_memory_mb", 0.37)
 
     w = 102
-    print("\n" + "=" * w)
-    print("  1. COMPLETE LOCALIZATION & TRAJECTORY ACCURACY METRICS (ACTIVE RUN)")
-    print("=" * w)
-    print(f"  {'Metric Name':<44} | {'Symbol / Direction':<24} | {'Measured Value':<24}")
-    print("-" * w)
+    report_lines = []
+    def log_line(line=""):
+        print(line)
+        report_lines.append(line)
+
+    log_line("\n" + "=" * w)
+    log_line("  1. COMPLETE LOCALIZATION & TRAJECTORY ACCURACY METRICS (ACTIVE RUN)")
+    log_line("=" * w)
+    log_line(f"  {'Metric Name':<44} | {'Symbol / Direction':<24} | {'Measured Value':<24}")
+    log_line("-" * w)
     loc_rows = [
         ("Absolute Trajectory Error (RMSE)",     "ATE_RMSE (cm) [-]",       f"{ate_rmse_cm:.2f} cm"),
         ("Absolute Trajectory Error (Mean)",     "ATE_Mean (cm) [-]",       f"{ate_mean_cm:.2f} cm"),
@@ -287,13 +292,13 @@ def print_full_evaluation_suite():
         ("Total Trajectory Distance Traveled",   "Path Length (m) [+]",     f"{dist_m:.2f} m (Eff: {path_eff:.1f}%)"),
     ]
     for name, sym, val in loc_rows:
-        print(f"  {name:<44} | {sym:<24} | {val:<24}")
+        log_line(f"  {name:<44} | {sym:<24} | {val:<24}")
 
-    print("\n" + "=" * w)
-    print("  2. COMPLETE SLAM MAPPING & GEOMETRIC RECONSTRUCTION METRICS (ACTIVE RUN)")
-    print("=" * w)
-    print(f"  {'Metric Name':<44} | {'Symbol / Direction':<24} | {'Measured Value':<24}")
-    print("-" * w)
+    log_line("\n" + "=" * w)
+    log_line("  2. COMPLETE SLAM MAPPING & GEOMETRIC RECONSTRUCTION METRICS (ACTIVE RUN)")
+    log_line("=" * w)
+    log_line(f"  {'Metric Name':<44} | {'Symbol / Direction':<24} | {'Measured Value':<24}")
+    log_line("-" * w)
     map_rows = [
         ("Reconstruction Accuracy (SLAM -> GT)", "Acc. (cm) [-]",           f"{acc_cm:.2f} cm"),
         ("Reconstruction Completion (GT -> SLAM)","Comp. (cm) [-]",          f"{comp_cm:.2f} cm"),
@@ -308,13 +313,13 @@ def print_full_evaluation_suite():
         ("Multi-Class Grid Classification Acc.", "Acc_grid (%) [+]",        f"{grid_acc:.1f} % (Explored: {explored_pct:.1f}%)"),
     ]
     for name, sym, val in map_rows:
-        print(f"  {name:<44} | {sym:<24} | {val:<24}")
+        log_line(f"  {name:<44} | {sym:<24} | {val:<24}")
 
-    print("\n" + "=" * w)
-    print("  3. CPU-ONLY MULTI-SLAM BENCHMARK COMPARISON (INDOOR ROBOTICS BENCHMARK)")
-    print("=" * w)
-    print(f"  {'SLAM System (All CPU Execution)':<28} | {'ATE RMSE':<10} | {'Chamfer':<10} | {'Comp/F1':<10} | {'Track/Fr':<10} | {'Map/Fr':<10} | {'Memory':<9}")
-    print("-" * w)
+    log_line("\n" + "=" * w)
+    log_line("  3. CPU-ONLY MULTI-SLAM BENCHMARK COMPARISON (INDOOR ROBOTICS BENCHMARK)")
+    log_line("=" * w)
+    log_line(f"  {'SLAM System (All CPU Execution)':<28} | {'ATE RMSE':<10} | {'Chamfer':<10} | {'Comp/F1':<10} | {'Track/Fr':<10} | {'Map/Fr':<10} | {'Memory':<9}")
+    log_line("-" * w)
     cpu_bench = [
         ("GMapping (FastSLAM 2.0 CPU)",   "4.80 cm", "4.50 cm", "88.4 %", "12.0 ms", "26.0 ms", "18.50 MB"),
         ("Hector SLAM (2D Gauss-Newton)", "3.20 cm", "3.10 cm", "91.2 %", "11.5 ms", "8.0 ms",  "12.40 MB"),
@@ -325,13 +330,13 @@ def print_full_evaluation_suite():
         ("OURS (Agentic IMU-ICP + GW-NBV)", f"{ate_rmse_cm:.2f} cm", f"{chamfer_cm:.2f} cm", f"{f1_pct:.1f} %", f"{track_ms:.1f} ms", f"{map_ms:.1f} ms", f"{mem_mb:.2f} MB"),
     ]
     for row in cpu_bench:
-        print(f"  {row[0]:<28} | {row[1]:<10} | {row[2]:<10} | {row[3]:<10} | {row[4]:<10} | {row[5]:<10} | {row[6]:<9}")
+        log_line(f"  {row[0]:<28} | {row[1]:<10} | {row[2]:<10} | {row[3]:<10} | {row[4]:<10} | {row[5]:<10} | {row[6]:<9}")
 
-    print("\n" + "=" * w)
-    print("  4. SYSTEM ABLATION STUDY (CONTRIBUTION OF EACH MODULE ON OUR ARENA)")
-    print("=" * w)
-    print(f"  {'Ablation Configuration':<42} | {'ATE RMSE':<11} | {'Max ATE':<11} | {'Chamfer':<11} | {'F1 Score':<10} | {'Plan/Step'}")
-    print("-" * w)
+    log_line("\n" + "=" * w)
+    log_line("  4. SYSTEM ABLATION STUDY (CONTRIBUTION OF EACH MODULE ON OUR ARENA)")
+    log_line("=" * w)
+    log_line(f"  {'Ablation Configuration':<42} | {'ATE RMSE':<11} | {'Max ATE':<11} | {'Chamfer':<11} | {'F1 Score':<10} | {'Plan/Step'}")
+    log_line("-" * w)
     ablation_rows = [
         ("1. Legacy D* Lite + Unfiltered Depth",       "28.40 cm", "42.10 cm", "8.20 cm", "14.2 %", ">1500 ms"),
         ("2. w/o Gait-IMU Prior (Raw Scan-to-Scan ICP)","22.60 cm", "28.00 cm", "6.40 cm", "91.2 %", "3.8 ms"),
@@ -340,15 +345,22 @@ def print_full_evaluation_suite():
         ("5. OURS (Full System: IMU-ICP + GW-NBV)",    f"{ate_rmse_cm:.2f} cm", f"{ate_max_cm:.2f} cm", f"{chamfer_cm:.2f} cm", f"{f1_pct:.1f} %", f"{plan_ms:.1f} ms (0 Stalls)"),
     ]
     for r in ablation_rows:
-        print(f"  {r[0]:<42} | {r[1]:<11} | {r[2]:<11} | {r[3]:<11} | {r[4]:<10} | {r[5]}")
+        log_line(f"  {r[0]:<42} | {r[1]:<11} | {r[2]:<11} | {r[3]:<11} | {r[4]:<10} | {r[5]}")
 
-    print("\n" + "=" * w)
-    print("  5. RESULT VALIDITY & ANTI-BYPASS VERIFICATION AUDIT")
-    print("=" * w)
+    log_line("\n" + "=" * w)
+    log_line("  5. RESULT VALIDITY & ANTI-BYPASS VERIFICATION AUDIT")
+    log_line("=" * w)
     for chk_name, passed, detail in checks:
         status = "[PASS]" if passed else "[WARN]"
-        print(f"  {status:<8} {chk_name:<52} -> {detail}")
-    print("=" * w + "\n", flush=True)
+        log_line(f"  {status:<8} {chk_name:<52} -> {detail}")
+    log_line("=" * w + "\n")
+
+    # Save complete human-readable report to disk
+    report_txt = "\n".join(report_lines)
+    report_path = os.path.join("accuracy_results", "full_evaluation_report.txt")
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(report_txt)
+    print(f"  [SAVED] Full evaluation report -> {report_path}", flush=True)
 
 
 if __name__ == "__main__":

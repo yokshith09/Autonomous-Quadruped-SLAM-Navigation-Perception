@@ -36,6 +36,7 @@ from sensors import initialize_sensors, get_depth_heatmap
 from grid import BayesianOccupancyGrid
 from viz import create_debug_dashboard
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory, evaluate_depth_perception
+from evaluate_all_metrics import print_full_evaluation_suite
 from print_mne_comparison import print_comparison_benchmark
 
 try:
@@ -477,11 +478,15 @@ def main():
             except Exception as e:
                 print(f"  [WARN] Benchmark evaluation skipped: {e}", flush=True)
 
-        # Print active run results to the VS Code terminal
+        # Print complete 22-metric results, CPU benchmark, and validity audit, and save full report
         try:
-            print_comparison_benchmark()
+            print_full_evaluation_suite()
         except Exception as e:
-            print(f"  [WARN] Could not print active run results table: {e}", flush=True)
+            print(f"  [WARN] Full evaluation failed, falling back to summary table: {e}", flush=True)
+            try:
+                print_comparison_benchmark()
+            except Exception:
+                pass
 
     print("=" * 75)
     print("  MULTI-AGENT EXPLORATION MISSION COMPLETE")

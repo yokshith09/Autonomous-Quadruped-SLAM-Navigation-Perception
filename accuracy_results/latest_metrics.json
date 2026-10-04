@@ -23,5 +23,16 @@
   "drift_rate_percent": 0.3018586243541148,
   "path_efficiency_ratio": 0.245843071704454,
   "total_pose_steps": 4185,
-  "explored_pct": 48.00065518724023
+  "explored_pct": 48.00065518724023,
+  "accuracy_meters": 0.057641791097147024,
+  "completion_meters": 0.044774094682621,
+  "completion_ratio_5cm": 0.674633770239013,
+  "map_memory_mb": 0.37262725830078125,
+  "ate_median_meters": 0.045245311147580534,
+  "ate_std_meters": 0.03131054887320979,
+  "rpe_trans_rmse_meters": 0.00036112308232675113,
+  "rpe_rot_rmse_deg": 0.7350131228225064,
+  "rooms_discovered": 5,
+  "doorways_discovered": 6,
+  "entities_mapped": 65
 }
