@@ -16,6 +16,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
+from generate_separate_maps import generate_separate_maps
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -365,6 +366,7 @@ def print_full_evaluation_suite():
     # Save all figures to dedicated separate image folder
     try:
         save_all_evaluation_figures(image_dir="evaluation_results_images")
+        generate_separate_maps(data_dir="captured_matrices", results_dir="accuracy_results", images_dir="evaluation_results_images")
     except Exception as e:
         print(f"  [WARN] Could not save figures to evaluation_results_images: {e}", flush=True)
 
