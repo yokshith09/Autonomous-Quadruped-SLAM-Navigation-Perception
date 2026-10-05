@@ -17,10 +17,15 @@ def a_star_search(grid, start, goal, smooth=False):
 
     start_time = time.time()
     
-    # Precompute 25cm inflated mask for robot clearance (5 cells radius at 5cm resolution)
+    # Precompute 15cm hard obstacle clearance for collision avoidance (3 cells radius at 5cm resolution)
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
+    
+    # Precompute soft wall clearance field using Euclidean Distance Transform (meters)
+    # Allows robot to center in open spaces while seamlessly traversing tight 60cm doorways
+    free_space_binary = (1 - occ).astype(np.uint8)
+    dist_to_wall = cv2.distanceTransform(free_space_binary, cv2.DIST_L2, 3) * grid.res
     
     def is_inflated(x, y):
         if 0 <= x < grid.width and 0 <= y < grid.height:
@@ -87,6 +92,12 @@ def a_star_search(grid, start, goal, smooth=False):
                 val = grid.get_state(nx, ny)
                 cost = base_cost
                 
+                # Soft clearance penalty: prefer staying away from walls in open areas,
+                # but seamlessly passes through narrow 60cm doorways without blocking
+                d_wall = dist_to_wall[ny, nx]
+                if d_wall < 0.28:
+                    cost += (0.28 - d_wall) * 1.5
+
                 # Penalize unknown space to prefer exploring known free space
                 if val == grid.UNKNOWN:
                     cost *= 4.0
@@ -148,7 +159,7 @@ def smooth_path(grid, path, min_spacing=0.20):
     
     # Safety clearance mask for line of sight
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
 
     smoothed = [path[0]]

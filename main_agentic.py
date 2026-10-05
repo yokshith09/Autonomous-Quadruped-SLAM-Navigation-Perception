@@ -347,7 +347,9 @@ def main():
 
                 # Persist live dashboard image so output can be inspected visually at any time
                 os.makedirs("accuracy_results", exist_ok=True)
+                os.makedirs("evaluation_results_images", exist_ok=True)
                 cv2.imwrite("accuracy_results/live_hud_latest.png", dashboard)
+                cv2.imwrite("evaluation_results_images/live_hud_latest.png", dashboard)
 
                 if not args.headless:
                     try:

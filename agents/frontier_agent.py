@@ -52,7 +52,7 @@ class FrontierAgent(BaseAgent):
         """
         h, w = self.grid.height, self.grid.width
         occ = (self.grid.grid_log_odds > self.grid.thresh_occ).astype(np.uint8)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         inflated = cv2.dilate(occ, kernel, iterations=1)
 
         # Snap start outside inflation margin if robot is close to a wall
@@ -125,9 +125,8 @@ class FrontierAgent(BaseAgent):
             tgy = event_msg.details.get("target_gy")
             if tgx is not None and tgy is not None:
                 self.blacklist_frontiers.add((tgx, tgy))
-            if self.committed_doorway is not None:
-                self.visited_doorways.add(self.committed_doorway)
-                self.committed_doorway = None
+            # Temporary back-off: clear committed doorway without marking it permanently visited
+            self.committed_doorway = None
             if self.committed_target is not None:
                 self.blacklist_frontiers.add(self.committed_target)
                 self.committed_target = None

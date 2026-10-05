@@ -112,18 +112,18 @@ class LocomotionAgent(BaseAgent):
             if self.waypoints and self.wp_idx < len(self.waypoints):
                 target_heading = math.atan2(target_wy - ry, target_wx - rx)
 
-                # Close-range bumper safety envelope (only directly in front of chassis so A* path is respected)
+                # Close-range frontal bumper safety envelope (narrowed so lateral doorposts don't trigger false swerving)
                 avoidance_yaw = 0.0
                 if self.latest_scan is not None and self.latest_scan.points_2d is not None and len(self.latest_scan.points_2d) > 0:
                     pts = self.latest_scan.points_2d
                     x_b = pts[:, 0]
                     y_b = pts[:, 1]
 
-                    crit = (x_b > 0.15) & (x_b < 0.34) & (np.abs(y_b) < 0.18)
+                    crit = (x_b > 0.14) & (x_b < 0.28) & (np.abs(y_b) < 0.10)
                     if np.any(crit):
                         close_yb = y_b[crit]
                         mean_yb = float(np.mean(close_yb))
-                        avoidance_yaw = -0.35 if mean_yb >= 0 else 0.35
+                        avoidance_yaw = -0.22 if mean_yb >= 0 else 0.22
 
                 steer_target = norm_angle(target_heading + avoidance_yaw)
                 heading_err = norm_angle(steer_target - r_yaw)
@@ -131,7 +131,7 @@ class LocomotionAgent(BaseAgent):
 
                 # High-efficiency speed modulation
                 if avoidance_yaw != 0.0:
-                    self.speed = 0.60
+                    self.speed = 0.70
                     self.state_str = "AVOID"
                     if (current_time - getattr(self, 'last_avoid_log_time', 0.0)) > 2.5:
                         self.last_avoid_log_time = current_time

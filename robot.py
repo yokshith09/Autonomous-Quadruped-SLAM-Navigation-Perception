@@ -11,8 +11,8 @@ OMEGA = 2 * math.pi * FREQ
 # smaller heading error than either previous version used. apply_gait() itself
 # is byte-identical across all three files -- this steering aggressiveness is
 # what actually changed the perceived "gait".
-SLOW_ANGLE = 0.25
-HEADING_RATE = 0.11
+SLOW_ANGLE = 0.30
+HEADING_RATE = 0.18
 
 def norm_angle(a):
     while a > math.pi:

@@ -362,6 +362,171 @@ def print_full_evaluation_suite():
         f.write(report_txt)
     print(f"  [SAVED] Full evaluation report -> {report_path}", flush=True)
 
+    # Save all figures to dedicated separate image folder
+    try:
+        save_all_evaluation_figures(image_dir="evaluation_results_images")
+    except Exception as e:
+        print(f"  [WARN] Could not save figures to evaluation_results_images: {e}", flush=True)
+
+
+def save_all_evaluation_figures(
+    image_dir: str = "evaluation_results_images",
+    data_dir: str = "captured_matrices",
+    results_dir: str = "accuracy_results",
+    resolution: float = 0.05
+):
+    """Generates and permanently stores all 6 quantitative evaluation figures in a separate folder."""
+    os.makedirs(image_dir, exist_ok=True)
+    m = compute_all_live_metrics(data_dir=data_dir, results_dir=results_dir, resolution=resolution)
+
+    # 1. 01_numerical_matrix_map_comparison.png & 05_map_cell_difference_heatmap.png
+    true_grid_path = os.path.join(data_dir, "true_grid.npy")
+    slam_grid_path = os.path.join(data_dir, "slam_grid.npy")
+    if os.path.exists(true_grid_path) and os.path.exists(slam_grid_path):
+        true_grid = np.load(true_grid_path)
+        slam_grid = np.load(slam_grid_path)
+        evaluate_grid_accuracy(
+            true_grid, slam_grid, resolution=resolution, tolerance_m=0.15,
+            output_dir=image_dir, save_plots=True
+        )
+        old_plot = os.path.join(image_dir, "numerical_map_accuracy_comparison.png")
+        new_plot = os.path.join(image_dir, "01_numerical_matrix_map_comparison.png")
+        if os.path.exists(old_plot):
+            if os.path.exists(new_plot):
+                os.remove(new_plot)
+            os.rename(old_plot, new_plot)
+
+        # 5. 05_map_cell_difference_heatmap.png (Continuous Matrix Log-Odds Discrepancy)
+        diff = np.abs(true_grid - slam_grid)
+        h, w = true_grid.shape
+        extent = [-w * resolution / 2, w * resolution / 2, -h * resolution / 2, h * resolution / 2]
+        fig, ax = plt.subplots(figsize=(10, 8))
+        im = ax.imshow(diff, cmap='inferno', origin='lower', extent=extent)
+        ax.set_title("Matrix-Level Cell-by-Cell Log-Odds Discrepancy: |l_true - l_slam|\n(Evaluated Directly on 2D Float64 Arrays, not Images)", fontsize=12, fontweight='bold')
+        ax.set_xlabel("X (meters)")
+        ax.set_ylabel("Y (meters)")
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label("Absolute Log-Odds Error |Δl|")
+        plt.tight_layout()
+        plt.savefig(os.path.join(image_dir, "05_map_cell_difference_heatmap.png"), dpi=200)
+        plt.close()
+
+    # 2. 02_robot_trajectory_and_drift_analysis.png
+    traj_path = os.path.join(data_dir, "trajectory_data.npz")
+    if os.path.exists(traj_path):
+        data = np.load(traj_path)
+        true_p = data["true_poses"]
+        slam_p = data["slam_poses"]
+        ts = data["timestamps"] if "timestamps" in data else None
+        evaluate_trajectory(true_p, slam_p, timestamps=ts, output_dir=image_dir, save_plots=True)
+        old_traj = os.path.join(image_dir, "robot_movement_trajectory_analysis.png")
+        new_traj = os.path.join(image_dir, "02_robot_trajectory_and_drift_analysis.png")
+        if os.path.exists(old_traj):
+            if os.path.exists(new_traj):
+                os.remove(new_traj)
+            os.rename(old_traj, new_traj)
+
+    # 3. 03_evaluation_metrics_scorecard.png (Render publication-quality table scorecard)
+    fig, axes = plt.subplots(1, 2, figsize=(18, 10))
+    fig.patch.set_facecolor('#ffffff')
+
+    ax_loc = axes[0]
+    ax_loc.axis('off')
+    loc_table_data = [
+        ["Absolute Trajectory Error (RMSE)", "ATE_RMSE", f"{m.get('ate_rmse_meters', 0.0)*100:.2f} cm"],
+        ["Absolute Trajectory Error (Mean)", "ATE_Mean", f"{m.get('ate_mean_meters', 0.0)*100:.2f} cm"],
+        ["Absolute Trajectory Error (Median)", "ATE_Med", f"{m.get('ate_median_meters', 0.0)*100:.2f} cm"],
+        ["Trajectory Error Std Dev", "ATE_Std", f"{m.get('ate_std_meters', 0.0)*100:.2f} cm"],
+        ["Peak Trajectory Drift", "ATE_Max", f"{m.get('ate_max_meters', 0.0)*100:.2f} cm"],
+        ["Relative Pose Error (Trans)", "RPE_trans", f"{m.get('rpe_trans_rmse_meters', 0.0)*100:.3f} cm/step"],
+        ["Relative Pose Error (Rot)", "RPE_rot", f"{m.get('rpe_rot_rmse_deg', 0.0):.3f} deg/step"],
+        ["Translational Drift Rate", "Drift %", f"{m.get('drift_rate_percent', 0.0):.2f} %"],
+        ["Mean Heading (Yaw) Error", "Yaw_Mean", f"{m.get('mean_heading_error_deg', 0.0):.2f}°"],
+        ["Max Heading (Yaw) Error", "Yaw_Max", f"{m.get('max_heading_error_deg', 0.0):.2f}°"],
+        ["Total Path Traveled", "Length", f"{m.get('total_distance_traveled_m', 0.0):.2f} m"],
+    ]
+    tbl_loc = ax_loc.table(cellText=loc_table_data, colLabels=["Localization Metric", "Symbol", "Measured Value"],
+                           loc='center', cellLoc='left')
+    tbl_loc.auto_set_font_size(False)
+    tbl_loc.set_fontsize(10)
+    tbl_loc.scale(1.0, 1.7)
+    for (row, col), cell in tbl_loc.get_celld().items():
+        if row == 0:
+            cell.set_facecolor('#1f77b4')
+            cell.set_text_props(color='white', weight='bold')
+        elif row % 2 == 1:
+            cell.set_facecolor('#f2f7fb')
+    ax_loc.set_title("1. LOCALIZATION & TRAJECTORY ACCURACY METRICS", fontsize=12, fontweight='bold', pad=15)
+
+    ax_map = axes[1]
+    ax_map.axis('off')
+    map_table_data = [
+        ["Reconstruction Accuracy (SLAM->GT)", "Acc.", f"{m.get('accuracy_meters', 0.0)*100:.2f} cm"],
+        ["Reconstruction Completion (GT->SLAM)", "Comp.", f"{m.get('completion_meters', 0.0)*100:.2f} cm"],
+        ["Bidirectional Chamfer Error", "Chamfer", f"{m.get('chamfer_distance_meters', 0.0)*100:.2f} cm"],
+        ["95th-Percentile Hausdorff Dist", "Hausdorff_95", f"{m.get('hausdorff_95_meters', 0.0)*100:.2f} cm"],
+        ["Completion Ratio (< 5cm error)", "Comp@5cm", f"{m.get('completion_ratio_5cm', 0.0)*100:.1f} %"],
+        ["Wall Reconstruction F1 Score", "F1 Score", f"{m.get('f1_score', 0.0)*100:.1f} %"],
+        ["Wall Precision / Recall", "Prec / Rec", f"{m.get('precision', 0.0)*100:.1f}% / {m.get('recall', 0.0)*100:.1f}%"],
+        ["Exact Cell Obstacle IoU", "IoU_exact", f"{m.get('obstacle_iou', 0.0)*100:.1f} %"],
+        ["Tolerant Obstacle IoU (±15cm)", "IoU_tolerant", f"{m.get('tolerant_iou', 0.0)*100:.1f} %"],
+        ["Navigable Free-Space IoU", "IoU_free", f"{m.get('free_space_iou', 0.0)*100:.1f} %"],
+        ["Overall Grid Accuracy", "Acc_grid", f"{m.get('overall_grid_accuracy', 0.0)*100:.1f} %"],
+    ]
+    tbl_map = ax_map.table(cellText=map_table_data, colLabels=["Mapping & Reconstruction Metric", "Symbol", "Measured Value"],
+                           loc='center', cellLoc='left')
+    tbl_map.auto_set_font_size(False)
+    tbl_map.set_fontsize(10)
+    tbl_map.scale(1.0, 1.7)
+    for (row, col), cell in tbl_map.get_celld().items():
+        if row == 0:
+            cell.set_facecolor('#2ca02c')
+            cell.set_text_props(color='white', weight='bold')
+        elif row % 2 == 1:
+            cell.set_facecolor('#f4faf4')
+    ax_map.set_title("2. SLAM MAPPING & GEOMETRIC ACCURACY METRICS", fontsize=12, fontweight='bold', pad=15)
+
+    plt.suptitle("AUTONOMOUS QUADRUPED MULTI-AGENT STACK: COMPLETE 22-METRIC EVALUATION SCORECARD",
+                 fontsize=14, fontweight='bold', y=0.98)
+    plt.tight_layout()
+    plt.savefig(os.path.join(image_dir, "03_evaluation_metrics_scorecard.png"), dpi=200, bbox_inches='tight')
+    plt.close()
+
+    # 4. 04_cpu_slam_benchmark_comparison.png
+    save_cpu_benchmark_plot(m, output_dir=image_dir)
+    bench_old = os.path.join(image_dir, "cpu_slam_benchmark_comparison.png")
+    bench_new = os.path.join(image_dir, "04_cpu_slam_benchmark_comparison.png")
+    if os.path.exists(bench_old) and bench_old != bench_new:
+        if os.path.exists(bench_new):
+            os.remove(bench_new)
+        os.rename(bench_old, bench_new)
+
+    # 6. 06_room_exploration_coverage.png
+    if os.path.exists(slam_grid_path):
+        slam_grid = np.load(slam_grid_path)
+        h, w = slam_grid.shape
+        extent = [-w * resolution / 2, w * resolution / 2, -h * resolution / 2, h * resolution / 2]
+        fig, ax = plt.subplots(figsize=(10, 8))
+        im = ax.imshow(slam_grid, cmap='coolwarm', origin='lower', extent=extent, vmin=-3.0, vmax=3.0)
+        if os.path.exists(traj_path):
+            data = np.load(traj_path)
+            true_p = data["true_poses"]
+            slam_p = data["slam_poses"]
+            ax.plot(true_p[:, 0], true_p[:, 1], color='#00ffcc', linewidth=2.0, label='Ground Truth Path')
+            ax.plot(slam_p[:, 0], slam_p[:, 1], color='#ff00ff', linestyle='--', linewidth=1.5, label='SLAM Estimated Path')
+        ax.set_title(f"Multi-Room Systematic Exploration & Coverage Map (Explored: {m.get('explored_pct', 0.0):.1f}%)\n"
+                     f"Rooms Cleared: {m.get('rooms_cleared', 1)} | Gateways: {m.get('doorways_discovered', 5)}",
+                     fontsize=12, fontweight='bold')
+        ax.set_xlabel("X (meters)")
+        ax.set_ylabel("Y (meters)")
+        ax.legend(loc='upper right')
+        plt.colorbar(im, ax=ax, label="Log-Odds ($l$)")
+        plt.tight_layout()
+        plt.savefig(os.path.join(image_dir, "06_room_exploration_coverage.png"), dpi=200)
+        plt.close()
+
+    print(f"  [SAVED] All 6 evaluation figures saved in separate folder -> {image_dir}/", flush=True)
+
 
 if __name__ == "__main__":
     print_full_evaluation_suite()
