@@ -4,34 +4,34 @@
 ======================================================================================================
   Metric Name                                  | Symbol / Direction       | Measured Value          
 ------------------------------------------------------------------------------------------------------
-  Absolute Trajectory Error (RMSE)             | ATE_RMSE (cm) [-]        | 5.70 cm                 
-  Absolute Trajectory Error (Mean)             | ATE_Mean (cm) [-]        | 4.76 cm                 
-  Absolute Trajectory Error (Median)           | ATE_Median (cm) [-]      | 4.52 cm                 
-  Trajectory Error Std. Deviation              | ATE_Std (cm) [-]         | 3.13 cm                 
-  Peak Trajectory Drift (Max Error)            | ATE_Max (cm) [-]         | 11.17 cm                
-  Relative Pose Error (Translational)          | RPE_trans (cm/step) [-]  | 0.036 cm/step           
-  Relative Pose Error (Rotational)             | RPE_rot (deg/step) [-]   | 0.735 deg/step          
-  Translational Drift Rate (% of Path)         | ATE_RMSE / Length [-]    | 0.30 %                  
-  Mean Heading (Yaw) Orientation Error         | Yaw_Mean (deg) [-]       | 2.07 deg                
-  Max Heading (Yaw) Orientation Error          | Yaw_Max (deg) [-]        | 10.03 deg               
-  Total Trajectory Distance Traveled           | Path Length (m) [+]      | 18.88 m (Eff: 24.6%)    
+  Absolute Trajectory Error (RMSE)             | ATE_RMSE (cm) [-]        | 39.43 cm                
+  Absolute Trajectory Error (Mean)             | ATE_Mean (cm) [-]        | 33.79 cm                
+  Absolute Trajectory Error (Median)           | ATE_Median (cm) [-]      | 37.26 cm                
+  Trajectory Error Std. Deviation              | ATE_Std (cm) [-]         | 20.32 cm                
+  Peak Trajectory Drift (Max Error)            | ATE_Max (cm) [-]         | 68.66 cm                
+  Relative Pose Error (Translational)          | RPE_trans (cm/step) [-]  | 0.055 cm/step           
+  Relative Pose Error (Rotational)             | RPE_rot (deg/step) [-]   | 1.127 deg/step          
+  Translational Drift Rate (% of Path)         | ATE_RMSE / Length [-]    | 0.65 %                  
+  Mean Heading (Yaw) Orientation Error         | Yaw_Mean (deg) [-]       | 4.30 deg                
+  Max Heading (Yaw) Orientation Error          | Yaw_Max (deg) [-]        | 19.32 deg               
+  Total Trajectory Distance Traveled           | Path Length (m) [+]      | 61.02 m (Eff: 14.6%)    
 
 ======================================================================================================
   2. COMPLETE SLAM MAPPING & GEOMETRIC RECONSTRUCTION METRICS (ACTIVE RUN)
 ======================================================================================================
   Metric Name                                  | Symbol / Direction       | Measured Value          
 ------------------------------------------------------------------------------------------------------
-  Reconstruction Accuracy (SLAM -> GT)         | Acc. (cm) [-]            | 5.76 cm                 
-  Reconstruction Completion (GT -> SLAM)       | Comp. (cm) [-]           | 4.48 cm                 
-  Mean Bidirectional Wall Chamfer Error        | Chamfer (cm) [-]         | 5.12 cm                 
-  95th-Percentile Hausdorff Distance           | Hausdorff_95 (cm) [-]    | 19.21 cm                
-  Strict Completion Ratio (< 5cm Error)        | Comp.Ratio@5cm (%) [+]   | 67.5 %                  
-  Tolerant Wall F1 Score (+/-15cm)             | F1_Score (%) [+]         | 93.3 %                  
-  Wall Detection Precision / Recall            | Prec / Rec (%) [+]       | 91.9 % / 94.8 %         
-  Exact Cell-for-Cell Obstacle IoU             | IoU_exact (%) [+]        | 27.4 %                  
-  Tolerant Obstacle IoU (+/-15cm)              | IoU_tolerant (%) [+]     | 59.4 %                  
-  Navigable Free-Space IoU                     | IoU_free (%) [+]         | 85.2 %                  
-  Multi-Class Grid Classification Acc.         | Acc_grid (%) [+]         | 91.6 % (Explored: 48.0%)
+  Reconstruction Accuracy (SLAM -> GT)         | Acc. (cm) [-]            | 17.29 cm                
+  Reconstruction Completion (GT -> SLAM)       | Comp. (cm) [-]           | 11.65 cm                
+  Mean Bidirectional Wall Chamfer Error        | Chamfer (cm) [-]         | 14.47 cm                
+  95th-Percentile Hausdorff Distance           | Hausdorff_95 (cm) [-]    | 50.25 cm                
+  Strict Completion Ratio (< 5cm Error)        | Comp.Ratio@5cm (%) [+]   | 42.9 %                  
+  Tolerant Wall F1 Score (+/-15cm)             | F1_Score (%) [+]         | 67.9 %                  
+  Wall Detection Precision / Recall            | Prec / Rec (%) [+]       | 61.7 % / 75.4 %         
+  Exact Cell-for-Cell Obstacle IoU             | IoU_exact (%) [+]        | 14.5 %                  
+  Tolerant Obstacle IoU (+/-15cm)              | IoU_tolerant (%) [+]     | 38.9 %                  
+  Navigable Free-Space IoU                     | IoU_free (%) [+]         | 78.0 %                  
+  Multi-Class Grid Classification Acc.         | Acc_grid (%) [+]         | 82.2 % (Explored: 69.1%)
 
 ======================================================================================================
   3. CPU-ONLY MULTI-SLAM BENCHMARK COMPARISON (INDOOR ROBOTICS BENCHMARK)
@@ -44,7 +44,7 @@
   RTAB-Map (RGB-D Graph CPU)   | 2.45 cm    | 2.65 cm    | 92.6 %     | 25.0 ms    | 40.0 ms    | 45.20 MB 
   ORB-SLAM3 (RGB-D Feature CPU) | 1.85 cm    | 2.15 cm    | 93.5 %     | 24.0 ms    | 18.0 ms    | 34.10 MB 
   Swarm-SLAM (Multi-Agent CPU) | 6.50 cm    | 4.90 cm    | 86.5 %     | 22.0 ms    | 26.0 ms    | 31.00 MB 
-  OURS (Agentic IMU-ICP + GW-NBV) | 5.70 cm    | 5.12 cm    | 93.3 %     | 14.2 ms    | 4.1 ms     | 0.37 MB  
+  OURS (Agentic IMU-ICP + GW-NBV) | 39.43 cm   | 14.47 cm   | 67.9 %     | 10.1 ms    | 21.2 ms    | 0.37 MB  
 
 ======================================================================================================
   4. SYSTEM ABLATION STUDY (CONTRIBUTION OF EACH MODULE ON OUR ARENA)
@@ -55,14 +55,14 @@
   2. w/o Gait-IMU Prior (Raw Scan-to-Scan ICP) | 22.60 cm    | 28.00 cm    | 6.40 cm     | 91.2 %     | 3.8 ms
   3. w/o Multi-Wall Loop Closure Guard       | 4.16 cm     | 7.93 cm     | 1.82 cm     | 99.3 %     | 3.6 ms
   4. w/o Geodesic Wavefront & Medoid NBV     | 2.95 cm     | 5.40 cm     | 1.80 cm     | 99.4 %     | 3.5 ms (Stalls)
-  5. OURS (Full System: IMU-ICP + GW-NBV)    | 5.70 cm     | 11.17 cm    | 5.12 cm     | 93.3 %     | 3.4 ms (0 Stalls)
+  5. OURS (Full System: IMU-ICP + GW-NBV)    | 39.43 cm    | 68.66 cm    | 14.47 cm    | 67.9 %     | 41.9 ms (0 Stalls)
 
 ======================================================================================================
   5. RESULT VALIDITY & ANTI-BYPASS VERIFICATION AUDIT
 ======================================================================================================
   [PASS]   AST Source Audit (Zero Sim API in SLAM/SLAMAgent)    -> slam.py & SLAMAgent contain 0 calls to sim.getObjectPosition/Orientation
   [PASS]   MessageBus Ground-Truth Isolation (Closed-Loop Mode) -> SLAMAgent does not subscribe to 'pose/ground_truth' when use_ground_truth_nav=False
-  [PASS]   Trajectory Independence Audit (SLAM != Ground Truth) -> SLAM vs GT poses diverge physically (ATE RMSE=5.70cm, Max=11.17cm > 0)
-  [PASS]   Dual-Grid Matrix Independence (True Grid != SLAM Grid) -> True Grid and SLAM Grid are independent matrices (6,321 cells differ)
+  [WARN]   Trajectory Independence Audit (SLAM != Ground Truth) -> SLAM vs GT poses diverge physically (ATE RMSE=39.43cm, Max=68.66cm > 0)
+  [PASS]   Dual-Grid Matrix Independence (True Grid != SLAM Grid) -> True Grid and SLAM Grid are independent matrices (10,901 cells differ)
   [PASS]   Active Closed-Loop Navigation Flag                   -> Navigation & planning driven by pose/slam (closed_loop_slam=True)
 ======================================================================================================
