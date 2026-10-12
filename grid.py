@@ -77,15 +77,6 @@ class BayesianOccupancyGrid:
             return self.get_state(gx, gy) == self.OCCUPIED
         return True # out of bounds is implicitly occupied
 
-    def add_wall_segment(self, x1, y1, x2, y2, inflate=0.0):
-        lo_x = min(x1, x2) - inflate
-        hi_x = max(x1, x2) + inflate
-        lo_y = min(y1, y2) - inflate
-        hi_y = max(y1, y2) + inflate
-        gx1, gy1 = self.world_to_grid(lo_x, lo_y)
-        gx2, gy2 = self.world_to_grid(hi_x, hi_y)
-        self.grid_log_odds[gy1:gy2 + 1, gx1:gx2 + 1] = self.l_max
-
     def update_from_depth_points(self, points_world, robot_pos, sample_rate=24):
         changed_cells = set()
         cells_updated = 0
@@ -207,49 +198,6 @@ class BayesianOccupancyGrid:
                 
         return frontiers
 
-    def segment_rooms(self):
-        """Topological Room Segmentation using Euclidean Distance Transform and Watershed."""
-        free_mask = (self.grid_log_odds <= self.thresh_free).astype(np.uint8) * 255
-        if np.sum(free_mask) < 200:
-            return np.zeros_like(free_mask, dtype=np.int32), []
-
-        dist_transform = cv2.distanceTransform(free_mask, cv2.DIST_L2, 5)
-        max_val = np.max(dist_transform)
-        if max_val < 4:
-            return (free_mask > 0).astype(np.int32), []
-
-        _, sure_fg = cv2.threshold(dist_transform, 0.45 * max_val, 255, 0)
-        num_markers, markers = cv2.connectedComponents(np.uint8(sure_fg))
-        if num_markers <= 1:
-            return (free_mask > 0).astype(np.int32), []
-
-        markers = markers + 1
-        markers[free_mask == 0] = 0
-        cv_img = cv2.cvtColor(free_mask, cv2.COLOR_GRAY2BGR)
-        cv2.watershed(cv_img, markers)
-
-        doorways = []
-        boundary_mask = (markers == -1) & (free_mask > 0)
-        num_doors, _, stats, centroids = cv2.connectedComponentsWithStats(boundary_mask.astype(np.uint8))
-        for i in range(1, num_doors):
-            if stats[i, cv2.CC_STAT_AREA] >= 2:
-                gx, gy = int(centroids[i][0]), int(centroids[i][1])
-                doorways.append(self.grid_to_world(gx, gy))
-
-        return markers, doorways
-
-    def get_room_frontiers(self, active_room_id, room_labels=None):
-        """Return only frontiers that belong to the active room."""
-        all_frontiers = self.detect_frontiers()
-        if room_labels is None or active_room_id <= 1:
-            return all_frontiers
-        room_frontiers = []
-        for gx, gy, area in all_frontiers:
-            if 0 <= gy < room_labels.shape[0] and 0 <= gx < room_labels.shape[1]:
-                if int(room_labels[gy, gx]) == active_room_id:
-                    room_frontiers.append((gx, gy, area))
-        return room_frontiers
-
     def get_grid_stats(self):
         free = np.sum(self.grid_log_odds <= self.thresh_free)
         occupied = np.sum(self.grid_log_odds >= self.thresh_occ)
@@ -258,16 +206,6 @@ class BayesianOccupancyGrid:
         explored_pct = (free + occupied) / total * 100.0
         return free, occupied, unknown, explored_pct
 
-    def get_occupied_world_points(self):
-        ys, xs = np.where(self.grid_log_odds >= self.thresh_occ)
-        if len(ys) == 0:
-            return []
-        
-        pts = []
-        for x, y in zip(xs, ys):
-            wx, wy = self.grid_to_world(x, y)
-            pts.append((wx, wy, 0.2)) # Render them at 20cm height
-        return pts
 
     def to_debug_image(self, slam_pos, slam_heading, true_pos=None, true_heading=None,
                        frontiers=None, path=None, trajectory=None,
@@ -351,9 +289,7 @@ class BayesianOccupancyGrid:
         cv2.putText(legend_banner, "CYAN: Ground Truth | MAGENTA: SLAM | GREEN: Travel | YELLOW: Plan | RED: Wall | WHITE: Free",
                     (10, 19), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1)
         img = np.vstack([legend_banner, img])
-        
-        return img
-        
+
         return img
 
 def find_nearest_free(grid, gx, gy):

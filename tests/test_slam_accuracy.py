@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from slam import (
-    estimate_normals_2d, icp_point_to_line, icp_match,
+    estimate_normals_2d, icp_point_to_line,
     KeyframeLoopManager, ICPPoseEstimator, wrap_angle, world_to_base_points
 )
 
@@ -89,6 +89,56 @@ def test_loop_closure_manager():
     print("PASSED")
 
 
+def test_loop_closure_rotated_keyframe():
+    print("Running test_loop_closure_rotated_keyframe...", end=" ")
+    wall_a = np.column_stack([np.linspace(0.5, 3.0, 60), np.full(60, -1.0)])
+    wall_b = np.column_stack([np.full(60, 3.0), np.linspace(-1.0, 1.5, 60)])
+    l_scan = np.vstack([wall_a, wall_b])
+    klm = KeyframeLoopManager(min_loop_time_diff=5.0, loop_search_radius=1.5)
+    klm.add_keyframe(1.0, 2.0, 1.0, 0.8, l_scan)
+    klm.add_keyframe(5.0, 6.0, 1.0, 0.0, l_scan)
+    klm.add_keyframe(9.0, 9.0, 4.0, 0.0, l_scan)
+
+    # Robot is physically back at keyframe 1 (same scan) but its estimate has drifted.
+    closure = klm.detect_loop_closure(20.0, 2.2, 0.9, 0.85, l_scan)
+    assert closure is not None, "Loop closure should be detected"
+    _, err_dx, err_dy, err_dyaw = closure
+    assert abs(err_dx + 0.2) < 0.02 and abs(err_dy - 0.1) < 0.02, f"Bad correction ({err_dx:.3f}, {err_dy:.3f})"
+    assert abs(err_dyaw + 0.05) < math.radians(0.5), f"Bad yaw correction {err_dyaw:.4f}"
+    print("PASSED")
+
+
+def test_degenerate_direction_removed():
+    print("Running test_degenerate_direction_removed...", end=" ")
+    from slam import project_out_degenerate
+    xs = np.linspace(0.0, 3.0, 60)
+    corridor = np.vstack([np.column_stack([xs, np.full(60, 1.0)]), np.column_stack([xs, np.full(60, -1.0)])])
+    normals = estimate_normals_2d(corridor)
+    kept = project_out_degenerate(np.array([0.05, 0.02]), corridor, corridor, normals)
+    assert abs(kept[0]) < 1e-3 and abs(kept[1] - 0.02) < 1e-3, f"Corridor should drop along-wall motion: {kept}"
+
+    corner = np.vstack([np.column_stack([xs, np.zeros(60)]), np.column_stack([np.full(60, 3.0), xs])])
+    kept = project_out_degenerate(np.array([0.05, 0.02]), corner, corner, estimate_normals_2d(corner))
+    assert np.allclose(kept, [0.05, 0.02], atol=1e-3), f"Corner constrains both axes: {kept}"
+    print("PASSED")
+
+
+def test_dominant_wall_angle():
+    print("Running test_dominant_wall_angle...", end=" ")
+    from slam import dominant_wall_angle
+    xs = np.linspace(0.0, 3.0, 60)
+    corner = np.vstack([np.column_stack([xs, np.zeros(60)]), np.column_stack([np.full(60, 3.0), xs])])
+    th = math.radians(20.0)
+    rot = np.array([[math.cos(th), -math.sin(th)], [math.sin(th), math.cos(th)]])
+    phi = dominant_wall_angle(estimate_normals_2d(corner @ rot.T))
+    assert phi is not None and abs(phi - th) < math.radians(1.0), f"Expected 20 deg, got {phi}"
+
+    rng = np.random.default_rng(0)
+    blob = rng.uniform(-1.0, 1.0, (120, 2))
+    assert dominant_wall_angle(estimate_normals_2d(blob)) is None, "Unstructured points must not give a heading"
+    print("PASSED")
+
+
 def test_world_to_base_projection():
     print("Running test_world_to_base_projection...", end=" ")
     pts = np.array([[2.0, 3.0], [4.0, 5.0]])
@@ -131,7 +181,7 @@ def test_icp_odometry_prior_and_recovery():
     wall_2 = np.column_stack([np.full_like(wall_y, 3.0), wall_y])
     base_scan = np.vstack([wall_1, wall_2])
 
-    est = ICPPoseEstimator(0.0, 0.0, 0.0)
+    est = ICPPoseEstimator(0.0, 0.0, 0.0, manhattan_gain=0.0)  # isolate gyro bridging from the heading prior
     est.update(base_scan, timestamp=1.0)
 
     # Simulate a sharp 35-deg turn where ICP fails/rejects on an outlier frame,
@@ -149,7 +199,7 @@ def test_icp_odometry_prior_and_recovery():
 
     # Now feed a valid scan at the turned orientation (shifted slightly by 2cm from corrupted_scan's true frame)
     # Wait: if previous_scan was updated to turned_scan on fallback, let's test consecutive valid scans after rejection:
-    p2b = est.update(turned_scan, odom_dx=0.0, odom_dy=0.0, odom_dyaw=0.0, timestamp=2.5)
+    est.update(turned_scan, odom_dx=0.0, odom_dy=0.0, odom_dyaw=0.0, timestamp=2.5)
     next_scan = turned_scan - np.array([0.05, 0.0])
     p3 = est.update(next_scan, odom_dx=0.05 * math.cos(rot_35), odom_dy=0.05 * math.sin(rot_35), odom_dyaw=0.0, timestamp=3.0)
     assert p3.accepted, "ICP failed to recover after a rejected scan frame!"
@@ -192,6 +242,9 @@ if __name__ == "__main__":
     test_normal_estimation()
     test_point_to_line_icp_convergence()
     test_loop_closure_manager()
+    test_loop_closure_rotated_keyframe()
+    test_degenerate_direction_removed()
+    test_dominant_wall_angle()
     test_world_to_base_projection()
     test_depth_to_base_projection()
     test_icp_odometry_prior_and_recovery()

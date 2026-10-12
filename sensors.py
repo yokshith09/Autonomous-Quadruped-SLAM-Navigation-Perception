@@ -1,7 +1,6 @@
 import math
 import numpy as np
 import cv2
-import os
 
 KINECT_FOV = math.radians(60.0)
 DEPTH_MIN_RANGE = 0.1
@@ -260,52 +259,3 @@ def get_depth_heatmap(depth_matrix):
     else:
         depth_heatmap = np.zeros((dh, dw, 3), dtype=np.uint8)
     return depth_heatmap
-
-def print_and_save_matrices(sim, depth_matrix, rgb_matrix, step):
-    dh, dw = depth_matrix.shape
-    print("\n" + "=" * 60, flush=True)
-    print(f"  [PERCEPTION UPDATE - STEP {step}] DEPTH & RGB MATRICES", flush=True)
-    print("=" * 60, flush=True)
-
-    valid_depths = depth_matrix[depth_matrix > 0]
-    d_min = np.min(valid_depths) if len(valid_depths) > 0 else 0.0
-    d_max = np.max(depth_matrix)
-    d_mean = np.mean(depth_matrix)
-
-    print(f"  DEPTH MATRIX: Shape={depth_matrix.shape} | Dtype={depth_matrix.dtype}", flush=True)
-    print(f"    Min: {d_min:.3f}m | Max: {d_max:.3f}m | Mean: {d_mean:.3f}m", flush=True)
-    print("    Sample Center 5x5 Matrix (distances in meters):", flush=True)
-    center_d = depth_matrix[dh//2-2 : dh//2+3, dw//2-2 : dw//2+3]
-    for row in center_d:
-        print("      " + " ".join(f"{val:5.3f}" for val in row), flush=True)
-
-    print("-" * 60, flush=True)
-
-    print(f"  RGB MATRIX: Shape={rgb_matrix.shape} | Dtype={rgb_matrix.dtype}", flush=True)
-    r_mean = np.mean(rgb_matrix[:, :, 2])  # BGR
-    g_mean = np.mean(rgb_matrix[:, :, 1])
-    b_mean = np.mean(rgb_matrix[:, :, 0])
-    print(f"    Channel Means: Red={r_mean:.1f} | Green={g_mean:.1f} | Blue={b_mean:.1f}", flush=True)
-    print("    Sample Center 5x5 Matrix (Red Channel values 0-255):", flush=True)
-    rh, rw = rgb_matrix.shape[:2]
-    center_r = rgb_matrix[rh//2-2 : rh//2+3, rw//2-2 : rw//2+3, 2]
-    for row in center_r:
-        print("      " + " ".join(f"{val:3d}" for val in row), flush=True)
-    print("=" * 60 + "\n", flush=True)
-
-    try:
-        msg = (f"[NavPulse] Depth Matrix {depth_matrix.shape} (Mean={d_mean:.2f}m) | "
-               f"RGB Matrix {rgb_matrix.shape} (Mean Red={r_mean:.1f})")
-        sim.addLog(sim.verbosity_scriptinfos, msg)
-    except Exception:
-        pass
-
-    output_dir = "./captured_matrices"
-    os.makedirs(output_dir, exist_ok=True)
-    np.savez_compressed(f"{output_dir}/matrix_data.npz", depth=depth_matrix, rgb=rgb_matrix)
-    np.savetxt(f"{output_dir}/depth_matrix.txt", depth_matrix, fmt="%.3f")
-    depth_heatmap = get_depth_heatmap(depth_matrix)
-    cv2.imwrite(f"{output_dir}/depth_heatmap.png", depth_heatmap)
-    cv2.imwrite(f"{output_dir}/rgb_image.png", rgb_matrix)
-    cv2.imwrite(f"{output_dir}/depth_step{step:04d}.png", depth_heatmap)
-    cv2.imwrite(f"{output_dir}/rgb_step{step:04d}.png", rgb_matrix)

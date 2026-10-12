@@ -1,6 +1,5 @@
 import math
 import heapq
-import time
 import cv2
 import numpy as np
 from grid import bresenham_line
@@ -15,8 +14,6 @@ def a_star_search(grid, start, goal, smooth=False):
     if start == goal:
         return [grid.grid_to_world(*start)]
 
-    start_time = time.time()
-    
     # Precompute 15cm hard obstacle clearance for collision avoidance (3 cells radius at 5cm resolution)
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
@@ -26,6 +23,11 @@ def a_star_search(grid, start, goal, smooth=False):
     # Allows robot to center in open spaces while seamlessly traversing tight 60cm doorways
     free_space_binary = (1 - occ).astype(np.uint8)
     dist_to_wall = cv2.distanceTransform(free_space_binary, cv2.DIST_L2, 3) * grid.res
+
+    # Traversable = known free space with 1-cell raycasting pinholes closed. Large unknown regions (e.g. behind a
+    # wall the camera has not seen) stay blocked, so paths cannot cut through unexplored space.
+    free = (grid.grid_log_odds <= grid.thresh_free).astype(np.uint8)
+    traversable = cv2.morphologyEx(free, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8)) > 0
     
     def is_inflated(x, y):
         if 0 <= x < grid.width and 0 <= y < grid.height:
@@ -89,7 +91,9 @@ def a_star_search(grid, start, goal, smooth=False):
                     if is_inflated(nx, cy) or is_inflated(cx, ny):
                         continue
                 
-                val = grid.get_state(nx, ny)
+                # Plan through known free space only: unknown cells may lie behind a wall the camera has not seen.
+                if not traversable[ny, nx] and (nx, ny) != goal:
+                    continue
                 cost = base_cost
                 
                 # Soft clearance penalty: prefer staying away from walls in open areas,
@@ -98,10 +102,6 @@ def a_star_search(grid, start, goal, smooth=False):
                 if d_wall < 0.28:
                     cost += (0.28 - d_wall) * 1.5
 
-                # Penalize unknown space to prefer exploring known free space
-                if val == grid.UNKNOWN:
-                    cost *= 4.0
-                    
                 neighbors.append(((nx, ny), cost))
         return neighbors
 

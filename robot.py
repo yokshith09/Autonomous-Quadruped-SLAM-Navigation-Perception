@@ -1,4 +1,5 @@
 import math
+import random
 
 FREQ = 6.5
 HIP_AMP = 0.48
@@ -13,6 +14,21 @@ OMEGA = 2 * math.pi * FREQ
 # what actually changed the perceived "gait".
 SLOW_ANGLE = 0.30
 HEADING_RATE = 0.18
+
+# Proprioceptive odometry model: body speed (m/s) vs. gait speed command, piecewise linear.
+# Calibration knob: measured offline from recordings/arena_gtnav_420s.npz (ground truth used only there).
+GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.047), (0.75, 0.053), (1.0, 0.0785))
+GYRO_NOISE_RAD_S = math.radians(0.10)   # white noise on z-rate (MPU-6050 class)
+GYRO_BIAS_RAD_S = math.radians(0.05)    # constant turn-on bias magnitude
+
+def gait_body_speed(speed_cmd):
+    """Calibrated forward body speed for a gait speed command (reverse gait mirrors the forward curve)."""
+    s = min(abs(speed_cmd), GAIT_SPEED_CURVE[-1][0])
+    for (s0, v0), (s1, v1) in zip(GAIT_SPEED_CURVE, GAIT_SPEED_CURVE[1:]):
+        if s <= s1:
+            return math.copysign(v0 + (v1 - v0) * (s - s0) / (s1 - s0), speed_cmd)
+    return math.copysign(GAIT_SPEED_CURVE[-1][1], speed_cmd)
+
 
 def norm_angle(a):
     while a > math.pi:
@@ -48,33 +64,32 @@ class LizardRobot:
         except Exception:
             pass
 
-        self._prev_imu_yaw = None
-        self._prev_odom_pos = None
         self.last_odom_lateral = 0.0
+        self._rng = random.Random(0)
+        self._gyro_bias = self._rng.choice((-1.0, 1.0)) * GYRO_BIAS_RAD_S
+        self._prev_gyro_yaw = None
 
     def get_odometry_imu_delta(self, dt: float, speed_cmd: float):
-        """Return (forward_displacement_m, gyro_dyaw_rad) using IMU orientation delta and base kinematics."""
-        d_fwd = 0.22 * speed_cmd * max(0.0, min(dt, 0.25))
+        """Return (forward_m, dyaw_rad) from commanded gait kinematics and a noisy simulated gyro.
+
+        Position is never read from the simulator: forward motion is dead-reckoned from the gait
+        command (foot slip unmodelled, as on the real robot). The gyro is simulated from the
+        per-step body rotation (the only quantity a physical gyro senses) plus bias and noise.
+        """
+        dt = max(0.0, min(dt, 0.25))
+        d_fwd = gait_body_speed(speed_cmd) * dt
         self.last_odom_lateral = 0.0
         try:
-            p = self.sim.getObjectPosition(self.base, self.sim.handle_world)
-            o = self.sim.getObjectOrientation(self.base, self.sim.handle_world)
-            yaw = norm_angle(o[2] + math.pi)
-            if self._prev_imu_yaw is None or self._prev_odom_pos is None:
-                self._prev_imu_yaw = yaw
-                self._prev_odom_pos = (p[0], p[1])
-                return 0.0, 0.0
-            dyaw = norm_angle(yaw - self._prev_imu_yaw)
-            mid_yaw = norm_angle(self._prev_imu_yaw + 0.5 * dyaw)
-            dx_w = p[0] - self._prev_odom_pos[0]
-            dy_w = p[1] - self._prev_odom_pos[1]
-            d_fwd = dx_w * math.cos(mid_yaw) + dy_w * math.sin(mid_yaw)
-            self.last_odom_lateral = -dx_w * math.sin(mid_yaw) + dy_w * math.cos(mid_yaw)
-            self._prev_imu_yaw = yaw
-            self._prev_odom_pos = (p[0], p[1])
-            return d_fwd, dyaw
+            yaw = self.sim.getObjectOrientation(self.base, self.sim.handle_world)[2]
         except Exception:
             return d_fwd, 0.0
+        if self._prev_gyro_yaw is None:
+            self._prev_gyro_yaw = yaw
+            return d_fwd, 0.0
+        true_dyaw = norm_angle(yaw - self._prev_gyro_yaw)
+        self._prev_gyro_yaw = yaw
+        noise = (self._gyro_bias + self._rng.gauss(0.0, GYRO_NOISE_RAD_S)) * dt
+        return d_fwd, true_dyaw + noise
 
     def get_pose(self):
         p = self.sim.getObjectPosition(self.base, self.sim.handle_world)

@@ -1,6 +1,5 @@
 """Runnable verification tests for the Multi-Agent Robotics Stack."""
 import numpy as np
-import math
 import sys
 import os
 
@@ -168,6 +167,23 @@ def test_planning_agent():
     print("PASSED")
 
 
+def test_planner_avoids_unknown_space():
+    print("Running test_planner_avoids_unknown_space...", end=" ")
+    from planner import a_star_search
+    grid = BayesianOccupancyGrid(-5.0, 5.0, -5.0, 5.0, 0.1)
+    # A thin never-observed strip (like the space beyond an unseen wall) almost splits the free area. Crossing
+    # it is short; the only known-free route goes around its end, far away.
+    grid.grid_log_odds[20:80, 20:80] = grid.l_min
+    grid.grid_log_odds[23:80, 47:54] = 0.0
+    start, goal = (35, 60), (65, 60)
+    path = a_star_search(grid, start, goal)
+    assert path, "A detour through known free space exists"
+    for wx, wy in path:
+        gx, gy = grid.world_to_grid(wx, wy)
+        assert not (23 <= gy < 80 and 47 <= gx < 54), f"Path entered unknown space at {(gx, gy)}"
+    print("PASSED")
+
+
 def test_locomotion_agent():
     print("Running test_locomotion_agent...", end=" ")
     from agents import LocomotionAgent
@@ -273,6 +289,7 @@ if __name__ == "__main__":
     test_room_segmentation()
     test_systematic_room_exploration()
     test_planning_agent()
+    test_planner_avoids_unknown_space()
     test_locomotion_agent()
     test_frontier_boundary_room_association()
     test_semantic_entity_extraction()

@@ -8,7 +8,7 @@ Provides:
 - ICPPoseEstimator: high-precision incremental base pose tracking
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import math
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Any
@@ -89,13 +89,13 @@ def best_fit_transform(source: np.ndarray, target: np.ndarray):
 
 def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Optional[np.ndarray] = None,
                        *, initial_guess: Optional[np.ndarray] = None, max_iterations: int = 25,
-                       tolerance: float = 1e-4, max_correspondence_distance: float = 0.35,
-                       min_correspondences: int = 20):
-    """Point-to-Line Metric ICP (Generalized ICP).
+                       tolerance: float = 1e-6, max_correspondence_distance: float = 0.35,
+                       min_correspondences: int = 20, fixed_rotation: bool = False):
+    """Point-to-Line Metric ICP.
 
     Minimizes orthogonal distance between source points and target surface normals:
       e_i = (R * p_i + t - q_i) . n_i
-    Provides sub-millimeter geometric wall locking without longitudinal corridor sliding.
+    With fixed_rotation, R stays at the initial guess and only t is solved (2-DoF).
     """
     source = np.asarray(source, dtype=np.float64)
     target = np.asarray(target, dtype=np.float64)
@@ -112,7 +112,6 @@ def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Op
     else:
         total_transform = np.eye(3, dtype=np.float64)
 
-    previous_rmse = float("inf")
     match_count = 0
 
     for _ in range(max_iterations):
@@ -135,18 +134,18 @@ def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Op
 
         # Jacobian: [nx, ny, px*ny - py*nx]
         cross_term = p[:, 0] * n[:, 1] - p[:, 1] * n[:, 0]
-        J = np.column_stack([n[:, 0], n[:, 1], cross_term])
+        J = n[:, :2] if fixed_rotation else np.column_stack([n[:, 0], n[:, 1], cross_term])
 
         # Solve normal equations: (J^T * J + lambda * I) * delta = -J^T * r
         H = J.T @ J
         b = -J.T @ residuals
-        damping = 1e-4 * np.trace(H) * np.eye(3)
+        damping = 1e-4 * np.trace(H) * np.eye(H.shape[0])
         try:
             delta = np.linalg.solve(H + damping, b)
         except np.linalg.LinAlgError:
             break
 
-        dx, dy, dtheta = delta
+        dx, dy, dtheta = (delta[0], delta[1], 0.0) if fixed_rotation else delta
         step_c, step_s = math.cos(dtheta), math.sin(dtheta)
         step_R = np.array([[step_c, -step_s], [step_s, step_c]])
         step_t = np.array([dx, dy])
@@ -158,10 +157,8 @@ def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Op
         aligned = (step_R @ aligned.T).T + step_t
         total_transform = step_transform @ total_transform
 
-        rmse = float(np.sqrt(np.mean(residuals ** 2)))
-        if abs(previous_rmse - rmse) < tolerance or np.linalg.norm(delta) < tolerance:
+        if np.linalg.norm(delta) < tolerance:
             break
-        previous_rmse = rmse
 
     distances, indices = _nearest_neighbours(aligned, target)
     valid = distances <= max_correspondence_distance
@@ -224,6 +221,36 @@ def icp_match(source: np.ndarray, target: np.ndarray, *, initial_guess: Optional
     return total_transform, rmse, match_count
 
 
+def project_out_degenerate(correction: np.ndarray, aligned: np.ndarray, target: np.ndarray,
+                           target_normals: np.ndarray, max_dist: float = 0.35, min_ratio: float = 0.15) -> np.ndarray:
+    """Keep a 2-D translation correction only along directions the matched wall normals constrain.
+
+    In an open area or a straight corridor the normals point mostly one way, so ICP cannot observe motion
+    along the other axis and its estimate there is noise; that component is dropped (odometry keeps it).
+    """
+    distances, indices = _nearest_neighbours(aligned, target)
+    n = target_normals[indices[distances <= max_dist]]
+    if len(n) < 3:
+        return np.zeros(2)
+    eigvals, eigvecs = np.linalg.eigh(n.T @ n)
+    kept = np.zeros(2)
+    for value, vec in zip(eigvals, eigvecs.T):
+        if value >= min_ratio * eigvals[-1]:
+            kept += float(vec @ correction) * vec
+    return kept
+
+
+def dominant_wall_angle(normals: np.ndarray, min_points: int = 40, min_concentration: float = 0.6):
+    """Dominant wall-normal direction of a scan, folded into [-45, 45) deg; None if no clear rectilinear structure."""
+    if len(normals) < min_points:
+        return None
+    ang = 4.0 * np.arctan2(normals[:, 1], normals[:, 0])
+    c, s = float(np.mean(np.cos(ang))), float(np.mean(np.sin(ang)))
+    if math.hypot(c, s) < min_concentration:
+        return None
+    return math.atan2(s, c) / 4.0
+
+
 def downsample_scan(points: np.ndarray, *, voxel_size: float = 0.05, max_points: int = 900) -> np.ndarray:
     """Voxel-downsample 2-D points to make ICP stable and bounded in cost."""
     points = np.asarray(points, dtype=np.float64)
@@ -251,8 +278,12 @@ class Keyframe:
 class KeyframeLoopManager:
     """Manages submap keyframes and detects loop closure constraints."""
 
-    def __init__(self, keyframe_dist: float = 1.5, keyframe_rot_deg: float = 40.0,
-                 loop_search_radius: float = 2.5, min_loop_time_diff: float = 12.0):
+    def __init__(self, keyframe_dist: float = 0.5, keyframe_rot_deg: float = 25.0,
+                 loop_search_radius: float = 2.5, min_loop_time_diff: float = 12.0,
+                 max_loop_correction: float = 0.3, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6):
+        self.max_loop_correction = max_loop_correction
+        self.loop_max_rmse = loop_max_rmse
+        self.loop_min_overlap = loop_min_overlap
         self.keyframe_dist = keyframe_dist
         self.keyframe_rot = math.radians(keyframe_rot_deg)
         self.loop_search_radius = loop_search_radius
@@ -300,18 +331,15 @@ class KeyframeLoopManager:
         candidates.sort(key=lambda item: item[1])
         best_kf, _ = candidates[0]
 
-        # Initial relative guess between current pose and keyframe pose
-        dx_guess = best_kf.x - current_x
-        dy_guess = best_kf.y - current_y
-        dyaw_guess = wrap_angle(best_kf.yaw - current_yaw)
-
+        # ICP maps current base-frame points into the keyframe's base frame: T = T_kf^-1 * T_cur.
+        rel_yaw = wrap_angle(current_yaw - best_kf.yaw)
+        ck, sk = math.cos(best_kf.yaw), math.sin(best_kf.yaw)
+        ox, oy = current_x - best_kf.x, current_y - best_kf.y
         guess_T = np.eye(3, dtype=np.float64)
-        guess_T[0, 0] = math.cos(dyaw_guess)
-        guess_T[0, 1] = -math.sin(dyaw_guess)
-        guess_T[1, 0] = math.sin(dyaw_guess)
-        guess_T[1, 1] = math.cos(dyaw_guess)
-        guess_T[0, 2] = dx_guess
-        guess_T[1, 2] = dy_guess
+        guess_T[0, 0], guess_T[0, 1] = math.cos(rel_yaw), -math.sin(rel_yaw)
+        guess_T[1, 0], guess_T[1, 1] = math.sin(rel_yaw), math.cos(rel_yaw)
+        guess_T[0, 2] = ck * ox + sk * oy
+        guess_T[1, 2] = -sk * ox + ck * oy
 
         transform, rmse, matches = icp_point_to_line(
             current_scan, best_kf.scan_points, best_kf.normals,
@@ -320,10 +348,17 @@ class KeyframeLoopManager:
             min_correspondences=25
         )
 
-        if matches >= 25 and rmse <= 0.08:
-            err_dx = transform[0, 2] - dx_guess
-            err_dy = transform[1, 2] - dy_guess
-            err_dyaw = wrap_angle(math.atan2(transform[1, 0], transform[0, 0]) - dyaw_guess)
+        # Narrow FOV in repetitive rooms makes false matches cheap: demand a tight fit over most of the scan.
+        if matches >= max(40, int(self.loop_min_overlap * len(current_scan))) and rmse <= self.loop_max_rmse:
+            tx, ty = transform[0, 2], transform[1, 2]
+            corrected_x = best_kf.x + ck * tx - sk * ty
+            corrected_y = best_kf.y + sk * tx + ck * ty
+            corrected_yaw = wrap_angle(best_kf.yaw + math.atan2(transform[1, 0], transform[0, 0]))
+            err_dx = corrected_x - current_x
+            err_dy = corrected_y - current_y
+            err_dyaw = wrap_angle(corrected_yaw - current_yaw)
+            if math.hypot(err_dx, err_dy) > self.max_loop_correction or abs(err_dyaw) > math.radians(20.0):
+                return None
 
             closure_info = {
                 "keyframe_id": best_kf.keyframe_id,
@@ -338,7 +373,7 @@ class KeyframeLoopManager:
         return None
 
     def optimize_pose_graph(self, matched_kf: Keyframe, err_dx: float, err_dy: float, err_dyaw: float) -> int:
-        """Relax keyframe poses along the loop chain via harmonic SE(2) error distribution."""
+        """Spread the loop-closure correction linearly along the keyframe chain after the anchor."""
         # ponytail: harmonic chain PGO, upgrade to sparse Gauss-Newton if multi-loop cross-links overlap
         try:
             anchor_idx = next(i for i, kf in enumerate(self.keyframes) if kf.keyframe_id == matched_kf.keyframe_id)
@@ -372,14 +407,24 @@ class ICPPoseEstimator:
     """Incrementally estimate base-frame pose using Point-to-Line Metric ICP with loop closure support."""
 
     def __init__(self, x: float, y: float, yaw: float, *, max_step_translation: float = 0.80,
-                 max_step_rotation: float = math.radians(120.0), max_rmse: float = 0.35,
-                 use_point_to_line: bool = True):
+                 max_step_rotation: float = math.radians(120.0), max_rmse: float = 0.05,
+                 use_point_to_line: bool = True, max_trans_disagreement: float = 0.01,
+                 trans_disagreement_ratio: float = 1.0, degeneracy_filter: bool = True,
+                 max_yaw_disagreement: float = math.radians(3.0), icp_yaw_weight: float = 0.1,
+                 manhattan_gain: float = 0.1):
         self.pose = PoseEstimate(x, y, yaw)
         self.previous_scan = None
         self.previous_normals = None
         self.max_step_translation = max_step_translation
         self.max_step_rotation = max_step_rotation
         self.max_rmse = max_rmse
+        self.max_trans_disagreement = max_trans_disagreement
+        self.trans_disagreement_ratio = trans_disagreement_ratio
+        self.degeneracy_filter = degeneracy_filter
+        self.max_yaw_disagreement = max_yaw_disagreement
+        self.icp_yaw_weight = icp_yaw_weight
+        self.manhattan_gain = manhattan_gain
+        self.max_manhattan_error = math.radians(15.0)
         self.use_point_to_line = use_point_to_line
         self.loop_manager = KeyframeLoopManager()
 
@@ -425,7 +470,7 @@ class ICPPoseEstimator:
         dx, dy = transform[:2, 2]
         dyaw = math.atan2(transform[1, 0], transform[0, 0])
 
-        valid = (
+        full_icp_ok = (
             correspondences >= 20
             and np.isfinite(rmse)
             and rmse <= self.max_rmse
@@ -433,24 +478,35 @@ class ICPPoseEstimator:
             and abs(dyaw) <= self.max_step_rotation
         )
 
-        if valid:
-            has_odom = (abs(odom_dx) > 1e-6 or abs(odom_dy) > 1e-6 or abs(odom_dyaw) > 1e-6)
-            if has_odom:
-                # Fuse with IMU gyro prior and reject lever-arm translation drift during turns
-                err_yaw = wrap_angle(dyaw - odom_dyaw)
-                max_yaw_corr = math.radians(0.15)
-                dyaw = wrap_angle(odom_dyaw + max(-max_yaw_corr, min(max_yaw_corr, err_yaw * 0.05)))
-                if abs(odom_dyaw) > math.radians(0.5):
-                    dx, dy = dx_local, dy_local
-                else:
-                    err_tx = dx - dx_local
-                    err_ty = dy - dy_local
-                    err_t = math.hypot(err_tx, err_ty)
-                    if err_t > 1e-6:
-                        scale = min(0.05, 0.0006 / err_t)
-                        dx = dx_local + err_tx * scale
-                        dy = dy_local + err_ty * scale
+        has_odom = (abs(odom_dx) > 1e-6 or abs(odom_dy) > 1e-6 or abs(odom_dyaw) > 1e-6)
+        valid = full_icp_ok
+        if has_odom:
+            # Gyro carries yaw. The 3-DoF ICP yaw only bleeds out gyro bias while the body is not turning
+            # fast: with a narrow-FOV camera, rotation and sideways slide are near-degenerate.
+            yaw_gap = wrap_angle(dyaw - odom_dyaw)
+            slow_turn = abs(odom_dyaw) < math.radians(1.0)
+            w = self.icp_yaw_weight if (full_icp_ok and slow_turn and abs(yaw_gap) <= self.max_yaw_disagreement) else 0.0
+            dyaw = wrap_angle(odom_dyaw + w * yaw_gap)
+            # Translation from ICP with rotation held at the fused yaw; odometry only seeds and gates it.
+            valid = False
+            if self.use_point_to_line:
+                guess = np.array([[math.cos(dyaw), -math.sin(dyaw), dx_local],
+                                  [math.sin(dyaw), math.cos(dyaw), dy_local],
+                                  [0.0, 0.0, 1.0]])
+                t_fixed, rmse_fixed, corr_fixed = icp_point_to_line(
+                    scan, self.previous_scan, self.previous_normals, initial_guess=guess, fixed_rotation=True)
+                tx, ty = t_fixed[0, 2], t_fixed[1, 2]
+                gate = self.max_trans_disagreement + self.trans_disagreement_ratio * math.hypot(dx_local, dy_local)
+                if (corr_fixed >= 20 and np.isfinite(rmse_fixed) and rmse_fixed <= self.max_rmse
+                        and math.hypot(tx - dx_local, ty - dy_local) <= gate):
+                    aligned = (t_fixed[:2, :2] @ scan.T).T + t_fixed[:2, 2]
+                    kept = np.array([tx - dx_local, ty - dy_local])
+                    if self.degeneracy_filter:
+                        kept = project_out_degenerate(kept, aligned, self.previous_scan, self.previous_normals)
+                    dx, dy = dx_local + kept[0], dy_local + kept[1]
+                    rmse, correspondences, valid = rmse_fixed, corr_fixed, True
 
+        if valid:
             self.pose.x += dx * math.cos(self.pose.yaw) - dy * math.sin(self.pose.yaw)
             self.pose.y += dx * math.sin(self.pose.yaw) + dy * math.cos(self.pose.yaw)
             self.pose.yaw = wrap_angle(self.pose.yaw + dyaw)
@@ -459,6 +515,16 @@ class ICPPoseEstimator:
             self.pose.rmse = rmse
             self.pose.correspondences = correspondences
             self.pose.accepted = True
+
+            # Manhattan-world heading prior: indoor walls meet at right angles, so the dominant wall direction
+            # in world frame should be a multiple of 90 deg; nudge heading toward it to cancel gyro drift.
+            # Only on steps where ICP matched, i.e. the scan shows real wall structure.
+            if self.manhattan_gain > 0.0:
+                phi = dominant_wall_angle(self.previous_normals)
+                if phi is not None:
+                    err = (self.pose.yaw + phi + math.pi / 4) % (math.pi / 2) - math.pi / 4
+                    if abs(err) <= self.max_manhattan_error:
+                        self.pose.yaw = wrap_angle(self.pose.yaw - self.manhattan_gain * err)
 
             # Keyframing & Loop Closure
             if self.loop_manager.should_add_keyframe(self.pose.x, self.pose.y, self.pose.yaw):
@@ -470,10 +536,9 @@ class ICPPoseEstimator:
                 matched_kf, err_dx, err_dy, err_dyaw = closure
                 matched_kf.timestamp = timestamp
                 self.loop_manager.optimize_pose_graph(matched_kf, err_dx, err_dy, err_dyaw)
-                if not has_odom:
-                    self.pose.x += err_dx * 0.5
-                    self.pose.y += err_dy * 0.5
-                    self.pose.yaw = wrap_angle(self.pose.yaw + err_dyaw * 0.5)
+                self.pose.x += err_dx
+                self.pose.y += err_dy
+                self.pose.yaw = wrap_angle(self.pose.yaw + err_dyaw)
         else:
             self.pose.x += odom_dx
             self.pose.y += odom_dy
@@ -512,15 +577,3 @@ def world_to_base_points(points_world: np.ndarray, *args) -> np.ndarray:
         return np.column_stack([bx, by])
     else:
         raise ValueError("world_to_base_points requires (points, matrix) or (points, x, y, yaw)")
-
-
-def base_to_world_points(points_base: np.ndarray, pose: PoseEstimate) -> np.ndarray:
-    """Project base-frame depth points into the ICP-estimated world frame."""
-    points_base = np.asarray(points_base, dtype=np.float64)
-    if len(points_base) == 0:
-        return np.empty((0, 2), dtype=np.float64)
-    c, s = math.cos(pose.yaw), math.sin(pose.yaw)
-    points_world = points_base.copy()
-    points_world[:, 0] = c * points_base[:, 0] - s * points_base[:, 1] + pose.x
-    points_world[:, 1] = s * points_base[:, 0] + c * points_base[:, 1] + pose.y
-    return points_world

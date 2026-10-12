@@ -21,10 +21,10 @@ This document rigorously catalogues all architectural and algorithmic **nuances*
 | **Phase 2** | **Simulator-Independent Camera Back-Projection** | Perception & Kinematics | **COMPLETED & VERIFIED** | Static calibrated $T_{\text{base}}^{\text{cam}}$ in `sensors.py`; zero calls to `sim.getObjectMatrix` during runtime loop. |
 | **Phase 3** | **Pose-Coupled Occupancy Grid & Dual Bayesian Grid** | Mapping & Evaluation | **COMPLETED & VERIFIED** | Maps updated via estimated pose $(\hat{x}, \hat{y}, \hat{\theta})$ in `MappingAgent`; dual `true_grid` vs `slam_grid` matrix evaluation. |
 | **Phase 4** | **Odometry & IMU Predictive Prior for Metric ICP** | Robust Localization | **COMPLETED & VERIFIED** | Kinematic stride + IMU gyro prior fed into Point-to-Line ICP; zero loss of tracking during sharp pivot turns. |
-| **Phase 5** | **Pose Graph Optimization (PGO) on Loop Closure** | Global Consistency | **COMPLETED & VERIFIED** | Harmonic SE(2) Gauss-Newton PGO across keyframes on loop closure in `KeyframeLoopManager`. |
+| **Phase 5** | **Pose Graph Optimization (PGO) on Loop Closure** | Global Consistency | **COMPLETED & VERIFIED** | Loop error distributed linearly along the keyframe chain in `KeyframeLoopManager` (not a full Gauss-Newton PGO yet). |
 | **Phase 6** | **Semantic Entity Extraction ("Chair" & "Wall")** | Semantic SLAM & Graph | **COMPLETED & VERIFIED** | Obstacle clusters classified by 3D span; registered as semantic entities in `SpatialKnowledgeGraph`. |
 | **Phase 7** | **Geodesic Wavefront NBV & Monotonic Angular Sweep** | Active Exploration & Decision | **COMPLETED & VERIFIED** | 8-connected BFS Geodesic Wavefront $D_{\text{geo}}$, hemisphere-first monotonic sweep, and dynamic view-cone sliding. |
-| **Phase 8** | **Full 22-Metric Scientific Evaluator & Anti-Bypass Audit** | Benchmarking & Validity | **COMPLETED & VERIFIED** | `evaluate_all_metrics.py` computes 22 trajectory/mapping metrics, CPU-only SLAM benchmark, and 5-point audit. |
+| **Phase 8** | **Full 22-Metric Scientific Evaluator & Anti-Bypass Audit** | Benchmarking & Validity | **COMPLETED & VERIFIED** | `evaluate_all_metrics.py` computes trajectory/mapping metrics, compares with published MNE-SLAM (CVPR 2025) tables, and runs a leakage audit. |
 | **Phase 9** | **Next-Gen Intelligence Roadmap (VLM / LLM / RL)** | Future Market Roadmap | **DESIGNED & SPECIFIED** | Open-vocabulary 3D scene graphs, semantic exploration priors, LLM System 2 executive, and terrain adaptation. |
 
 ---
@@ -37,7 +37,7 @@ This document rigorously catalogues all architectural and algorithmic **nuances*
 
 - **Prior Issue:** `SLAMAgent` published simulator ground-truth poses to `pose/state`. The robot navigated on ground truth while SLAM ran passively in the background without consequence.
 - **Implemented Fix:** `SLAMAgent` runs closed-loop by default (`use_ground_truth_nav = False`). When in closed-loop mode, `SLAMAgent` **does not even subscribe to `pose/ground_truth`** on the message bus, providing complete architectural isolation.
-- **Verification:** All paths and gait steering are computed using `pose/slam`. In an 18.88m multi-room run, the robot drifted only $5.70\text{ cm}$ ATE RMSE ($0.30\%$ drift rate).
+- **Correction (Oct 2026):** the odometry fed to SLAM was later found to be computed from the simulator's true position (`robot.get_odometry_imu_delta`), so earlier ATE figures are void. Odometry now comes from commanded gait kinematics plus a noisy simulated gyro; numbers must be re-measured.
 
 ---
 
@@ -57,7 +57,7 @@ This document rigorously catalogues all architectural and algorithmic **nuances*
   2. **Dual Bayesian Grid Evaluation:** `main_agentic.py` maintains two independent $220 \times 220$ Bayesian Log-Odds Grids ($5\text{ cm}$ resolution):
      - `true_grid`: Raycasted using the exact physics ground-truth pose $(x_t^*, y_t^*, \theta_t^*)$ to form an unbiased reference of the observed arena.
      - `mapping_agent.grid`: Raycasted using the estimated SLAM pose $(\hat{x}_t, \hat{y}_t, \hat{\theta}_t)$.
-- **Verification:** [`accuracy_evaluator.py`](../accuracy_evaluator.py) evaluates `true_grid.npy` vs. `slam_grid.npy` using `scipy.spatial.cKDTree`, yielding an honest, physical Mean Wall Chamfer Distance of $1.76\text{ cm}$ (short run) and $5.12\text{ cm}$ (18.88m long run).
+- **Verification:** [`accuracy_evaluator.py`](../accuracy_evaluator.py) evaluates `true_grid.npy` vs. `slam_grid.npy` using `scipy.spatial.cKDTree`. Earlier Chamfer figures were produced with ground-truth odometry and are void until re-measured.
 
 ---
 
@@ -65,14 +65,14 @@ This document rigorously catalogues all architectural and algorithmic **nuances*
 
 - **Prior Issue:** `ICPPoseEstimator.update()` performed an unguided scan search starting from $\Delta x = 0, \Delta y = 0, \Delta \theta = 0$, causing scan-matching slippage during sharp $90^\circ$ and $180^\circ$ turns.
 - **Implemented Fix:** Fused leg kinematics and simulated IMU gyroscope angular delta into `get_odometry_imu_delta()`. This initial motion guess $(\Delta x_{\text{odom}}, \Delta y_{\text{odom}}, \Delta \theta_{\text{imu}})$ is passed directly into Point-to-Line ICP as an initial transformation prior.
-- **Verification:** ICP converges in 3–5 iterations instead of 12–15; zero loss of tracking during pivot turns.
+- **Verification:** not measured yet.
 
 ---
 
 ### 🔹 Phase 5: Pose Graph Optimization (PGO) on Loop Closure
 
 - **Prior Issue:** Loop closure detected keyframe proximity but did not deform the trajectory or distribute drift across historical poses.
-- **Implemented Fix:** Implemented harmonic SE(2) Gauss-Newton Pose Graph Optimization in [`slam.py`](../slam.py) (`KeyframeLoopManager.optimize_pose_graph`). On loop closure detection, historical keyframes are adjusted to close loops and eliminate ghost walls.
+- **Implemented Fix:** On loop closure, [`slam.py`](../slam.py) (`KeyframeLoopManager.optimize_pose_graph`) spreads the correction linearly over the keyframes after the anchor and applies it to the current pose. The loop-closure transform is computed in the matched keyframe's frame (fixed Oct 2026; it previously mixed in world-frame offsets).
 - **Verification:** Unit test `test_pose_graph_optimization` confirms correct trajectory relaxation and loop closure correction.
 
 ---
@@ -81,7 +81,7 @@ This document rigorously catalogues all architectural and algorithmic **nuances*
 
 - **Prior Issue:** All obstacles were anonymous binary grid cells.
 - **Implemented Fix:** Added `extract_semantic_entities()` in [`agents/mapping_agent.py`](../agents/mapping_agent.py). Obstacle clusters are segmented by 2D connected components; clusters with physical span $0.18\text{m} \le \text{span} \le 1.05\text{m}$ are registered as `"chair"`, while spans $\ge 1.2\text{m}$ are labeled `"wall"`. These are published as semantic entities in `SpatialKnowledgeGraph`.
-- **Verification:** Telemetry identifies and maps $65$ semantic entities across 5 rooms in the 18.88m run.
+- **Verification:** unit test `test_semantic_entity_extraction`.
 
 ---
 
@@ -101,11 +101,11 @@ This document rigorously catalogues all architectural and algorithmic **nuances*
 
 ### 🔹 Phase 8: Full 22-Metric Scientific Evaluator & Anti-Bypass Audit
 
-- **Implemented Solution:** Created [`evaluate_all_metrics.py`](../evaluate_all_metrics.py) and [`print_mne_comparison.py`](../print_mne_comparison.py) to compute:
+- **Implemented Solution:** Created [`evaluate_all_metrics.py`](../evaluate_all_metrics.py) to compute:
   - 11 Localization Metrics (ATE RMSE, Mean, Median, Std, Max, RPE Trans/Rot, Drift %, Yaw Mean/Max, Path Length & Efficiency).
   - 11 Mapping Metrics (Acc., Comp., Chamfer, Hausdorff-95, Comp.Ratio@5cm, F1, Precision, Recall, Exact IoU, Tolerant IoU, Free-Space IoU, Grid Acc.).
-  - Side-by-side CPU-Only Multi-SLAM Benchmark Table.
-  - Automated 5-Point Anti-Bypass Integrity Audit (`5/5 PASS`).
+  - Comparison with the published tables of MNE-SLAM (Deng et al., CVPR 2025), cited per table and dataset.
+  - Automated ground-truth leakage audit (static AST scan of the estimation path and odometry, plus a runtime bus check).
 
 ---
 
@@ -135,10 +135,5 @@ To guarantee that reported benchmark results are scientifically valid and not by
 
 ## 6. Hardware Budget & Edge Deployment Viability (Raspberry Pi 5)
 
-Our entire stack is optimized for **low-power CPU edge deployment (Raspberry Pi 5 @ <12W)**:
-
-- **Tracking Latency:** `14.2 ms` (Point-to-Line ICP on ARM Cortex-A76).
-- **Mapping Latency:** `4.1 ms` (Bresenham raycasting & log-odds update).
-- **Path Planning Latency:** `3.4 ms` (Vector-dilated $A^*$ on 5cm grid).
-- **RAM Footprint:** `0.37 MB` (Occupancy grid + topological graph).
-- **Multi-Agent Bandwidth Budget:** $< 50\text{ KB}$ (synchronizing topological room nodes & doorway transforms rather than raw point clouds).
+Not measured on a Raspberry Pi yet. Desktop-CPU latencies and map memory for each run are recorded in
+`accuracy_results/latest_metrics.json` (`cpu_track_ms`, `cpu_map_ms`, `cpu_plan_ms`, `map_memory_mb`, `cpu_name`).
