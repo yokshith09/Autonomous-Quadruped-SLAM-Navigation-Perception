@@ -7,6 +7,10 @@ __pycache__/
 .playwright-cli/
 .agents/
 .claude/
-captured_matrices/*.npy
-captured_matrices/*.npz
+.anchor/
+# Regenerated on every run by main_agentic.py / evaluate_all_metrics.py
+captured_matrices/
+accuracy_results/
+evaluation_results_images/
+recordings/
 
