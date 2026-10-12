@@ -8,7 +8,6 @@
 
 import os
 import json
-import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -131,8 +130,8 @@ def _render_localization_map(true_p, slam_p, metrics, images_dir, results_dir):
         f"║  * Mean Trajectory Error (Mean):     {ate_mean*100:5.2f} cm ║\n"
         f"║  * Peak Drift (Max ATE Error):       {ate_max*100:5.2f} cm ║\n"
         f"║  * Mean Heading (Yaw) Error:          {mean_yaw_err:5.2f}°  ║\n"
-        f"║  * Path Distance Traveled:           {metrics.get('total_distance_traveled_m', 18.88):5.2f} m  ║\n"
-        f"║  * Drift Rate (% of Path Length):     {metrics.get('drift_rate_percent', 0.30):5.2f} %  ║\n"
+        f"║  * Path Distance Traveled:           {metrics.get('total_distance_traveled_m', 0.0):5.2f} m  ║\n"
+        f"║  * Drift Rate (% of Path Length):     {metrics.get('drift_rate_percent', 0.0):5.2f} %  ║\n"
         "╚═════════════════════════════════════════════╝"
     )
     ax.text(0.03, 0.97, card_text, transform=ax.transAxes, fontsize=10, fontfamily='monospace',
@@ -149,7 +148,7 @@ def _render_localization_map(true_p, slam_p, metrics, images_dir, results_dir):
     legend.get_frame().set_alpha(0.9)
 
     plt.tight_layout()
-    for dest in [images_dir, results_dir, "."]:
+    for dest in [images_dir, results_dir]:
         p = os.path.join(dest, "localization_map.png")
         plt.savefig(p, dpi=250, facecolor=fig.get_facecolor(), bbox_inches='tight')
     plt.close()
@@ -170,7 +169,7 @@ def _render_slam_occupancy_map(slam_grid, kg, metrics, resolution, images_dir, r
     display_rgb = np.full((h, w, 3), 229, dtype=np.uint8)  # Default: Unknown Gray
 
     free_mask = slam_grid <= -0.5
-    occ_mask = slam_grid >= 0.7
+    occ_mask = slam_grid >= 1.0
 
     display_rgb[free_mask] = [255, 255, 255]               # Free Space: Pure Crisp White
     display_rgb[occ_mask] = [20, 24, 33]                   # Obstacles: Deep Charcoal Black
@@ -209,9 +208,10 @@ def _render_slam_occupancy_map(slam_grid, kg, metrics, resolution, images_dir, r
     ax.set_ylabel("Y (meters in Arena Frame)", fontsize=11, fontweight='bold', color='#1e293b')
 
     # Mapping Metrics Card
-    f1 = metrics.get('f1_score', 0.933) * 100.0
-    chamfer = metrics.get('chamfer_distance_meters', 0.0512) * 100.0
-    explored = metrics.get('explored_pct', 48.0)
+    f1 = metrics.get('f1_score', 0.0) * 100.0
+    chamfer = metrics.get('chamfer_distance_meters', 0.0) * 100.0
+    explored = metrics.get('explored_pct', 0.0)
+    mem_mb = metrics.get('map_memory_mb', slam_grid.nbytes / (1024.0 * 1024.0))
     free_cells = int(np.sum(free_mask))
     occ_cells = int(np.sum(occ_mask))
 
@@ -225,7 +225,7 @@ def _render_slam_occupancy_map(slam_grid, kg, metrics, resolution, images_dir, r
         f"║  * Free Space Area Explored:      {free_cells * (resolution**2):5.1f} m² ║\n"
         f"║  * Occupied Obstacle Perimeter:   {occ_cells * resolution:5.1f} m  ║\n"
         f"║  * Grid Resolution:                5.0 cm/cell║\n"
-        f"║  * Map RAM Memory Footprint:        0.37 MB  ║\n"
+        f"║  * Map RAM Memory Footprint:       {mem_mb:5.2f} MB  ║\n"
         "╚═════════════════════════════════════════════╝"
     )
     ax.text(0.03, 0.97, card_text, transform=ax.transAxes, fontsize=10, fontfamily='monospace',
@@ -242,7 +242,7 @@ def _render_slam_occupancy_map(slam_grid, kg, metrics, resolution, images_dir, r
     ax.legend(handles=legend_elements, loc='lower right', facecolor='#f8fafc', edgecolor='#94a3b8', fontsize=10)
 
     plt.tight_layout()
-    for dest in [images_dir, results_dir, "."]:
+    for dest in [images_dir, results_dir]:
         p = os.path.join(dest, "slam_map.png")
         plt.savefig(p, dpi=250, facecolor=fig.get_facecolor(), bbox_inches='tight')
     plt.close()
@@ -260,7 +260,7 @@ def _render_ground_truth_map(true_grid, resolution, images_dir, results_dir):
 
     display_rgb = np.full((h, w, 3), 229, dtype=np.uint8)
     free_mask = true_grid <= -0.5
-    occ_mask = true_grid >= 0.7
+    occ_mask = true_grid >= 1.0
 
     display_rgb[free_mask] = [255, 255, 255]
     display_rgb[occ_mask] = [15, 23, 42]
@@ -273,7 +273,7 @@ def _render_ground_truth_map(true_grid, resolution, images_dir, results_dir):
     ax.set_ylabel("Y (meters in Arena Frame)", fontsize=11, fontweight='bold', color='#1e293b')
 
     plt.tight_layout()
-    for dest in [images_dir, results_dir, "."]:
+    for dest in [images_dir, results_dir]:
         p = os.path.join(dest, "ground_truth_map.png")
         plt.savefig(p, dpi=250, facecolor=fig.get_facecolor(), bbox_inches='tight')
     plt.close()
@@ -289,8 +289,8 @@ def _render_overlay_comparison_map(true_grid, slam_grid, resolution, metrics, im
     fig.patch.set_facecolor('#0f172a')
     ax.set_facecolor('#0f172a')
 
-    true_occ = (true_grid >= 0.7)
-    slam_occ = (slam_grid >= 0.7)
+    true_occ = (true_grid >= 1.0)
+    slam_occ = (slam_grid >= 1.0)
 
     # Color code:
     # Background: Dark #0F172A
@@ -298,7 +298,7 @@ def _render_overlay_comparison_map(true_grid, slam_grid, resolution, metrics, im
     # Red (#EF4444)   = SLAM Detected Obstacle
     # Yellow (#FBBF24)= True Wall Match within tolerance
     import cv2
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     true_dilated = cv2.dilate(true_occ.astype(np.uint8), kernel, iterations=1) > 0
     slam_matches = np.logical_and(true_dilated, slam_occ)
 
@@ -324,7 +324,7 @@ def _render_overlay_comparison_map(true_grid, slam_grid, resolution, metrics, im
     ax.legend(handles=legend_elements, loc='lower right', facecolor='#1e293b', edgecolor='#475569', fontsize=10, labelcolor='white')
 
     plt.tight_layout()
-    for dest in [images_dir, results_dir, "."]:
+    for dest in [images_dir, results_dir]:
         p = os.path.join(dest, "slam_vs_groundtruth_overlay_map.png")
         plt.savefig(p, dpi=250, facecolor=fig.get_facecolor(), bbox_inches='tight')
     plt.close()

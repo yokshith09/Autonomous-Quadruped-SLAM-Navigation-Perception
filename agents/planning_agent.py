@@ -3,9 +3,9 @@ import time
 import math
 from typing import List, Tuple, Optional
 from .base import BaseAgent
-from .bus import MessageBus, PathMsg, FrontierTargetMsg, PoseMsg, GridMapMsg, MissionEventMsg
+from .bus import MessageBus, PathMsg, FrontierTargetMsg, PoseMsg, MissionEventMsg
 from planner import a_star_search, smooth_path
-from grid import find_nearest_free, ROBOT_RADIUS
+from grid import find_nearest_free
 
 
 class PlanningAgent(BaseAgent):

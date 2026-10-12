@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Comprehensive SLAM, Localization, Exploration & CPU Benchmark Evaluator.
+"""SLAM, localization and exploration evaluator for a recorded CoppeliaSim run.
 
-Computes and prints:
-1. All Localization & Trajectory Accuracy Metrics (ATE RMSE/Mean/Median/Std/Max, RPE Trans/Rot, Drift %, Yaw Err).
-2. All SLAM Occupancy & Surface Reconstruction Metrics (Acc, Comp, Chamfer, Hausdorff-95, Comp.Ratio, F1, Precision, Recall, IoU).
-3. CPU-Only Multi-SLAM Benchmark Comparison (vs. ORB-SLAM3 CPU, Cartographer 2D CPU, GMapping CPU, Hector SLAM CPU, RTAB-Map CPU, Swarm-SLAM CPU).
-4. Ablation Study Table (evaluating individual algorithmic modules on CPU).
-5. Programmatic Anti-Bypass & Result Validity Audit (verifying zero ground-truth leakage).
+Every number for OUR system is recomputed from the raw matrices saved by main_agentic.py
+(captured_matrices/). Published baselines are quoted verbatim from MNE-SLAM (Deng et al.,
+CVPR 2025) with their table number and dataset, so a reader can check each value.
 """
 
 import ast
@@ -17,360 +14,291 @@ import numpy as np
 import matplotlib.pyplot as plt
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
 from generate_separate_maps import generate_separate_maps
-from render_table_photos import render_table_photos
+from benchmarks import MNE_APARTMENT, MNE_REPLICA, MNE_RUNTIME, MNE_SCANNET_AVG
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
     pass
 
+MNE_REF = "Deng et al., MNE-SLAM, CVPR 2025"
+
+GT_POSE_APIS = {"getObjectPosition", "getObjectOrientation", "getObjectMatrix", "getObjectPose", "getObjectVelocity"}
+NAV_FILES = ["slam.py"] + [os.path.join("agents", f) for f in (
+    "slam_agent.py", "mapping_agent.py", "perception_agent.py", "frontier_agent.py", "planning_agent.py")]
+
 
 def compute_all_live_metrics(
     data_dir: str = "captured_matrices",
     results_dir: str = "accuracy_results",
     resolution: float = 0.05,
+    save_plots: bool = True,
+    plot_dir: str = None,
 ) -> dict:
     """Recompute all localization and mapping metrics directly from saved NumPy matrices."""
     os.makedirs(results_dir, exist_ok=True)
+    plot_dir = plot_dir or results_dir
     combined = {}
 
     json_path = os.path.join(results_dir, "latest_metrics.json")
     if os.path.exists(json_path):
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                combined.update(json.load(f))
-        except Exception:
-            pass
+        with open(json_path, "r", encoding="utf-8") as f:
+            combined.update(json.load(f))
 
     true_grid_path = os.path.join(data_dir, "true_grid.npy")
     slam_grid_path = os.path.join(data_dir, "slam_grid.npy")
     if os.path.exists(true_grid_path) and os.path.exists(slam_grid_path):
         true_grid = np.load(true_grid_path)
         slam_grid = np.load(slam_grid_path)
-        grid_metrics = evaluate_grid_accuracy(
-            true_grid, slam_grid, resolution=resolution, tolerance_m=0.15, output_dir=results_dir, save_plots=True
-        )
-        combined.update(grid_metrics)
-        total_cells = true_grid.size
+        combined.update(evaluate_grid_accuracy(
+            true_grid, slam_grid, resolution=resolution, tolerance_m=0.15, output_dir=plot_dir, save_plots=save_plots
+        ))
         explored_cells = int(np.count_nonzero((slam_grid <= -0.5) | (slam_grid >= 1.0)))
-        combined["explored_pct"] = (explored_cells / total_cells) * 100.0 if total_cells > 0 else 0.0
-        combined["map_memory_mb"] = float(slam_grid.nbytes * 2) / (1024.0 * 1024.0)
+        combined["explored_pct"] = explored_cells / slam_grid.size * 100.0
+        combined.setdefault("map_memory_mb", slam_grid.nbytes / (1024.0 * 1024.0))
 
     traj_path = os.path.join(data_dir, "trajectory_data.npz")
     if os.path.exists(traj_path):
         data = np.load(traj_path)
-        true_poses = data["true_poses"]
-        slam_poses = data["slam_poses"]
         timestamps = data["timestamps"] if "timestamps" in data else None
-        traj_metrics = evaluate_trajectory(
-            true_poses, slam_poses, timestamps=timestamps, output_dir=results_dir, save_plots=True
-        )
-        combined.update(traj_metrics)
+        combined.update(evaluate_trajectory(
+            data["true_poses"], data["slam_poses"], timestamps=timestamps, output_dir=plot_dir, save_plots=save_plots
+        ))
 
     kg_path = os.path.join(results_dir, "knowledge_graph.json")
     if os.path.exists(kg_path):
-        try:
-            with open(kg_path, "r", encoding="utf-8") as f:
-                kg = json.load(f)
-                combined["rooms_discovered"] = max(1, len(kg.get("rooms", {})))
-                combined["doorways_discovered"] = len(kg.get("doorways", {}))
-                combined["entities_mapped"] = len(kg.get("entities", {}))
-        except Exception:
-            pass
+        with open(kg_path, "r", encoding="utf-8") as f:
+            kg = json.load(f)
+        combined["rooms_discovered"] = len(kg.get("rooms", {}))
+        combined["doorways_discovered"] = len(kg.get("doorways", {}))
+        combined["entities_mapped"] = len(kg.get("entities", {}))
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(combined, f, indent=2)
-
     return combined
 
 
-def verify_results_not_bypassed(
-    data_dir: str = "captured_matrices",
-    results_dir: str = "accuracy_results",
-) -> list:
-    """Run 5 programmatic integrity checks proving SLAM & mapping results are genuine and not bypassed."""
+def _gt_api_calls(tree, allowed=frozenset()):
+    return [f"line {n.lineno}: {n.attr}" for n in ast.walk(tree)
+            if isinstance(n, ast.Attribute) and n.attr in GT_POSE_APIS - allowed]
+
+
+def verify_results_not_bypassed(data_dir: str = "captured_matrices", results_dir: str = "accuracy_results") -> list:
+    """Integrity checks that the SLAM estimate never consumes simulator ground truth."""
     checks = []
 
-    # Check 1: AST code audit on slam.py and agents/slam_agent.py (no sim.getObjectPosition calls)
-    slam_clean = True
-    for fname in ["slam.py", os.path.join("agents", "slam_agent.py")]:
+    # 1. Static audit: no ground-truth pose API anywhere in the estimation/navigation path.
+    leaks = []
+    for fname in NAV_FILES:
         if os.path.exists(fname):
             with open(fname, "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=fname)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Attribute) and node.attr in ("getObjectPosition", "getObjectOrientation"):
-                    slam_clean = False
+                leaks += [f"{fname} {c}" for c in _gt_api_calls(ast.parse(f.read()))]
+    # Odometry feeds SLAM: the simulated gyro may read orientation (per-step delta only), never position.
+    with open("robot.py", "r", encoding="utf-8") as f:
+        robot_tree = ast.parse(f.read())
+    odom_fn = next((n for n in ast.walk(robot_tree)
+                    if isinstance(n, ast.FunctionDef) and n.name == "get_odometry_imu_delta"), None)
+    if odom_fn is None:
+        leaks.append("robot.py: get_odometry_imu_delta not found")
+    else:
+        leaks += [f"robot.py get_odometry_imu_delta {c}" for c in _gt_api_calls(odom_fn, {"getObjectOrientation"})]
     checks.append((
-        "AST Source Audit (Zero Sim API in SLAM/SLAMAgent)",
-        slam_clean,
-        "slam.py & SLAMAgent contain 0 calls to sim.getObjectPosition/Orientation"
+        "Static audit: no GT pose API in SLAM, agents, or odometry",
+        not leaks,
+        "; ".join(leaks) if leaks else f"{len(NAV_FILES)} nav files + odometry clean (gyro = noisy orientation delta)",
     ))
 
-    # Check 2: Bus subscription isolation in SLAMAgent when use_ground_truth_nav=False
-    bus_isolated = False
-    slam_agent_path = os.path.join("agents", "slam_agent.py")
-    if os.path.exists(slam_agent_path):
-        with open(slam_agent_path, "r", encoding="utf-8") as f:
-            src = f.read()
-            bus_isolated = "if self.use_ground_truth_nav:" in src
+    # 2. Runtime audit: in closed-loop mode SLAMAgent never subscribes to ground truth.
+    from agents import MessageBus, SLAMAgent
+    bus = MessageBus()
+    SLAMAgent(bus, use_ground_truth_nav=False).initialize()
+    subscribed = "pose/ground_truth" in bus._subscribers
     checks.append((
-        "MessageBus Ground-Truth Isolation (Closed-Loop Mode)",
-        bus_isolated,
-        "SLAMAgent does not subscribe to 'pose/ground_truth' when use_ground_truth_nav=False"
+        "Runtime audit: SLAMAgent bus subscriptions (closed loop)",
+        not subscribed,
+        "SLAMAgent subscribes to: " + ", ".join(sorted(bus._subscribers)),
     ))
 
-    # Check 3: Non-zero physical divergence between true_poses and slam_poses
-    traj_valid = False
-    traj_detail = "trajectory_data.npz not found"
+    # 3. Trajectories must physically diverge (a GT replay would give ~0 error).
+    traj_ok, traj_detail = False, "trajectory_data.npz not found"
     traj_path = os.path.join(data_dir, "trajectory_data.npz")
     if os.path.exists(traj_path):
         data = np.load(traj_path)
-        tp = data["true_poses"][:, :2]
-        sp = data["slam_poses"][:, :2]
+        tp, sp = data["true_poses"][:, :2], data["slam_poses"][:, :2]
         n = min(len(tp), len(sp))
         if n > 5:
-            diffs = np.linalg.norm(tp[:n] - sp[:n], axis=1)
-            rmse_cm = float(np.sqrt(np.mean(diffs ** 2))) * 100.0
-            max_cm = float(np.max(diffs)) * 100.0
-            traj_valid = (0.05 <= rmse_cm <= 25.0) and not np.allclose(tp[:n], sp[:n], atol=1e-4)
-            traj_detail = f"SLAM vs GT poses diverge physically (ATE RMSE={rmse_cm:.2f}cm, Max={max_cm:.2f}cm > 0)"
-    checks.append((
-        "Trajectory Independence Audit (SLAM != Ground Truth)",
-        traj_valid,
-        traj_detail
-    ))
+            err = np.linalg.norm(tp[:n] - sp[:n], axis=1)
+            rmse_cm = float(np.sqrt(np.mean(err ** 2))) * 100.0
+            traj_ok = rmse_cm > 0.1
+            traj_detail = f"ATE RMSE {rmse_cm:.2f} cm, max {float(np.max(err)) * 100.0:.2f} cm over {n} poses"
+    checks.append(("Trajectory independence (SLAM != ground truth)", traj_ok, traj_detail))
 
-    # Check 4: Independent Dual-Grid Audit (true_grid.npy vs slam_grid.npy)
-    grid_valid = False
-    grid_detail = "true_grid.npy / slam_grid.npy not found"
-    tg_path = os.path.join(data_dir, "true_grid.npy")
-    sg_path = os.path.join(data_dir, "slam_grid.npy")
+    # 4. The two occupancy grids must be independently built.
+    grid_ok, grid_detail = False, "true_grid.npy / slam_grid.npy not found"
+    tg_path, sg_path = os.path.join(data_dir, "true_grid.npy"), os.path.join(data_dir, "slam_grid.npy")
     if os.path.exists(tg_path) and os.path.exists(sg_path):
-        tg = np.load(tg_path)
-        sg = np.load(sg_path)
-        diff_cells = int(np.count_nonzero(np.abs(tg - sg) > 1e-3))
-        grid_valid = (diff_cells > 50) and not np.array_equal(tg, sg)
-        grid_detail = f"True Grid and SLAM Grid are independent matrices ({diff_cells:,d} cells differ)"
-    checks.append((
-        "Dual-Grid Matrix Independence (True Grid != SLAM Grid)",
-        grid_valid,
-        grid_detail
-    ))
+        diff_cells = int(np.count_nonzero(np.abs(np.load(tg_path) - np.load(sg_path)) > 1e-3))
+        grid_ok = diff_cells > 50
+        grid_detail = f"{diff_cells:,d} cells differ"
+    checks.append(("Dual-grid independence (true grid != SLAM grid)", grid_ok, grid_detail))
 
-    # Check 5: Closed-Loop Flag in latest_metrics.json
-    cl_valid = True
+    # 5. The run itself must have navigated on the SLAM pose.
+    cl_ok = False
     json_path = os.path.join(results_dir, "latest_metrics.json")
     if os.path.exists(json_path):
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-                cl_valid = bool(meta.get("closed_loop_slam", True))
-        except Exception:
-            pass
-    checks.append((
-        "Active Closed-Loop Navigation Flag",
-        cl_valid,
-        "Navigation & planning driven by pose/slam (closed_loop_slam=True)"
-    ))
-
+        with open(json_path, "r", encoding="utf-8") as f:
+            cl_ok = bool(json.load(f).get("closed_loop_slam", False))
+    checks.append(("Run navigated on pose/slam (closed_loop_slam flag)", cl_ok,
+                   "closed_loop_slam=True" if cl_ok else "flag missing or False"))
     return checks
 
 
-def save_cpu_benchmark_plot(metrics: dict, output_dir: str = "accuracy_results"):
-    """Generate a publication-ready bar chart comparing CPU SLAM systems."""
-    os.makedirs(output_dir, exist_ok=True)
-    ate_cm = metrics.get("ate_rmse_meters", 0.0079) * 100.0
-    chamfer_cm = metrics.get("chamfer_distance_meters", 0.0176) * 100.0
-    track_ms = metrics.get("cpu_track_ms", 14.2)
-    map_ms = metrics.get("cpu_map_ms", 4.1)
+def _fmt(value, scale=1.0, unit="", nd=2):
+    return "n/a" if value is None else f"{value * scale:.{nd}f}{unit}"
 
-    methods = [
-        "GMapping\n(CPU)",
-        "Hector SLAM\n(CPU)",
-        "Cartographer\n(CPU)",
-        "RTAB-Map\n(CPU)",
-        "ORB-SLAM3\n(CPU)",
-        "Swarm-SLAM\n(CPU)",
-        "Ours (Agentic\nCPU SLAM)"
+
+def _rank_line(label, ours, rows, col):
+    vals = sorted([r[col] for r in rows if r[col] is not None] + [ours])
+    return f"  -> {label}: OURS would rank {vals.index(ours) + 1} of {len(vals)} (lower is better)"
+
+
+def build_comparison_lines(m: dict) -> list:
+    """Side-by-side tables against MNE-SLAM's published numbers, with our measured row appended."""
+    ate = m.get("ate_rmse_meters")
+    acc, comp, ratio = m.get("accuracy_meters"), m.get("completion_meters"), m.get("completion_ratio_5cm")
+    ate_cm = ate * 100.0 if ate is not None else None
+    lines = [
+        f"  Source of every non-OURS value: {MNE_REF}. Datasets differ from ours, so read these as",
+        "  'same metric, different scene' context, not a head-to-head on identical data:",
+        "  - Baselines: dense 3D (NeRF / RGB-D) SLAM on Replica / Apartment / ScanNet, metrics on 3D meshes.",
+        "  - OURS: 2D occupancy-grid SLAM, single agent, quadruped in CoppeliaSim (robot_working.ttt),",
+        "    Acc/Comp computed on 2D wall cells against a grid raycast from the simulator's true pose.",
+        "",
+        "  [MNE-SLAM Table 2] Multi-room 'Apartment' scenes, global ATE RMSE (cm)",
+        f"  {'Method':<14} | {'Apt-1':>7} | {'Apt-2':>7} | {'Apt-0':>7}",
+        "  " + "-" * 44,
     ]
-    ate_vals = [4.80, 3.20, 2.10, 2.45, 1.85, 6.50, ate_cm]
-    chamfer_vals = [4.50, 3.10, 2.20, 2.65, 2.15, 4.90, chamfer_cm]
-    latency_vals = [38.0, 19.5, 28.4, 65.0, 42.0, 48.0, track_ms + map_ms]
+    for name, a1, a2, a0 in MNE_APARTMENT:
+        lines.append(f"  {name:<14} | {_fmt(a1):>7} | {_fmt(a2):>7} | {_fmt(a0):>7}")
+    lines.append(f"  {'OURS':<14} | {_fmt(ate_cm):>7} |  (our CoppeliaSim multi-room arena, single run)")
+    if ate_cm is not None:
+        lines.append(_rank_line("vs Apartment-1", ate_cm, MNE_APARTMENT, 1))
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
-    colors = ["#6c8ebf"] * 6 + ["#d9534f"]
+    lines += [
+        "",
+        "  [MNE-SLAM Table 1] Replica, global reconstruction + tracking",
+        f"  {'Method':<14} | {'Acc cm':>7} | {'Comp cm':>7} | {'Ratio %':>7} | {'ATE cm':>7}",
+        "  " + "-" * 56,
+    ]
+    for name, a, c, r, t in MNE_REPLICA:
+        lines.append(f"  {name:<14} | {a:>7.3f} | {c:>7.3f} | {r:>7.3f} | {t:>7.3f}")
+    lines.append(f"  {'OURS (2D)':<14} | {_fmt(acc, 100, '', 3):>7} | {_fmt(comp, 100, '', 3):>7} | "
+                 f"{_fmt(ratio, 100, '', 3):>7} | {_fmt(ate_cm, 1, '', 3):>7}")
 
-    # Panel 1: Localization ATE RMSE (cm)
-    bars0 = axes[0].bar(methods, ate_vals, color=colors, edgecolor="black", alpha=0.9)
-    axes[0].set_title("Localization Error: ATE RMSE (cm) [Lower is Better]", fontsize=11, fontweight="bold")
-    axes[0].set_ylabel("ATE RMSE (cm)")
-    axes[0].tick_params(axis="x", labelsize=8)
-    axes[0].grid(axis="y", linestyle=":", alpha=0.6)
-    for b in bars0:
-        axes[0].text(b.get_x() + b.get_width() / 2, b.get_height() + 0.1, f"{b.get_height():.2f}", ha="center", fontsize=8, fontweight="bold")
-
-    # Panel 2: Wall Reconstruction Chamfer Error (cm)
-    bars1 = axes[1].bar(methods, chamfer_vals, color=colors, edgecolor="black", alpha=0.9)
-    axes[1].set_title("Mapping Error: Wall Chamfer Dist (cm) [Lower is Better]", fontsize=11, fontweight="bold")
-    axes[1].set_ylabel("Chamfer Distance (cm)")
-    axes[1].tick_params(axis="x", labelsize=8)
-    axes[1].grid(axis="y", linestyle=":", alpha=0.6)
-    for b in bars1:
-        axes[1].text(b.get_x() + b.get_width() / 2, b.get_height() + 0.08, f"{b.get_height():.2f}", ha="center", fontsize=8, fontweight="bold")
-
-    # Panel 3: Total Per-Frame CPU Latency (Track + Map ms)
-    bars2 = axes[2].bar(methods, latency_vals, color=colors, edgecolor="black", alpha=0.9)
-    axes[2].set_title("CPU Runtime: Total Frame Latency (ms) [Lower is Better]", fontsize=11, fontweight="bold")
-    axes[2].set_ylabel("Latency per Frame (ms)")
-    axes[2].tick_params(axis="x", labelsize=8)
-    axes[2].grid(axis="y", linestyle=":", alpha=0.6)
-    for b in bars2:
-        axes[2].text(b.get_x() + b.get_width() / 2, b.get_height() + 1.0, f"{b.get_height():.1f}ms", ha="center", fontsize=8, fontweight="bold")
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "cpu_slam_benchmark_comparison.png"), dpi=200)
-    plt.close()
+    lines += [
+        "",
+        "  [MNE-SLAM Table 3] ScanNet (real-world) average ATE RMSE (cm)",
+        "  " + " | ".join(f"{n} {_fmt(v, nd=1)}" for n, v in MNE_SCANNET_AVG),
+        f"  OURS (this run): {_fmt(ate_cm, nd=1)}",
+        "",
+        "  [MNE-SLAM Table 5] Runtime and scene-representation memory (Replica; their hardware)",
+        f"  {'Method':<14} | {'Map/Fr':>9} | {'Track/Fr':>9} | {'Memory':>9}",
+        "  " + "-" * 50,
+    ]
+    for name, mp, tr, mem in MNE_RUNTIME:
+        lines.append(f"  {name:<14} | {mp:>8.2f}s | {tr:>7.1f}ms | {mem:>7.2f}MB")
+    map_s = m.get("cpu_map_ms") / 1000.0 if m.get("cpu_map_ms") is not None else None
+    lines.append(f"  {'OURS (CPU)':<14} | {_fmt(map_s, nd=4):>8}s | {_fmt(m.get('cpu_track_ms'), nd=1):>7}ms | "
+                 f"{_fmt(m.get('map_memory_mb')):>7}MB   [{m.get('cpu_name', 'cpu unknown')}]")
+    return lines
 
 
 def print_full_evaluation_suite():
+    os.makedirs("accuracy_results", exist_ok=True)
     m = compute_all_live_metrics()
     checks = verify_results_not_bypassed()
-    save_cpu_benchmark_plot(m)
-
-    ate_rmse_cm = m.get("ate_rmse_meters", 0.0) * 100.0
-    ate_mean_cm = m.get("ate_mean_meters", 0.0) * 100.0
-    ate_med_cm = m.get("ate_median_meters", 0.0) * 100.0
-    ate_std_cm = m.get("ate_std_meters", 0.0) * 100.0
-    ate_max_cm = m.get("ate_max_meters", 0.0) * 100.0
-    rpe_trans_cm = m.get("rpe_trans_rmse_meters", 0.0) * 100.0
-    rpe_rot_deg = m.get("rpe_rot_rmse_deg", 0.0)
-    drift_pct = m.get("drift_rate_percent", 0.0)
-    yaw_mean = m.get("mean_heading_error_deg", 0.0)
-    yaw_max = m.get("max_heading_error_deg", 0.0)
-    dist_m = m.get("total_distance_traveled_m", 0.0)
-    path_eff = m.get("path_efficiency_ratio", 0.0) * 100.0
-
-    acc_cm = m.get("accuracy_meters", m.get("chamfer_distance_meters", 0.0)) * 100.0
-    comp_cm = m.get("completion_meters", m.get("chamfer_distance_meters", 0.0)) * 100.0
-    chamfer_cm = m.get("chamfer_distance_meters", 0.0) * 100.0
-    haus95_cm = m.get("hausdorff_95_meters", 0.0) * 100.0
-    comp_5cm = m.get("completion_ratio_5cm", 0.0) * 100.0
-    f1_pct = m.get("f1_score", 0.0) * 100.0
-    prec_pct = m.get("precision", 0.0) * 100.0
-    rec_pct = m.get("recall", 0.0) * 100.0
-    obs_iou = m.get("obstacle_iou", 0.0) * 100.0
-    tol_iou = m.get("tolerant_iou", 0.0) * 100.0
-    free_iou = m.get("free_space_iou", 0.0) * 100.0
-    grid_acc = m.get("overall_grid_accuracy", 0.0) * 100.0
-    explored_pct = m.get("explored_pct", 0.0)
-
-    track_ms = m.get("cpu_track_ms", 14.2)
-    map_ms = m.get("cpu_map_ms", 4.1)
-    plan_ms = m.get("cpu_plan_ms", 3.4)
-    mem_mb = m.get("map_memory_mb", 0.37)
 
     w = 102
     report_lines = []
+
     def log_line(line=""):
         print(line)
         report_lines.append(line)
 
-    log_line("\n" + "=" * w)
-    log_line("  1. COMPLETE LOCALIZATION & TRAJECTORY ACCURACY METRICS (ACTIVE RUN)")
-    log_line("=" * w)
-    log_line(f"  {'Metric Name':<44} | {'Symbol / Direction':<24} | {'Measured Value':<24}")
-    log_line("-" * w)
-    loc_rows = [
-        ("Absolute Trajectory Error (RMSE)",     "ATE_RMSE (cm) [-]",       f"{ate_rmse_cm:.2f} cm"),
-        ("Absolute Trajectory Error (Mean)",     "ATE_Mean (cm) [-]",       f"{ate_mean_cm:.2f} cm"),
-        ("Absolute Trajectory Error (Median)",   "ATE_Median (cm) [-]",     f"{ate_med_cm:.2f} cm"),
-        ("Trajectory Error Std. Deviation",      "ATE_Std (cm) [-]",        f"{ate_std_cm:.2f} cm"),
-        ("Peak Trajectory Drift (Max Error)",    "ATE_Max (cm) [-]",        f"{ate_max_cm:.2f} cm"),
-        ("Relative Pose Error (Translational)",  "RPE_trans (cm/step) [-]", f"{rpe_trans_cm:.3f} cm/step"),
-        ("Relative Pose Error (Rotational)",     "RPE_rot (deg/step) [-]",  f"{rpe_rot_deg:.3f} deg/step"),
-        ("Translational Drift Rate (% of Path)", "ATE_RMSE / Length [-]",   f"{drift_pct:.2f} %"),
-        ("Mean Heading (Yaw) Orientation Error", "Yaw_Mean (deg) [-]",      f"{yaw_mean:.2f} deg"),
-        ("Max Heading (Yaw) Orientation Error",  "Yaw_Max (deg) [-]",       f"{yaw_max:.2f} deg"),
-        ("Total Trajectory Distance Traveled",   "Path Length (m) [+]",     f"{dist_m:.2f} m (Eff: {path_eff:.1f}%)"),
-    ]
-    for name, sym, val in loc_rows:
-        log_line(f"  {name:<44} | {sym:<24} | {val:<24}")
+    def section(title):
+        log_line("\n" + "=" * w)
+        log_line(f"  {title}")
+        log_line("=" * w)
 
-    log_line("\n" + "=" * w)
-    log_line("  2. COMPLETE SLAM MAPPING & GEOMETRIC RECONSTRUCTION METRICS (ACTIVE RUN)")
-    log_line("=" * w)
-    log_line(f"  {'Metric Name':<44} | {'Symbol / Direction':<24} | {'Measured Value':<24}")
-    log_line("-" * w)
-    map_rows = [
-        ("Reconstruction Accuracy (SLAM -> GT)", "Acc. (cm) [-]",           f"{acc_cm:.2f} cm"),
-        ("Reconstruction Completion (GT -> SLAM)","Comp. (cm) [-]",          f"{comp_cm:.2f} cm"),
-        ("Mean Bidirectional Wall Chamfer Error","Chamfer (cm) [-]",        f"{chamfer_cm:.2f} cm"),
-        ("95th-Percentile Hausdorff Distance",   "Hausdorff_95 (cm) [-]",   f"{haus95_cm:.2f} cm"),
-        ("Strict Completion Ratio (< 5cm Error)","Comp.Ratio@5cm (%) [+]",  f"{comp_5cm:.1f} %"),
-        ("Tolerant Wall F1 Score (+/-15cm)",     "F1_Score (%) [+]",        f"{f1_pct:.1f} %"),
-        ("Wall Detection Precision / Recall",    "Prec / Rec (%) [+]",      f"{prec_pct:.1f} % / {rec_pct:.1f} %"),
-        ("Exact Cell-for-Cell Obstacle IoU",     "IoU_exact (%) [+]",       f"{obs_iou:.1f} %"),
-        ("Tolerant Obstacle IoU (+/-15cm)",      "IoU_tolerant (%) [+]",    f"{tol_iou:.1f} %"),
-        ("Navigable Free-Space IoU",             "IoU_free (%) [+]",        f"{free_iou:.1f} %"),
-        ("Multi-Class Grid Classification Acc.", "Acc_grid (%) [+]",        f"{grid_acc:.1f} % (Explored: {explored_pct:.1f}%)"),
-    ]
-    for name, sym, val in map_rows:
-        log_line(f"  {name:<44} | {sym:<24} | {val:<24}")
+    def rows(items):
+        for name, val in items:
+            log_line(f"  {name:<46} | {val}")
 
-    log_line("\n" + "=" * w)
-    log_line("  3. CPU-ONLY MULTI-SLAM BENCHMARK COMPARISON (INDOOR ROBOTICS BENCHMARK)")
-    log_line("=" * w)
-    log_line(f"  {'SLAM System (All CPU Execution)':<28} | {'ATE RMSE':<10} | {'Chamfer':<10} | {'Comp/F1':<10} | {'Track/Fr':<10} | {'Map/Fr':<10} | {'Memory':<9}")
-    log_line("-" * w)
-    cpu_bench = [
-        ("GMapping (FastSLAM 2.0 CPU)",   "4.80 cm", "4.50 cm", "88.4 %", "12.0 ms", "26.0 ms", "18.50 MB"),
-        ("Hector SLAM (2D Gauss-Newton)", "3.20 cm", "3.10 cm", "91.2 %", "11.5 ms", "8.0 ms",  "12.40 MB"),
-        ("Cartographer 2D (Submap PGO)",  "2.10 cm", "2.20 cm", "94.8 %", "16.4 ms", "12.0 ms", "28.00 MB"),
-        ("RTAB-Map (RGB-D Graph CPU)",    "2.45 cm", "2.65 cm", "92.6 %", "25.0 ms", "40.0 ms", "45.20 MB"),
-        ("ORB-SLAM3 (RGB-D Feature CPU)", "1.85 cm", "2.15 cm", "93.5 %", "24.0 ms", "18.0 ms", "34.10 MB"),
-        ("Swarm-SLAM (Multi-Agent CPU)",  "6.50 cm", "4.90 cm", "86.5 %", "22.0 ms", "26.0 ms", "31.00 MB"),
-        ("OURS (Agentic IMU-ICP + GW-NBV)", f"{ate_rmse_cm:.2f} cm", f"{chamfer_cm:.2f} cm", f"{f1_pct:.1f} %", f"{track_ms:.1f} ms", f"{map_ms:.1f} ms", f"{mem_mb:.2f} MB"),
-    ]
-    for row in cpu_bench:
-        log_line(f"  {row[0]:<28} | {row[1]:<10} | {row[2]:<10} | {row[3]:<10} | {row[4]:<10} | {row[5]:<10} | {row[6]:<9}")
+    section("1. LOCALIZATION & TRAJECTORY ACCURACY (this run)")
+    rows([
+        ("ATE RMSE",                         _fmt(m.get("ate_rmse_meters"), 100, " cm")),
+        ("ATE mean / median / std",          f"{_fmt(m.get('ate_mean_meters'), 100, ' cm')} / "
+                                             f"{_fmt(m.get('ate_median_meters'), 100, ' cm')} / "
+                                             f"{_fmt(m.get('ate_std_meters'), 100, ' cm')}"),
+        ("ATE max",                          _fmt(m.get("ate_max_meters"), 100, " cm")),
+        ("RPE translational (per pose step)", _fmt(m.get("rpe_trans_rmse_meters"), 100, " cm", 3)),
+        ("RPE rotational (per pose step)",   _fmt(m.get("rpe_rot_rmse_deg"), 1, " deg", 3)),
+        ("Drift rate (ATE RMSE / path length)", _fmt(m.get("drift_rate_percent"), 1, " %")),
+        ("Heading error mean / max",         f"{_fmt(m.get('mean_heading_error_deg'), 1, ' deg')} / "
+                                             f"{_fmt(m.get('max_heading_error_deg'), 1, ' deg')}"),
+        ("Path length (ground truth)",       _fmt(m.get("total_distance_traveled_m"), 1, " m")),
+    ])
 
-    log_line("\n" + "=" * w)
-    log_line("  4. SYSTEM ABLATION STUDY (CONTRIBUTION OF EACH MODULE ON OUR ARENA)")
-    log_line("=" * w)
-    log_line(f"  {'Ablation Configuration':<42} | {'ATE RMSE':<11} | {'Max ATE':<11} | {'Chamfer':<11} | {'F1 Score':<10} | {'Plan/Step'}")
-    log_line("-" * w)
-    ablation_rows = [
-        ("1. Legacy D* Lite + Unfiltered Depth",       "28.40 cm", "42.10 cm", "8.20 cm", "14.2 %", ">1500 ms"),
-        ("2. w/o Gait-IMU Prior (Raw Scan-to-Scan ICP)","22.60 cm", "28.00 cm", "6.40 cm", "91.2 %", "3.8 ms"),
-        ("3. w/o Multi-Wall Loop Closure Guard",       "4.16 cm",  "7.93 cm",  "1.82 cm", "99.3 %", "3.6 ms"),
-        ("4. w/o Geodesic Wavefront & Medoid NBV",     "2.95 cm",  "5.40 cm",  "1.80 cm", "99.4 %", "3.5 ms (Stalls)"),
-        ("5. OURS (Full System: IMU-ICP + GW-NBV)",    f"{ate_rmse_cm:.2f} cm", f"{ate_max_cm:.2f} cm", f"{chamfer_cm:.2f} cm", f"{f1_pct:.1f} %", f"{plan_ms:.1f} ms (0 Stalls)"),
-    ]
-    for r in ablation_rows:
-        log_line(f"  {r[0]:<42} | {r[1]:<11} | {r[2]:<11} | {r[3]:<11} | {r[4]:<10} | {r[5]}")
+    section("2. MAPPING ACCURACY (SLAM grid vs grid raycast from true pose)")
+    rows([
+        ("Acc. (SLAM walls -> true walls)",  _fmt(m.get("accuracy_meters"), 100, " cm")),
+        ("Comp. (true walls -> SLAM walls)", _fmt(m.get("completion_meters"), 100, " cm")),
+        ("Chamfer (mean of Acc/Comp)",       _fmt(m.get("chamfer_distance_meters"), 100, " cm")),
+        ("Hausdorff 95th percentile",        _fmt(m.get("hausdorff_95_meters"), 100, " cm")),
+        ("Comp. ratio (< 5 cm)",             _fmt(m.get("completion_ratio_5cm"), 100, " %", 1)),
+        ("Wall F1 / precision / recall (+/-15 cm)", f"{_fmt(m.get('f1_score'), 100, ' %', 1)} / "
+                                             f"{_fmt(m.get('precision'), 100, ' %', 1)} / "
+                                             f"{_fmt(m.get('recall'), 100, ' %', 1)}"),
+        ("Obstacle IoU exact / tolerant",    f"{_fmt(m.get('obstacle_iou'), 100, ' %', 1)} / "
+                                             f"{_fmt(m.get('tolerant_iou'), 100, ' %', 1)}"),
+        ("Free-space IoU",                   _fmt(m.get("free_space_iou"), 100, " %", 1)),
+    ])
 
-    log_line("\n" + "=" * w)
-    log_line("  5. RESULT VALIDITY & ANTI-BYPASS VERIFICATION AUDIT")
-    log_line("=" * w)
-    for chk_name, passed, detail in checks:
-        status = "[PASS]" if passed else "[WARN]"
-        log_line(f"  {status:<8} {chk_name:<52} -> {detail}")
+    section("3. EXPLORATION MISSION & CPU RUNTIME (this run)")
+    rows([
+        ("Mission ended because",            m.get("end_reason", "n/a")),
+        ("Mission time (sim)",               _fmt(m.get("mission_time_s"), 1, " s", 1)),
+        ("Rooms segmented / rooms cleared",  f"{m.get('rooms_discovered', 'n/a')} / {m.get('rooms_cleared', 'n/a')}"),
+        ("Doorways / semantic entities",     f"{m.get('doorways_discovered', 'n/a')} / {m.get('entities_mapped', 'n/a')}"),
+        ("Frontiers remaining at end",       str(m.get("frontiers_remaining", "n/a"))),
+        ("Map cells known (free + occupied)", _fmt(m.get("explored_pct"), 1, " % of 11x11 m grid", 1)),
+        ("Tracking / mapping / planning latency", f"{_fmt(m.get('cpu_track_ms'), 1, ' ms', 1)} / "
+                                             f"{_fmt(m.get('cpu_map_ms'), 1, ' ms', 1)} / "
+                                             f"{_fmt(m.get('cpu_plan_ms'), 1, ' ms', 1)}"),
+        ("Map memory",                       _fmt(m.get("map_memory_mb"), 1, " MB")),
+        ("CPU",                              m.get("cpu_name", "n/a")),
+    ])
+
+    section(f"4. COMPARISON WITH PUBLISHED SLAM SYSTEMS ({MNE_REF})")
+    for line in build_comparison_lines(m):
+        log_line(line)
+
+    section("5. RESULT VALIDITY AUDIT")
+    for name, passed, detail in checks:
+        log_line(f"  {'[PASS]' if passed else '[FAIL]':<8} {name:<56} -> {detail}")
     log_line("=" * w + "\n")
 
-    # Save complete human-readable report to disk
-    report_txt = "\n".join(report_lines)
     report_path = os.path.join("accuracy_results", "full_evaluation_report.txt")
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(report_txt)
+        f.write("\n".join(report_lines))
     print(f"  [SAVED] Full evaluation report -> {report_path}", flush=True)
 
-    # Save all figures to dedicated separate image folder and render table photos to final_results
     try:
         save_all_evaluation_figures(image_dir="evaluation_results_images")
-        generate_separate_maps(data_dir="captured_matrices", results_dir="accuracy_results", images_dir="evaluation_results_images")
-        render_table_photos(report_file=report_path, output_dir="final_results")
+        generate_separate_maps(data_dir="captured_matrices", results_dir="accuracy_results",
+                               images_dir="evaluation_results_images")
     except Exception as e:
-        print(f"  [WARN] Could not save figures/tables to output folders: {e}", flush=True)
+        print(f"  [WARN] Could not save figures: {e}", flush=True)
 
 
 def save_all_evaluation_figures(
@@ -379,133 +307,74 @@ def save_all_evaluation_figures(
     results_dir: str = "accuracy_results",
     resolution: float = 0.05
 ):
-    """Generates and permanently stores all 6 quantitative evaluation figures in a separate folder."""
+    """Saves the quantitative evaluation figures for the last run into image_dir."""
     os.makedirs(image_dir, exist_ok=True)
-    m = compute_all_live_metrics(data_dir=data_dir, results_dir=results_dir, resolution=resolution)
+    m = compute_all_live_metrics(data_dir=data_dir, results_dir=results_dir, resolution=resolution, plot_dir=image_dir)
 
-    # 1. 01_numerical_matrix_map_comparison.png & 05_map_cell_difference_heatmap.png
+    for old, new in [("numerical_map_accuracy_comparison.png", "01_numerical_matrix_map_comparison.png"),
+                     ("robot_movement_trajectory_analysis.png", "02_robot_trajectory_and_drift_analysis.png")]:
+        if os.path.exists(os.path.join(image_dir, old)):
+            os.replace(os.path.join(image_dir, old), os.path.join(image_dir, new))
+
     true_grid_path = os.path.join(data_dir, "true_grid.npy")
     slam_grid_path = os.path.join(data_dir, "slam_grid.npy")
-    if os.path.exists(true_grid_path) and os.path.exists(slam_grid_path):
-        true_grid = np.load(true_grid_path)
-        slam_grid = np.load(slam_grid_path)
-        evaluate_grid_accuracy(
-            true_grid, slam_grid, resolution=resolution, tolerance_m=0.15,
-            output_dir=image_dir, save_plots=True
-        )
-        old_plot = os.path.join(image_dir, "numerical_map_accuracy_comparison.png")
-        new_plot = os.path.join(image_dir, "01_numerical_matrix_map_comparison.png")
-        if os.path.exists(old_plot):
-            if os.path.exists(new_plot):
-                os.remove(new_plot)
-            os.rename(old_plot, new_plot)
+    traj_path = os.path.join(data_dir, "trajectory_data.npz")
 
-        # 5. 05_map_cell_difference_heatmap.png (Continuous Matrix Log-Odds Discrepancy)
-        diff = np.abs(true_grid - slam_grid)
+    if os.path.exists(true_grid_path) and os.path.exists(slam_grid_path):
+        true_grid, slam_grid = np.load(true_grid_path), np.load(slam_grid_path)
         h, w = true_grid.shape
         extent = [-w * resolution / 2, w * resolution / 2, -h * resolution / 2, h * resolution / 2]
         fig, ax = plt.subplots(figsize=(10, 8))
-        im = ax.imshow(diff, cmap='inferno', origin='lower', extent=extent)
-        ax.set_title("Matrix-Level Cell-by-Cell Log-Odds Discrepancy: |l_true - l_slam|\n(Evaluated Directly on 2D Float64 Arrays, not Images)", fontsize=12, fontweight='bold')
+        im = ax.imshow(np.abs(true_grid - slam_grid), cmap='inferno', origin='lower', extent=extent)
+        ax.set_title("Cell-by-cell log-odds discrepancy |l_true - l_slam|", fontsize=12, fontweight='bold')
         ax.set_xlabel("X (meters)")
         ax.set_ylabel("Y (meters)")
-        cbar = fig.colorbar(im, ax=ax)
-        cbar.set_label("Absolute Log-Odds Error |Δl|")
+        fig.colorbar(im, ax=ax).set_label("|Δ log-odds|")
         plt.tight_layout()
         plt.savefig(os.path.join(image_dir, "05_map_cell_difference_heatmap.png"), dpi=200)
         plt.close()
 
-    # 2. 02_robot_trajectory_and_drift_analysis.png
-    traj_path = os.path.join(data_dir, "trajectory_data.npz")
-    if os.path.exists(traj_path):
-        data = np.load(traj_path)
-        true_p = data["true_poses"]
-        slam_p = data["slam_poses"]
-        ts = data["timestamps"] if "timestamps" in data else None
-        evaluate_trajectory(true_p, slam_p, timestamps=ts, output_dir=image_dir, save_plots=True)
-        old_traj = os.path.join(image_dir, "robot_movement_trajectory_analysis.png")
-        new_traj = os.path.join(image_dir, "02_robot_trajectory_and_drift_analysis.png")
-        if os.path.exists(old_traj):
-            if os.path.exists(new_traj):
-                os.remove(new_traj)
-            os.rename(old_traj, new_traj)
+    def pct(key):
+        return _fmt(m.get(key), 100, " %", 1)
 
-    # 3. 03_evaluation_metrics_scorecard.png (Render publication-quality table scorecard)
+    def cm(key):
+        return _fmt(m.get(key), 100, " cm")
+
     fig, axes = plt.subplots(1, 2, figsize=(18, 10))
-    fig.patch.set_facecolor('#ffffff')
-
-    ax_loc = axes[0]
-    ax_loc.axis('off')
-    loc_table_data = [
-        ["Absolute Trajectory Error (RMSE)", "ATE_RMSE", f"{m.get('ate_rmse_meters', 0.0)*100:.2f} cm"],
-        ["Absolute Trajectory Error (Mean)", "ATE_Mean", f"{m.get('ate_mean_meters', 0.0)*100:.2f} cm"],
-        ["Absolute Trajectory Error (Median)", "ATE_Med", f"{m.get('ate_median_meters', 0.0)*100:.2f} cm"],
-        ["Trajectory Error Std Dev", "ATE_Std", f"{m.get('ate_std_meters', 0.0)*100:.2f} cm"],
-        ["Peak Trajectory Drift", "ATE_Max", f"{m.get('ate_max_meters', 0.0)*100:.2f} cm"],
-        ["Relative Pose Error (Trans)", "RPE_trans", f"{m.get('rpe_trans_rmse_meters', 0.0)*100:.3f} cm/step"],
-        ["Relative Pose Error (Rot)", "RPE_rot", f"{m.get('rpe_rot_rmse_deg', 0.0):.3f} deg/step"],
-        ["Translational Drift Rate", "Drift %", f"{m.get('drift_rate_percent', 0.0):.2f} %"],
-        ["Mean Heading (Yaw) Error", "Yaw_Mean", f"{m.get('mean_heading_error_deg', 0.0):.2f}°"],
-        ["Max Heading (Yaw) Error", "Yaw_Max", f"{m.get('max_heading_error_deg', 0.0):.2f}°"],
-        ["Total Path Traveled", "Length", f"{m.get('total_distance_traveled_m', 0.0):.2f} m"],
+    tables = [
+        (axes[0], "LOCALIZATION", "#1f77b4", [
+            ["ATE RMSE", cm("ate_rmse_meters")], ["ATE mean", cm("ate_mean_meters")],
+            ["ATE median", cm("ate_median_meters")], ["ATE max", cm("ate_max_meters")],
+            ["RPE trans / step", _fmt(m.get("rpe_trans_rmse_meters"), 100, " cm", 3)],
+            ["RPE rot / step", _fmt(m.get("rpe_rot_rmse_deg"), 1, " deg", 3)],
+            ["Drift rate", _fmt(m.get("drift_rate_percent"), 1, " %")],
+            ["Heading error mean", _fmt(m.get("mean_heading_error_deg"), 1, " deg")],
+            ["Path length", _fmt(m.get("total_distance_traveled_m"), 1, " m")],
+        ]),
+        (axes[1], "MAPPING", "#2ca02c", [
+            ["Acc.", cm("accuracy_meters")], ["Comp.", cm("completion_meters")],
+            ["Chamfer", cm("chamfer_distance_meters")], ["Hausdorff-95", cm("hausdorff_95_meters")],
+            ["Comp. ratio < 5 cm", pct("completion_ratio_5cm")], ["Wall F1 (±15 cm)", pct("f1_score")],
+            ["Precision / recall", f"{pct('precision')} / {pct('recall')}"],
+            ["Free-space IoU", pct("free_space_iou")],
+        ]),
     ]
-    tbl_loc = ax_loc.table(cellText=loc_table_data, colLabels=["Localization Metric", "Symbol", "Measured Value"],
-                           loc='center', cellLoc='left')
-    tbl_loc.auto_set_font_size(False)
-    tbl_loc.set_fontsize(10)
-    tbl_loc.scale(1.0, 1.7)
-    for (row, col), cell in tbl_loc.get_celld().items():
-        if row == 0:
-            cell.set_facecolor('#1f77b4')
-            cell.set_text_props(color='white', weight='bold')
-        elif row % 2 == 1:
-            cell.set_facecolor('#f2f7fb')
-    ax_loc.set_title("1. LOCALIZATION & TRAJECTORY ACCURACY METRICS", fontsize=12, fontweight='bold', pad=15)
-
-    ax_map = axes[1]
-    ax_map.axis('off')
-    map_table_data = [
-        ["Reconstruction Accuracy (SLAM->GT)", "Acc.", f"{m.get('accuracy_meters', 0.0)*100:.2f} cm"],
-        ["Reconstruction Completion (GT->SLAM)", "Comp.", f"{m.get('completion_meters', 0.0)*100:.2f} cm"],
-        ["Bidirectional Chamfer Error", "Chamfer", f"{m.get('chamfer_distance_meters', 0.0)*100:.2f} cm"],
-        ["95th-Percentile Hausdorff Dist", "Hausdorff_95", f"{m.get('hausdorff_95_meters', 0.0)*100:.2f} cm"],
-        ["Completion Ratio (< 5cm error)", "Comp@5cm", f"{m.get('completion_ratio_5cm', 0.0)*100:.1f} %"],
-        ["Wall Reconstruction F1 Score", "F1 Score", f"{m.get('f1_score', 0.0)*100:.1f} %"],
-        ["Wall Precision / Recall", "Prec / Rec", f"{m.get('precision', 0.0)*100:.1f}% / {m.get('recall', 0.0)*100:.1f}%"],
-        ["Exact Cell Obstacle IoU", "IoU_exact", f"{m.get('obstacle_iou', 0.0)*100:.1f} %"],
-        ["Tolerant Obstacle IoU (±15cm)", "IoU_tolerant", f"{m.get('tolerant_iou', 0.0)*100:.1f} %"],
-        ["Navigable Free-Space IoU", "IoU_free", f"{m.get('free_space_iou', 0.0)*100:.1f} %"],
-        ["Overall Grid Accuracy", "Acc_grid", f"{m.get('overall_grid_accuracy', 0.0)*100:.1f} %"],
-    ]
-    tbl_map = ax_map.table(cellText=map_table_data, colLabels=["Mapping & Reconstruction Metric", "Symbol", "Measured Value"],
-                           loc='center', cellLoc='left')
-    tbl_map.auto_set_font_size(False)
-    tbl_map.set_fontsize(10)
-    tbl_map.scale(1.0, 1.7)
-    for (row, col), cell in tbl_map.get_celld().items():
-        if row == 0:
-            cell.set_facecolor('#2ca02c')
-            cell.set_text_props(color='white', weight='bold')
-        elif row % 2 == 1:
-            cell.set_facecolor('#f4faf4')
-    ax_map.set_title("2. SLAM MAPPING & GEOMETRIC ACCURACY METRICS", fontsize=12, fontweight='bold', pad=15)
-
-    plt.suptitle("AUTONOMOUS QUADRUPED MULTI-AGENT STACK: COMPLETE 22-METRIC EVALUATION SCORECARD",
-                 fontsize=14, fontweight='bold', y=0.98)
+    for ax, title, color, data in tables:
+        ax.axis('off')
+        tbl = ax.table(cellText=data, colLabels=[f"{title} METRIC", "MEASURED"], loc='center', cellLoc='left')
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(11)
+        tbl.scale(1.0, 1.8)
+        for (row, _), cell in tbl.get_celld().items():
+            if row == 0:
+                cell.set_facecolor(color)
+                cell.set_text_props(color='white', weight='bold')
+        ax.set_title(title, fontsize=12, fontweight='bold', pad=15)
+    plt.suptitle("Measured metrics for the last CoppeliaSim run", fontsize=14, fontweight='bold')
     plt.tight_layout()
     plt.savefig(os.path.join(image_dir, "03_evaluation_metrics_scorecard.png"), dpi=200, bbox_inches='tight')
     plt.close()
 
-    # 4. 04_cpu_slam_benchmark_comparison.png
-    save_cpu_benchmark_plot(m, output_dir=image_dir)
-    bench_old = os.path.join(image_dir, "cpu_slam_benchmark_comparison.png")
-    bench_new = os.path.join(image_dir, "04_cpu_slam_benchmark_comparison.png")
-    if os.path.exists(bench_old) and bench_old != bench_new:
-        if os.path.exists(bench_new):
-            os.remove(bench_new)
-        os.rename(bench_old, bench_new)
-
-    # 6. 06_room_exploration_coverage.png
     if os.path.exists(slam_grid_path):
         slam_grid = np.load(slam_grid_path)
         h, w = slam_grid.shape
@@ -514,22 +383,20 @@ def save_all_evaluation_figures(
         im = ax.imshow(slam_grid, cmap='coolwarm', origin='lower', extent=extent, vmin=-3.0, vmax=3.0)
         if os.path.exists(traj_path):
             data = np.load(traj_path)
-            true_p = data["true_poses"]
-            slam_p = data["slam_poses"]
-            ax.plot(true_p[:, 0], true_p[:, 1], color='#00ffcc', linewidth=2.0, label='Ground Truth Path')
-            ax.plot(slam_p[:, 0], slam_p[:, 1], color='#ff00ff', linestyle='--', linewidth=1.5, label='SLAM Estimated Path')
-        ax.set_title(f"Multi-Room Systematic Exploration & Coverage Map (Explored: {m.get('explored_pct', 0.0):.1f}%)\n"
-                     f"Rooms Cleared: {m.get('rooms_cleared', 1)} | Gateways: {m.get('doorways_discovered', 5)}",
+            ax.plot(data["true_poses"][:, 0], data["true_poses"][:, 1], color='#00ffcc', linewidth=2.0, label='Ground truth path')
+            ax.plot(data["slam_poses"][:, 0], data["slam_poses"][:, 1], color='#ff00ff', linestyle='--', linewidth=1.5, label='SLAM path')
+            ax.legend(loc='upper right')
+        ax.set_title(f"Exploration coverage (known cells {_fmt(m.get('explored_pct'), 1, '%', 1)}) | "
+                     f"rooms cleared {m.get('rooms_cleared', 'n/a')} | doorways {m.get('doorways_discovered', 'n/a')}",
                      fontsize=12, fontweight='bold')
         ax.set_xlabel("X (meters)")
         ax.set_ylabel("Y (meters)")
-        ax.legend(loc='upper right')
-        plt.colorbar(im, ax=ax, label="Log-Odds ($l$)")
+        plt.colorbar(im, ax=ax, label="Log-odds")
         plt.tight_layout()
         plt.savefig(os.path.join(image_dir, "06_room_exploration_coverage.png"), dpi=200)
         plt.close()
 
-    print(f"  [SAVED] All 6 evaluation figures saved in separate folder -> {image_dir}/", flush=True)
+    print(f"  [SAVED] Evaluation figures -> {image_dir}/", flush=True)
 
 
 if __name__ == "__main__":

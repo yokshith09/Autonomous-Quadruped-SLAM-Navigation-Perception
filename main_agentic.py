@@ -17,6 +17,7 @@ import math
 import time
 import json
 import argparse
+import platform
 import numpy as np
 import cv2
 
@@ -27,17 +28,16 @@ except ImportError:
     from zmqRemoteApi import RemoteAPIClient
 
 from agents import (
-    MessageBus, PoseMsg, ScanMsg, RGBDMsg, GridMapMsg, FrontierTargetMsg, PathMsg,
-    PerceptionAgent, SLAMAgent, MappingAgent, FrontierAgent, PlanningAgent,
+    MessageBus, PoseMsg, PerceptionAgent, SLAMAgent, MappingAgent, FrontierAgent, PlanningAgent,
     LocomotionAgent, SupervisorAgent
 )
 from robot import LizardRobot, patch_coppelasim_scripts, norm_angle
 from sensors import initialize_sensors, get_depth_heatmap
 from grid import BayesianOccupancyGrid
 from viz import create_debug_dashboard
-from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory, evaluate_depth_perception
+from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
 from evaluate_all_metrics import print_full_evaluation_suite
-from print_mne_comparison import print_comparison_benchmark
+import build_report
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -49,12 +49,22 @@ MAP_X_MIN, MAP_X_MAX = -5.5, 5.5
 MAP_Y_MIN, MAP_Y_MAX = -5.5, 5.5
 GRID_RES = 0.05
 
-traveled_drawing_handle = -1
 path_drawing_handle = -1
 
 
+def cpu_name():
+    if sys.platform == "win32":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+            return winreg.QueryValueEx(key, "ProcessorNameString")[0].strip()
+        except OSError:
+            pass
+    return platform.processor() or platform.machine()
+
+
 def cleanup_sim_drawings(sim):
-    global traveled_drawing_handle, path_drawing_handle
+    global path_drawing_handle
     for key in ['quadruped_trail_handle', 'quadruped_path_handle']:
         try:
             val = sim.getStringNamedParam(key)
@@ -65,25 +75,23 @@ def cleanup_sim_drawings(sim):
                 sim.setStringNamedParam(key, '')
         except Exception:
             pass
-    for h in [traveled_drawing_handle, path_drawing_handle]:
-        if h != -1:
-            try:
-                sim.addDrawingObjectItem(h, None)
-                sim.removeDrawingObject(h)
-            except Exception:
-                pass
+    if path_drawing_handle != -1:
+        try:
+            sim.addDrawingObjectItem(path_drawing_handle, None)
+            sim.removeDrawingObject(path_drawing_handle)
+        except Exception:
+            pass
     # Sweep CoppeliaSim drawing handles from 0 to 128 to remove any leftover ghost lines from prior runs
     for h_cand in range(128):
         try:
             sim.removeDrawingObject(h_cand)
         except Exception:
             pass
-    traveled_drawing_handle = -1
     path_drawing_handle = -1
 
 
 def init_sim_drawings(sim):
-    global traveled_drawing_handle, path_drawing_handle
+    global path_drawing_handle
     cleanup_sim_drawings(sim)
     # The trajectory is rendered in real time on the 2D HUD dashboard with zero clutter.
     # We only draw the active, dynamically updating planned path waypoints in the 3D scene.
@@ -96,13 +104,7 @@ def init_sim_drawings(sim):
         print(f"  [WARN] Failed to create path drawing object: {e}")
 
 
-def update_traveled_trail(sim, p1, p2):
-    # Deprecated to prevent floor clutter and ghost lines in CoppeliaSim across runs
-    pass
-
-
 def draw_planned_path_in_sim(sim, waypoints):
-    global path_drawing_handle
     if path_drawing_handle != -1:
         try:
             sim.addDrawingObjectItem(path_drawing_handle, None)  # Clear previous
@@ -121,6 +123,7 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
     parser.add_argument("--closed-loop-slam", action="store_true", default=True, help="Navigate strictly using closed-loop SLAM pose (default)")
     parser.add_argument("--ground-truth-nav", action="store_true", help="Bypass SLAM drift with ground-truth navigation (for ablation only)")
+    parser.add_argument("--record", default=None, help="Save the raw SLAM input stream (.npz) for offline replay with slam_replay.py")
     args, _ = parser.parse_known_args()
 
     print("\n" + "=" * 75)
@@ -200,17 +203,19 @@ def main():
     init_sim_drawings(sim)
 
     # Telemetry tracking
-    last_trail_pos = (init_x, init_y)
     true_trajectory_poses = []
     slam_trajectory_poses = []
     trajectory_timestamps = []
-    visited_positions = [(init_x, init_y)]
     live_grid_metrics = {"f1_score": 1.0, "precision": 1.0, "recall": 1.0, "chamfer_distance_meters": 0.0}
     live_drift_m = 0.0
     live_ate_rmse = 0.0
     live_heading_err_deg = 0.0
     step_count = 0
     done = False
+    end_reason = "interrupted"
+    t = 0.0
+    complete_streak = 0  # frontier evaluations in a row reporting MISSION_COMPLETE
+    rec = {"t": [], "gt": [], "scans": [], "act": []}
 
     print("  [OK] Multi-Agent System operational. Commencing systematic exploration.\n")
 
@@ -218,16 +223,18 @@ def main():
         while not done:
             if sim.getSimulationState() == 0:
                 print("  Simulation stopped externally.")
+                end_reason = "simulation stopped externally"
                 break
 
             if args.max_steps is not None and step_count >= args.max_steps:
                 print(f"  [COMPLETED] Reached max steps limit ({args.max_steps}).")
-                done = True
+                end_reason = f"max steps ({args.max_steps})"
                 break
 
             t = sim.getSimulationTime() - t0
             if t > args.max_time:
                 print(f"  [TIMEOUT] Reached max mission duration ({args.max_time}s).")
+                end_reason = f"timeout ({args.max_time:.0f}s) before all frontiers were cleared"
                 break
 
             # A. Sample Ground Truth Pose
@@ -237,19 +244,19 @@ def main():
             true_trajectory_poses.append((true_x, true_y, true_heading))
             trajectory_timestamps.append(t)
 
-            # Record traveled 3D trail in simulation
-            d_moved = math.hypot(true_x - last_trail_pos[0], true_y - last_trail_pos[1])
-            if d_moved >= 0.08:
-                update_traveled_trail(sim, last_trail_pos, (true_x, true_y))
-                last_trail_pos = (true_x, true_y)
-
             # B. Step Multi-Rate Agents
             # Step 1: Perception & SLAM (every step / 10Hz)
             perception_agent.step(t)
+            if args.record:
+                rec_scan = bus.get_latest("sensor/scan")
+                rec["scans"].append(np.asarray(rec_scan.points_2d, dtype=np.float32) if rec_scan else np.empty((0, 2), np.float32))
+                rec["t"].append(t)
+                rec["gt"].append((true_x, true_y, true_heading))
             slam_agent.step(t)
+            # One SLAM pose per ground-truth sample, so index i of both trajectories is the same instant.
             slam_pose = bus.get_latest("pose/slam")
-            if slam_pose:
-                slam_trajectory_poses.append((slam_pose.x, slam_pose.y, slam_pose.yaw))
+            slam_trajectory_poses.append((slam_pose.x, slam_pose.y, slam_pose.yaw) if slam_pose
+                                         else (init_x, init_y, init_heading))
 
             # Step 2: Mapping Agent (Bayesian raycasting & periodic room segmentation)
             mapping_agent.step(t)
@@ -269,6 +276,11 @@ def main():
             # Step 3: Frontier Agent (Hierarchical Room-by-Room selection)
             if step_count % 10 == 0:
                 frontier_agent.step(t)
+                complete_streak = complete_streak + 1 if frontier_agent.state == "MISSION_COMPLETE" else 0
+                if complete_streak >= 3:
+                    print(f"  [COMPLETED] No reachable frontiers left at t={t:.1f}s. All rooms explored.")
+                    end_reason = "all reachable frontiers explored"
+                    break
 
             # Step 4: Planning Agent (A* search towards room frontier / doorway)
             if step_count % 5 == 0:
@@ -279,6 +291,11 @@ def main():
 
             # Step 5: Locomotion Agent (Gait cycle & heading steering)
             locomotion_agent.step(t)
+            if args.record:
+                act = bus.get_latest("control/actuation")
+                fresh = act is not None and act.timestamp == t
+                rec["act"].append((act.odom_forward, act.odom_lateral, act.gyro_dyaw, act.speed, 1.0) if fresh
+                                  else (0.0, 0.0, 0.0, 0.0, 0.0))
 
             # Step 6: Supervisor Agent (Knowledge graph & memory events)
             if step_count % 10 == 0:
@@ -357,6 +374,7 @@ def main():
                         key = cv2.waitKey(1) & 0xFF
                         if key == ord('q'):
                             print("  User requested termination ('q' pressed).")
+                            end_reason = "user pressed q"
                             done = True
                     except Exception:
                         pass
@@ -424,6 +442,16 @@ def main():
         os.makedirs("accuracy_results", exist_ok=True)
         os.makedirs("captured_matrices", exist_ok=True)
 
+        if args.record and rec["act"]:
+            n_rec = len(rec["act"])
+            scans = rec["scans"][:n_rec]
+            np.savez_compressed(
+                args.record, t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
+                scan_points=np.concatenate(scans) if scans else np.empty((0, 2), np.float32),
+                scan_offsets=np.cumsum([0] + [len(sc) for sc in scans]),
+                initial_pose=np.array([init_x, init_y, init_heading]))
+            print(f"  [SAVED] SLAM input recording ({n_rec} steps) -> {args.record}")
+
         # Export Knowledge Graph & Episodic Memory
         report = supervisor_agent.export_mission_report()
         with open("accuracy_results/knowledge_graph.json", "w", encoding="utf-8") as f:
@@ -458,37 +486,40 @@ def main():
                         timestamps=trajectory_timestamps[:min_len], output_dir="accuracy_results"
                     )
                     _, _, _, final_explored_pct = mapping_agent.grid.get_grid_stats()
-                    track_ms = float(np.mean(getattr(slam_agent, "track_times_ms", [14.2]) or [14.2]))
-                    map_ms = float(np.mean(getattr(mapping_agent, "map_times_ms", [4.1]) or [4.1]))
-                    plan_ms = float(np.mean(getattr(planning_agent, "plan_times_ms", [3.4]) or [3.4]))
+
+                    def mean_ms(samples):
+                        return float(np.mean(samples)) if samples else None
+
                     mem_bytes = mapping_agent.grid.grid_log_odds.nbytes
                     if mapping_agent.room_labels is not None:
                         mem_bytes += mapping_agent.room_labels.nbytes
-                    mem_mb = float(mem_bytes) / (1024.0 * 1024.0)
                     with open("accuracy_results/latest_metrics.json", "w", encoding="utf-8") as f:
                         json.dump({
                             **grid_metrics,
                             **traj_metrics,
                             "explored_pct": float(final_explored_pct),
-                            "cpu_track_ms": track_ms,
-                            "cpu_map_ms": map_ms,
-                            "cpu_plan_ms": plan_ms,
-                            "map_memory_mb": mem_mb,
+                            "cpu_track_ms": mean_ms(slam_agent.track_times_ms),
+                            "cpu_map_ms": mean_ms(getattr(mapping_agent, "map_times_ms", [])),
+                            "cpu_plan_ms": mean_ms(getattr(planning_agent, "plan_times_ms", [])),
+                            "map_memory_mb": mem_bytes / (1024.0 * 1024.0),
                             "rooms_cleared": len(frontier_agent.explored_rooms),
+                            "frontiers_remaining": len(mapping_agent.grid.detect_frontiers()),
+                            "loop_closures": len(slam_agent.pose_estimator.loop_manager.loop_closures),
+                            "odom_distance_m": slam_agent.odom_distance_m,
+                            "mission_time_s": float(t),
+                            "end_reason": end_reason,
                             "closed_loop_slam": not bool(args.ground_truth_nav),
+                            "odometry_model": "commanded gait kinematics + noisy simulated gyro",
+                            "cpu_name": cpu_name(),
                         }, f, indent=2)
             except Exception as e:
                 print(f"  [WARN] Benchmark evaluation skipped: {e}", flush=True)
 
-        # Print complete 22-metric results, CPU benchmark, and validity audit, and save full report
         try:
             print_full_evaluation_suite()
+            build_report.main()
         except Exception as e:
-            print(f"  [WARN] Full evaluation failed, falling back to summary table: {e}", flush=True)
-            try:
-                print_comparison_benchmark()
-            except Exception:
-                pass
+            print(f"  [WARN] Evaluation / report failed: {e}", flush=True)
 
     print("=" * 75)
     print("  MULTI-AGENT EXPLORATION MISSION COMPLETE")

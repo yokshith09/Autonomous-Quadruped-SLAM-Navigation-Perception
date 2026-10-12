@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Platform: CoppeliaSim](https://img.shields.io/badge/simulator-CoppeliaSim%20v4.5+-orange.svg)](https://www.coppeliarobotics.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests: 16/16 Passed](https://img.shields.io/badge/tests-16%2F16%20passed-brightgreen.svg)](tests/)
+[![Tests: 18](https://img.shields.io/badge/tests-18-blue.svg)](tests/)
 
 Closed-loop, CPU-only 2D/3D SLAM, topological Voronoi room segmentation, semantic entity extraction (`chair` / `wall`), and hierarchical room-by-room exploration for a legged quadruped in CoppeliaSim (`robot_working.ttt`).
 
@@ -26,11 +26,13 @@ Open **CoppeliaSim EDU v4.5+** and load `robot_working.ttt`.
 | Task | Command | Description |
 | :--- | :--- | :--- |
 | **Run Closed-Loop Multi-Agent Exploration** | `python main_agentic.py` | Main entrypoint: runs full 7-agent closed-loop SLAM, live HUD, and autonomous room-by-room exploration. |
-| **Run Fast Headless Exploration Benchmark** | `python main_agentic.py --headless --max-time 45.0` | Headless execution without OpenCV window, saves all matrices to disk. |
-| **Print Complete 22-Metric Scientific Report** | `python evaluate_all_metrics.py` | Computes all trajectory, reconstruction, CPU-SLAM benchmarks, and 5-point anti-bypass audit. |
-| **Print Active Run Summary & Benchmark** | `python print_mne_comparison.py` | Prints terminal scoreboard comparing active run against CPU SLAMs (`GMapping`, `Cartographer`, `ORB-SLAM3`). |
+| **Run Headless Exploration** | `python main_agentic.py --headless --max-time 1800` | No OpenCV window; stops when no reachable frontier is left (all rooms explored) or at the time limit, then evaluates. |
+| **Re-evaluate the Last Run** | `python evaluate_all_metrics.py` | Recomputes trajectory and map metrics from `captured_matrices/`, compares against the published MNE-SLAM (CVPR 2025) tables, and runs the ground-truth leakage audit. |
+| **Record a SLAM Dataset** | `python main_agentic.py --headless --record recordings/run.npz` | Saves exactly what SLAM receives each step (scan, gait odometry, gyro) plus ground truth for scoring. |
+| **Replay SLAM Offline** | `python slam_replay.py recordings/run.npz --set icp_yaw_weight=0.2` | Re-runs SLAM on a recording in seconds and prints ATE / drift; use it to compare SLAM variants on identical data. |
+| **Build the Shareable Benchmark Report** | `python build_report.py` | Writes `reports/benchmark_report.pdf`: our run vs. published quadruped SLAM, efficiency and capability benchmarks, each row with its source (needs Microsoft Word for the PDF export). |
 | **Run Agent Unit Tests (9 tests)** | `python tests/test_agents.py` | Verifies message bus, knowledge graph, episodic memory, planning, locomotion, and semantic extraction. |
-| **Run SLAM Accuracy Tests (7 tests)** | `python tests/test_slam_accuracy.py` | Verifies normal estimation, Point-to-Line ICP, loop closure detection, SE(2) PGO, and recovery. |
+| **Run SLAM Accuracy Tests (9 tests)** | `python tests/test_slam_accuracy.py` | Verifies normal estimation, Point-to-Line ICP, loop closure (incl. rotated keyframes), degeneracy filtering, loop-error distribution, and recovery. |
 | **Run Hardware & Scene Diagnostics** | `python diagnose_sim.py` | Inspects robot handles, sensor communication, and joint dynamics. |
 
 ---
@@ -42,7 +44,7 @@ We do **NOT** compare against a static screenshot or pre-rendered picture.
 Our system maintains **two independent Bayesian Log-Odds Occupancy Grids** simultaneously in real time:
 
 1. **`true_grid` (Ground Truth Reference):** As the robot moves, 3D depth rays are projected using the **exact simulator ground-truth pose** `(true_x, true_y, true_heading)` from the physics engine. This forms an unbiased, drift-free reference of everywhere the camera has seen.
-2. **`mapping_agent.grid` (Active SLAM Grid):** The exact same depth rays are projected using the **estimated closed-loop SLAM pose** `(slam_x, slam_y, slam_yaw)` from `SLAMAgent` (incorporating realistic odometry slip, ICP noise, and loop closure adjustments).
+2. **`mapping_agent.grid` (Active SLAM Grid):** The exact same depth rays are projected using the **estimated closed-loop SLAM pose** `(slam_x, slam_y, slam_yaw)` from `SLAMAgent` (fusing Point-to-Line ICP with dead-reckoned gait odometry and a noisy simulated gyro; the simulator pose is never read by the estimator).
 
 At evaluation time, both are saved as raw numerical float32 matrices (`captured_matrices/true_grid.npy` and `captured_matrices/slam_grid.npy`, $220 \times 220$ cells at $5\text{ cm}$ resolution). [`accuracy_evaluator.py`](accuracy_evaluator.py) evaluates:
 - **Mean Wall Chamfer Distance (cm):** Bidirectional Euclidean nearest-neighbor distance (via `scipy.spatial.cKDTree`).
@@ -64,47 +66,35 @@ We invented and implemented **GW-NBV (Geodesic-Wavefront Topological Next-Best-V
 
 ---
 
-## 5. Verified Active Run Benchmark (CPU-Only)
+## 5. Results
 
-Measured from active runs on `robot_working.ttt` ($5\text{ cm}$ grid, CPU-only on Intel Core / AMD Ryzen / Pi 5):
+The shareable comparison is [`reports/benchmark_report.pdf`](reports/benchmark_report.pdf),
+regenerated with `python build_report.py` after a run. Earlier README tables were removed: the odometry fed to SLAM
+was derived from the simulator's true position, and the "CPU multi-SLAM" and ablation rows were hard-coded.
 
-| Metric | Measured Value (45s Short Run) | Measured Value (18.88m Long Run) | Target Benchmark |
-| :--- | :---: | :---: | :---: |
-| **Local ATE RMSE (Trajectory Error)** | **`0.79 cm`** | **`5.70 cm`** | $< 10.0\text{ cm}$ |
-| **Translational Drift Rate (% of Path)** | **`0.20 %`** | **`0.30 %`** | $< 1.0\text{ %}$ |
-| **Peak Trajectory Drift (Max ATE)** | **`1.14 cm`** | **`11.17 cm`** | $< 15.0\text{ cm}$ |
-| **Mean Wall Chamfer Error** | **`1.76 cm`** | **`5.12 cm`** | $< 5.5\text{ cm}$ |
-| **Obstacle Map F1 Score** | **`99.8 %`** | **`93.3 %`** | $> 90.0\text{ %}$ |
-| **Navigable Free-Space IoU** | **`94.6 %`** | **`85.2 %`** | $> 80.0\text{ %}$ |
-| **CPU Tracking Latency (`Track/Fr`)** | **`14.2 ms`** | **`14.2 ms`** | $< 25.0\text{ ms}$ |
-| **CPU Mapping Latency (`Map/Fr`)** | **`4.1 ms`** | **`4.1 ms`** | $< 10.0\text{ ms}$ |
-| **CPU A\* Planning Latency (`Plan/Call`)** | **`3.4 ms`** | **`3.4 ms`** | $< 10.0\text{ ms}$ |
-| **Scene Map RAM Footprint** | **`0.37 MB`** | **`0.37 MB`** | $< 1.0\text{ MB}$ |
-
-### CPU-Only Multi-SLAM Benchmark Comparison
-
-| SLAM System (All Executed on CPU) | ATE RMSE $\downarrow$ | Wall Chamfer $\downarrow$ | Comp / F1 $\uparrow$ | Track / Frame $\downarrow$ | Map / Frame $\downarrow$ | Map RAM $\downarrow$ |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **GMapping (FastSLAM 2.0 CPU)** | $4.80\text{ cm}$ | $4.50\text{ cm}$ | $88.4\%$ | $12.0\text{ ms}$ | $26.0\text{ ms}$ | $18.50\text{ MB}$ |
-| **Hector SLAM (2D Gauss-Newton CPU)** | $3.20\text{ cm}$ | $3.10\text{ cm}$ | $91.2\%$ | $11.5\text{ ms}$ | $8.0\text{ ms}$ | $12.40\text{ MB}$ |
-| **Cartographer 2D (Submap PGO CPU)** | $2.10\text{ cm}$ | $2.20\text{ cm}$ | $94.8\%$ | $16.4\text{ ms}$ | $12.0\text{ ms}$ | $28.00\text{ MB}$ |
-| **RTAB-Map (RGB-D Graph CPU)** | $2.45\text{ cm}$ | $2.65\text{ cm}$ | $92.6\%$ | $25.0\text{ ms}$ | $40.0\text{ ms}$ | $45.20\text{ MB}$ |
-| **ORB-SLAM3 (RGB-D Feature CPU)** | $1.85\text{ cm}$ | $2.15\text{ cm}$ | $93.5\%$ | $24.0\text{ ms}$ | $18.0\text{ ms}$ | $34.10\text{ MB}$ |
-| **Swarm-SLAM (Multi-Agent CPU)** | $6.50\text{ cm}$ | $4.90\text{ cm}$ | $86.5\%$ | $22.0\text{ ms}$ | $26.0\text{ ms}$ | $31.00\text{ MB}$ |
-| **OURS (Agentic CPU SLAM - Short)** | **$0.79\text{ cm}$** | **$1.76\text{ cm}$** | **$99.8\%$** | **$14.2\text{ ms}$** | **$4.1\text{ ms}$** | **$0.37\text{ MB}$** |
-| **OURS (Agentic CPU SLAM - 18.9m)** | **$5.70\text{ cm}$** | **$5.12\text{ cm}$** | **$93.3\%$** | **$14.2\text{ ms}$** | **$4.1\text{ ms}$** | **$0.37\text{ MB}$** |
+After a full exploration run, `accuracy_results/full_evaluation_report.txt` contains:
+1. Localization metrics (ATE RMSE / mean / median / max, RPE, drift rate, heading error).
+2. Mapping metrics (Acc., Comp., Comp. ratio < 5 cm, Chamfer, Hausdorff-95, wall F1, IoU).
+3. Mission and CPU runtime (time to clear all frontiers, rooms, tracking/mapping/planning latency, memory).
+4. Our row placed next to the published tables of MNE-SLAM (Deng et al., CVPR 2025; Tables 1, 2, 3, 5),
+   with the caveat that those systems were evaluated on Replica / Apartment / ScanNet, not on our arena.
 
 ---
 
-## 6. Result Validity & Anti-Bypass Integrity Audit (5/5 PASS)
+## 6. Result Validity Audit
 
-Every execution of `python evaluate_all_metrics.py` automatically runs 5 programmatic audits verifying zero simulation cheat or ground-truth leakage:
+`evaluate_all_metrics.py` runs these checks on every evaluation:
 
-1. **`[PASS]` AST Source Code Audit:** Verifies `slam.py` and `agents/slam_agent.py` contain **0 calls** to `sim.getObjectPosition` or `sim.getObjectOrientation`.
-2. **`[PASS]` MessageBus Ground-Truth Isolation:** In closed-loop mode (`use_ground_truth_nav=False`), `SLAMAgent` does not subscribe to or receive `pose/ground_truth`.
-3. **`[PASS]` Trajectory Independence Audit:** Confirms `true_poses` and `slam_poses` diverge physically ($0 < \text{ATE RMSE} \le 10\text{ cm}$).
-4. **`[PASS]` Dual-Grid Matrix Independence Audit:** Confirms `true_grid.npy` and `slam_grid.npy` are independent matrices ($>6,000$ cells differ due to real SLAM drift).
-5. **`[PASS]` Active Closed-Loop Navigation Flag:** Confirms navigation operates on `pose/slam` with `closed_loop_slam=True`.
+1. **Static audit:** `slam.py` and the SLAM, mapping, perception, frontier and planning agents contain no call to
+   `sim.getObjectPosition / Orientation / Matrix / Pose / Velocity`; the odometry function in `robot.py` reads no position
+   (its simulated gyro uses only the per-step orientation delta plus bias and noise).
+2. **Runtime audit:** a closed-loop `SLAMAgent` is instantiated and its bus subscriptions are checked for `pose/ground_truth`.
+3. **Trajectory independence:** SLAM and ground-truth trajectories must differ.
+4. **Dual-grid independence:** `true_grid.npy` and `slam_grid.npy` must differ.
+5. **Closed-loop flag:** the run must have navigated on `pose/slam`.
+
+Known simulation shortcut: `LizardRobot.steer_heading` turns the body by setting its orientation directly (actuation,
+not sensing). The turn amount is computed from the SLAM heading error.
 
 ---
 
@@ -123,41 +113,27 @@ Every execution of `python evaluate_all_metrics.py` automatically runs 5 program
 ## 8. Repository Structure
 
 ```text
-Autonomous-Quadruped-SLAM-Navigation-Perception/
-├── main_agentic.py                 # Multi-Agent Closed-Loop Orchestrator
-├── evaluate_all_metrics.py         # 22-Metric Scientific Evaluator & Anti-Bypass Audit
-├── print_mne_comparison.py         # CPU SLAM Benchmark Reporter
-├── accuracy_evaluator.py           # Numerical Grid (cKDTree) & Trajectory Engine
-├── grid.py                         # Bayesian Log-Odds Grid & Medoid Frontier Extractor
-├── planner.py                      # Vector-Dilated A* Planner & Shortcut Smoother
-├── robot.py                        # LizardRobot CPG Kinematics & IMU Delta
-├── sensors.py                      # Static TF Camera Extrinsics & Pinhole Back-Projection
-├── slam.py                         # Point-to-Line Metric ICP & SE(2) Keyframe PGO
-├── requirements.txt                # Pip dependency file
-├── robot_working.ttt               # CoppeliaSim Multi-Room Arena Scene
-├── agents/                         # Asynchronous 7-Agent Architecture
-│   ├── base.py                     # BaseAgent & Lifecycle Management
-│   ├── bus.py                      # Thread-Safe Typed MessageBus
-│   ├── perception_agent.py         # RGB-D Back-Projection & Radial Self-Masking
-│   ├── slam_agent.py               # IMU-ICP Pose Estimator (Closed-Loop)
-│   ├── mapping_agent.py            # Pose-Coupled Grid & Voronoi Room Segmentation
-│   ├── frontier_agent.py           # GW-NBV & Monotonic Angular Sweep Engine
-│   ├── planning_agent.py           # Safe A* Path Planning & Replanning Watchdog
-│   ├── locomotion_agent.py         # CPG Gait & Tight Waypoint Line-Tracker
-│   └── supervisor_agent.py         # Spatial Knowledge Graph & Episodic Timeline
-├── tests/                          # Automated Verification Suite
-│   ├── test_agents.py              # 9 Agent Subsystem Unit Tests
-│   └── test_slam_accuracy.py       # 7 SLAM Metric & Loop Closure Tests
-├── accuracy_results/               # Evaluation Outputs & Artifacts
-│   ├── latest_metrics.json         # Numerical Metrics Payload
-│   ├── cpu_slam_benchmark_comparison.png  # CPU Multi-SLAM Comparison Bar Chart
-│   ├── numerical_map_accuracy_comparison.png # 4-Panel Map Accuracy Dashboard
-│   ├── robot_movement_trajectory_analysis.png # Trajectory Overlay & Drift Curves
-│   ├── live_hud_latest.png         # Live OpenCV 4-Panel Telemetry HUD
-│   ├── knowledge_graph.json        # 4-Layer Topological Spatial Graph
-│   └── mission_timeline.md         # Episodic Mission Event Log
-└── docs/                           # Architectural Specifications & Reports
-    ├── README.md                   # Mirrored Docs Readme
-    ├── SLAM_NUANCES_AND_IMPLEMENTATION_ROADMAP.md # Detailed SLAM Roadmap & Specs
-    └── system_architecture_diagram.html # Interactive Architecture Diagram
+├── main_agentic.py            # Entry point: wires the 7 agents to CoppeliaSim, runs the mission, saves the run
+├── main.py                    # Alias for main_agentic.py
+├── evaluate_all_metrics.py    # Recomputes all metrics from the saved run + ground-truth leakage audit
+├── slam_replay.py             # Offline SLAM benchmark on a recorded input stream
+├── build_report.py            # Builds reports/benchmark_report.pdf
+├── benchmarks.py              # Published benchmark numbers, each tied to its source
+├── accuracy_evaluator.py      # Grid (Acc/Comp/Chamfer/F1/IoU) and trajectory (ATE/RPE) metrics
+├── generate_separate_maps.py  # Localization, SLAM, ground-truth and overlay map figures
+├── slam.py                    # Point-to-line ICP, gyro/odometry fusion, keyframe loop closure
+├── grid.py                    # Bayesian log-odds occupancy grid and frontier extraction
+├── planner.py                 # Inflated A* and line-of-sight path smoothing
+├── robot.py                   # Quadruped gait, steering, and proprioceptive odometry (no ground truth)
+├── sensors.py                 # Camera setup, depth back-projection into the robot frame
+├── viz.py                     # Live 4-panel HUD
+├── diagnose_sim.py            # Scene / sensor / joint diagnostics
+├── robot_working.ttt          # CoppeliaSim multi-room arena
+├── agents/                    # Perception, SLAM, Mapping, Frontier, Planning, Locomotion, Supervisor + message bus
+├── tests/                     # 9 agent tests + 9 SLAM tests
+├── reports/                   # Shareable benchmark report (pdf)
+└── docs/                      # Panel review report/slides, architecture diagram, SLAM roadmap
 ```
+
+Generated on every run (git-ignored): `captured_matrices/` (raw grids and trajectories), `accuracy_results/`
+(metrics JSON, report text, knowledge graph, mission timeline), `evaluation_results_images/` (figures).

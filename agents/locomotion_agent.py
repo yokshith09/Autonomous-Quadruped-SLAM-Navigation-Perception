@@ -4,7 +4,7 @@ import numpy as np
 from typing import List, Tuple, Optional
 from .base import BaseAgent
 from .bus import MessageBus, ActuationMsg, PathMsg, PoseMsg, ScanMsg, MissionEventMsg
-from robot import LizardRobot, norm_angle
+from robot import LizardRobot, gait_body_speed, norm_angle
 
 
 class LocomotionAgent(BaseAgent):
@@ -24,6 +24,10 @@ class LocomotionAgent(BaseAgent):
         self.last_stuck_pos: Tuple[float, float] = (0.0, 0.0)
         self.stuck_ticks: int = 0
         self.recovery_countdown: int = 0
+        # Progress watchdog: a goal the robot cannot get closer to (wall in the way, mis-registered map) is dropped.
+        self.progress_timeout_s: float = 15.0
+        self._goal_best_dist = float("inf")
+        self._goal_best_time = None
 
     def initialize(self) -> bool:
         self.bus.subscribe("plan/path", self.on_path)
@@ -33,6 +37,9 @@ class LocomotionAgent(BaseAgent):
         return True
 
     def on_path(self, path_msg: PathMsg):
+        if not self.waypoints or not path_msg.waypoints or                 math.hypot(path_msg.waypoints[-1][0] - self.waypoints[-1][0],
+                           path_msg.waypoints[-1][1] - self.waypoints[-1][1]) > 0.3:
+            self._goal_best_dist, self._goal_best_time = float("inf"), None
         self.waypoints = path_msg.waypoints
         self.wp_idx = 0
 
@@ -55,7 +62,7 @@ class LocomotionAgent(BaseAgent):
             self.recovery_countdown -= 1
             self.speed = -0.6  # Reverse gait swing
             self.state_str = "RECOVER_BACKUP"
-            d_fwd, d_lat, dyaw_gyro = -0.10 * 0.05, 0.0, 0.0
+            d_fwd, d_lat, dyaw_gyro = gait_body_speed(self.speed) * dt_step, 0.0, 0.0
             if self.robot is not None:
                 try:
                     self.robot.apply_gait(current_time, self.speed)
@@ -77,6 +84,16 @@ class LocomotionAgent(BaseAgent):
 
         # 2. Waypoint tracking & navigation (tight adherence to the planned blue line)
         if self.waypoints and self.wp_idx < len(self.waypoints):
+            goal_dist = math.hypot(self.waypoints[-1][0] - rx, self.waypoints[-1][1] - ry)
+            if self._goal_best_time is None or goal_dist < self._goal_best_dist - 0.2:
+                self._goal_best_dist, self._goal_best_time = goal_dist, current_time
+            elif current_time - self._goal_best_time > self.progress_timeout_s:
+                print(f"  [LOCOMOTION] No progress toward goal for {self.progress_timeout_s:.0f}s -> abandoning target")
+                self.bus.publish("mission/event", MissionEventMsg(
+                    timestamp=current_time, event_type="ROBOT_STUCK", details={"x": rx, "y": ry}))
+                self.waypoints, self.wp_idx = [], 0
+                self._goal_best_dist, self._goal_best_time = float("inf"), None
+                return
             # Only skip the start cell (wp_idx == 0) if the robot is already standing on it
             if self.wp_idx == 0 and len(self.waypoints) > 1:
                 if math.hypot(self.waypoints[0][0] - rx, self.waypoints[0][1] - ry) < 0.24:
@@ -168,7 +185,7 @@ class LocomotionAgent(BaseAgent):
                         details={"x": rx, "y": ry}
                     ))
 
-                d_fwd, d_lat, dyaw_gyro = 0.22 * self.speed * 0.05, 0.0, 0.0
+                d_fwd, d_lat, dyaw_gyro = gait_body_speed(self.speed) * dt_step, 0.0, 0.0
                 if self.robot is not None:
                     try:
                         orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
@@ -196,7 +213,9 @@ class LocomotionAgent(BaseAgent):
             d_fwd, d_lat, dyaw_gyro = 0.0, 0.0, 0.0
             if self.robot is not None:
                 try:
-                    self.robot.apply_gait(current_time, 0.0)
+                    # Hold a still stance: a zero-speed gait still lifts the legs and makes the body creep
+                    # sideways while odometry reports no motion.
+                    self.robot.stop_motors()
                     d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, 0.0)
                     d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                 except Exception:

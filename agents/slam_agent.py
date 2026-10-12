@@ -17,6 +17,7 @@ class SLAMAgent(BaseAgent):
         self.accum_odom_dy = 0.0
         self.accum_odom_dyaw = 0.0
         self.track_times_ms = []
+        self.odom_distance_m = 0.0
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
@@ -33,11 +34,13 @@ class SLAMAgent(BaseAgent):
         self.latest_gt_pose = (pose_msg.x, pose_msg.y, pose_msg.yaw)
 
     def on_actuation(self, act_msg: ActuationMsg):
-        mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * act_msg.gyro_dyaw)
+        gyro_dyaw = act_msg.gyro_dyaw
+        mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * gyro_dyaw)
         odom_lat = getattr(act_msg, "odom_lateral", 0.0)
+        self.odom_distance_m += math.hypot(act_msg.odom_forward, odom_lat)
         self.accum_odom_dx += act_msg.odom_forward * math.cos(mid_yaw) - odom_lat * math.sin(mid_yaw)
         self.accum_odom_dy += act_msg.odom_forward * math.sin(mid_yaw) + odom_lat * math.cos(mid_yaw)
-        self.accum_odom_dyaw = wrap_angle(self.accum_odom_dyaw + act_msg.gyro_dyaw)
+        self.accum_odom_dyaw = wrap_angle(self.accum_odom_dyaw + gyro_dyaw)
 
     def step(self, current_time: float) -> None:
         if self.latest_scan is None or len(self.latest_scan.points_2d) == 0:

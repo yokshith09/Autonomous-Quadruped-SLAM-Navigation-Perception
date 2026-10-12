@@ -1,7 +1,7 @@
 """Supervisor Agent: System watchdog, Spatial Knowledge Graph custodian, and Episodic Memory manager."""
 from typing import Optional, Dict, Any
 from .base import BaseAgent
-from .bus import MessageBus, MissionEventMsg, PoseMsg, GridMapMsg, PathMsg
+from .bus import MessageBus, MissionEventMsg, PoseMsg, GridMapMsg
 from .knowledge_graph import SpatialKnowledgeGraph
 from .episodic_memory import EpisodicMemory
 
@@ -50,12 +50,6 @@ class SupervisorAgent(BaseAgent):
             room_id = event_msg.details.get("room_id", 1)
             room = self.knowledge_graph.get_or_create_room(room_id)
             room.status = "EXPLORED"
-        elif event_msg.event_type == "DOORWAY_DISCOVERED":
-            d_id = event_msg.details.get("door_id", "door_1")
-            pos = event_msg.details.get("pos", (rx, ry))
-            r_a = event_msg.details.get("room_a", 1)
-            r_b = event_msg.details.get("room_b", 2)
-            self.knowledge_graph.add_doorway(d_id, pos, r_a, r_b)
         elif event_msg.event_type == "OBJECT_DETECTED":
             e_id = event_msg.details.get("entity_id", "obj_1")
             cls_name = event_msg.details.get("class_name", "obstacle")

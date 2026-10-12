@@ -6,7 +6,6 @@ import numpy as np
 from typing import List, Tuple, Set, Optional
 from .base import BaseAgent
 from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEventMsg
-from grid import find_nearest_free, bresenham_line
 from robot import norm_angle
 
 
@@ -317,6 +316,12 @@ class FrontierAgent(BaseAgent):
                 geo_dist, nav_cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=7)
                 if np.isfinite(geo_dist):
                     candidates.append(((nav_cell[0], nav_cell[1], area), geo_dist))
+
+        if not candidates and int(np.count_nonzero(np.isfinite(dist_map))) > 400:
+            # Robot has room to move (>1 m^2 reachable) yet no frontier is reachable: exploration is done.
+            self.state = "MISSION_COMPLETE"
+            print(f"  [FRONTIER] {len(all_frontiers)} frontier(s) left, none reachable. MISSION_COMPLETE.")
+            return None
 
         if not candidates:
             # Fallback if robot is temporarily boxed in: pick closest raw frontier
