@@ -1,50 +1,53 @@
-# Baseline interpretation (run 20261024_210638)
+# Baseline (run 20261024_210638)
 
-Measured values are in [`runs/20261024_210638/REPORT.md`](../runs/20261024_210638/REPORT.md). This file interprets
-them. It uses only that run and states what it does not show. Nothing has been optimized yet.
+The shareable result is [`BASELINE_REPORT.pdf`](BASELINE_REPORT.pdf): our results with what each value is, why it came out that
+way and a Good / Improve / Poor class, then the comparison with published systems. The raw record is
+[`runs/20261024_210638/REPORT.md`](../runs/20261024_210638/REPORT.md). Every fix needed is in [`FIXES.md`](FIXES.md).
+Nothing has been optimized yet.
 
-## Setup of the baseline
-- Code: commit `6f9c01e` (the run itself recorded `1f231d2` + uncommitted changes, which are exactly that commit).
-- One run, 1800 simulated seconds (the cap chosen by me; the sim took 5666 s of wall time, 0.32x real time).
-- Ended by **timeout**, not completion: 6 of 8 rooms completed, 48 frontiers left.
-- Replay is faithful: the full-system replay matches the live trajectory to 0.01 cm, and two identical replays are identical.
+## Setup
+- Code: snapshot commit `6f9c01e` (the run recorded `1f231d2` plus uncommitted changes, which are exactly that commit).
+- One run, 1800 simulated seconds (a cap I set), 5666 s of wall time (0.32x real time). Ended by **timeout**, not completion:
+  6 of 8 rooms completed, 48 frontiers left.
+- The replay is faithful: the full-system replay matches the live trajectory to 0.01 cm; two identical replays are identical.
 
-## What the measurements show
-| Area | Result | Reading |
+## Summary
+31 metrics were classified: **10 Good, 9 Improve, 12 Poor** (limits and their basis are in the PDF, section 2).
+
+| Area | Measured | Class |
 |---|---|---|
-| Localization | ATE RMSE 31.0 cm, final error 38.5 cm (0.24 % of 157.9 m), error never above 63 cm, heading 0.74 deg | No catastrophic drift over 30 minutes. This is the strong part |
-| Mapping | wall accuracy 12.9 cm, recall 91 %, precision 67 %, 5407 vs 3184 occupied cells | Walls are found but smeared/doubled by the pose error. Mapping is weaker than localization |
-| Speed | 0.088 m/s average | Slow; this limits mission time more than compute does |
-| Compute | 86 % of one CPU core, 3 GB peak memory, real-time factor 0.32 | Not real time on this machine; agents account for only 46 % of wall time |
-| Contribution (offline replay) | removing scan matching: ATE 31 -> 265 cm; removing the Manhattan prior: 31 -> 169 cm; removing loop closure: 31 -> 54 cm; removing the degeneracy filter: 31 -> 33 cm | Scan matching, the heading prior and loop closure each matter on this run. The degeneracy filter shows **no measurable benefit** here (final error was lower without it: 30.7 vs 38.5 cm) |
+| Localization drift | final error 38.5 cm = 0.24 % of 157.9 m; never above 63 cm; heading error 0.74 deg | Good |
+| Localization absolute / local | ATE RMSE 31.0 cm (target 15 cm); relative error 7.4 % per metre | Improve / Poor |
+| Mapping | recall 91 %, update time 37 ms and memory 0.19 MB | Good |
+| Mapping | F1 77 %, completion 6.4 cm, free-space IoU 81 % | Improve |
+| Mapping | wall accuracy 12.9 cm, precision 67 %, completion ratio 54 % | Poor |
+| Exploration | not completed; 0.088 m/s; 46 % of the path walked after coverage had plateaued; 2.25 room entries per room | Poor |
+| Compute | SLAM 10.6 ms per update; loop p95 380 ms, stalls up to 2.2 s; real-time factor 0.32 | Good (SLAM) / Poor (loop) |
+| SLAM components | removing scan matching: ATE +756 %; Manhattan prior +446 %; loop closure +76 %; degeneracy filter +6 % | Helps / Helps / Helps / Not shown |
 
-Observation to investigate, not a conclusion: odometry plus gyro alone has a *lower* local error (RPE 1.8 %) than
-the full system (7.4 %) but drifts in heading to 44.6 deg. Scan matching buys global consistency at the price of
-local jitter; the cause was not isolated.
+Observation to investigate, not a conclusion: odometry plus gyro alone has a *lower* local error (RPE 1.8 %) than the full system
+(7.4 %) but drifts in heading to 44.6 deg; scan matching trades local smoothness for global consistency (fix F7).
 
-## Why the run did not finish (diagnosis, not yet confirmed by a fix run)
-Evidence: final map image (`map_overlay.png`), the frontier code, and the log.
-1. Coverage reached 78.4 % of the map box by t = 1000 s and 80.1 % at 1800 s. The arena fills about 81 % of the box,
-   so the interior was essentially mapped by 1000 s; the remaining 42 % of the distance walked (66.8 of 157.9 m) added 1.7 points.
-2. Of the 48 remaining frontiers, 21 lie outside the outer wall and 13 within 0.5 m of it. The map has 579 free cells
-   outside the wall (rays leaking past thin or smeared walls). A frontier is any free cell next to unknown, so these
-   can never be cleared by looking from inside.
-3. A frontier within 0.3 m of reachable floor counts as reachable, so the robot drives to the wall, the frontier
-   survives, the target is blacklisted, and the blacklist is cleared when it exceeds 40 entries or no candidate is left.
-   The same targets then return (single targets were planned 11-21 times; 1814 paths for 36001 steps).
-4. Room labels flip as the map grows: 17 "entered new room" events for 8 rooms, which restarts room sweeps.
+## Why the run did not finish (diagnosis; to be confirmed by the fix run)
+1. The explored area reached 97 % of its final value at t = 930 s. The last 73.2 m (46 % of the path) added 2.1 points of coverage.
+2. Of the 48 remaining frontiers, 21 lie outside the outer wall and 13 within 0.5 m of it; the map has 579 free cells outside the wall.
+   Even the reference grid built with the true pose has 34 frontiers (9 outside), so the depth rays leak past walls independent of
+   pose error; pose error makes it worse (48 vs 34). A frontier is any free cell next to unknown, so these cannot be cleared from inside.
+3. A frontier within 0.3 m of reachable floor counts as reachable, so the robot drives to the wall, the frontier survives, the
+   target is blacklisted, and the blacklist is cleared when it exceeds 40 entries or no candidate remains. The same targets return
+   (single targets planned 11-21 times; 1814 paths).
+4. Room labels change as the map grows: 18 room-entered events for 8 rooms, which restarts room sweeps.
 
-## Planned fixes (to be tested against this baseline; they change behaviour, so numbers will change)
-1. Ignore frontiers with no navigable floor within about 0.2 m and any outside the arena bounds or behind an occupied wall.
-2. Keep the blacklist per area permanent and declare completion when only blacklisted or unreachable frontiers remain.
-3. Freeze room labels once a room is marked explored.
-4. Remove the time cap as the normal stop condition (keep a large safety cap).
-Then: profile (`cProfile`) to find where the 54 % of wall time outside the agents goes; speed-ups must leave results
-unchanged, which is checked by replaying this recording.
+## Comparison (PDF section 3)
+No published system was evaluated under our conditions, so **none is directly comparable**. Closest, all partial: the A1 SLAM paper
+(quadruped, 5 m paths), the ANYmal D evaluation (quadruped, 145-332 m, mostly outdoors) and FARE (exploration, wheeled).
+- Localization: our ATE per path length (0.20 %) is the same order as ORB-SLAM3 stereo (derived 0.14 %) and above FAST-LIVO2 (0.04 %); no claim to beat them.
+- Speed: slower than every listed system (FARE indoor planners 1.6-1.8 m/s derived; ANYmal 0.75 m/s; Spot 1.6 m/s).
+- Runtime: our SLAM update (10.6 ms) is cheaper than camera-based tracking (ORB-SLAM2 25.6 ms), which says nothing about accuracy.
+- Mapping: not comparable (2D 5 cm grid against 3D neural meshes).
+- The fair experiments that are still missing are fixes F25-F27 (head-to-head on our own recording, same-arena baseline explorer, repeated runs).
 
 ## What this baseline cannot show
-- Repeatability: one run. Variance needs several runs with different gyro seeds.
-- Real-robot performance: simulation only; the gait speed here is not a real robot's.
-- Independent map accuracy: the reference grid uses the true pose, not a floor plan.
-- Contribution of mapping, frontier selection and planning (only SLAM components were ablated).
-- External comparison: not started; see `docs/OBJECTIVES.md` (R14).
+One run (no variance); simulation only; the map reference is built from the same sensor with the true pose; the contribution of mapping,
+frontier selection and planning is unmeasured; scan-match acceptance and tracking-loss counts are diagnostic; interventions and
+collisions were not measurable.

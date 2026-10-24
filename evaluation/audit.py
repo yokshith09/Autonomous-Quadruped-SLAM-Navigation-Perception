@@ -7,6 +7,7 @@ import os
 import numpy as np
 
 GT_POSE_APIS = {"getObjectPosition", "getObjectOrientation", "getObjectMatrix", "getObjectPose", "getObjectVelocity"}
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAV_FILES = ["slam.py"] + [os.path.join("agents", f) for f in (
     "slam_agent.py", "mapping_agent.py", "perception_agent.py", "frontier_agent.py", "planning_agent.py")]
 
@@ -20,10 +21,10 @@ def audit(run_dir):
     checks = []
     leaks = []
     for fname in NAV_FILES:
-        if os.path.exists(fname):
-            with open(fname, encoding="utf-8") as f:
+        if os.path.exists(os.path.join(ROOT, fname)):
+            with open(os.path.join(ROOT, fname), encoding="utf-8") as f:
                 leaks += [f"{fname} {c}" for c in _gt_calls(ast.parse(f.read()))]
-    with open("robot.py", encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "robot.py"), encoding="utf-8") as f:
         tree = ast.parse(f.read())
     odom = next((n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "get_odometry_imu_delta"), None)
     if odom is None:

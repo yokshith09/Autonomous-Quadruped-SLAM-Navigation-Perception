@@ -2,7 +2,7 @@
 """Offline component ablation on one run's recording: the full SLAM stack vs. one component removed, all
 replayed through the same recorded scans/odometry and scored against the same ground truth.
 
-  python ablate.py runs/<run_id>      # writes runs/<run_id>/ablation.csv and ablation.json
+  python -m evaluation.ablate runs/<run_id>      # writes runs/<run_id>/ablation.csv and ablation.json
 
 The live robot is never modified. Two reproducibility checks are included:
   * determinism: the full system is replayed twice; the trajectories must be identical;
@@ -19,8 +19,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 
-from run_telemetry import rpe_distance
-from slam_replay import replay
+from evaluation.run_telemetry import rpe_distance
+from evaluation.slam_replay import replay
 
 VARIANTS = [
     ("full system", {}),

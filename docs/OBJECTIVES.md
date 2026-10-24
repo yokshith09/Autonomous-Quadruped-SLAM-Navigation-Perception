@@ -14,14 +14,14 @@ compare against.
 - Do not optimize to improve numbers; do not finalize competitor comparisons before the baseline is verified.
 
 ## Requirements and status
-Status as of baseline run `20261024_210638` (details in `runs/20261024_210638/REPORT.md`).
+Status as of baseline run `20261024_210638`. Results: `docs/BASELINE_REPORT.pdf` (shareable), `docs/BASELINE.md`, `runs/20261024_210638/REPORT.md` (raw). Fixes: `docs/FIXES.md`.
 
 | # | Requirement | Status | Where / note |
 |---|---|---|---|
-| R1 | Run normally; results computed and saved automatically | Done | `python main_agentic.py`, `run_telemetry.py` |
+| R1 | Run normally; results computed and saved automatically | Done | `python main_agentic.py`, `evaluation/run_telemetry.py` |
 | R2 | Overall: completion, time, distance, coverage, stuck/recovery events, bottlenecks | Done | Interventions and collisions are `n/a`: no channel exists for either |
 | R3 | Per agent: calls, successes, errors, latency p50/p95, task metric | Done | Section 2a of the report. Per-agent memory is not separable in one process |
-| R4 | Component contribution by offline ablation | Partly | Scan matching, loop closure, degeneracy filter, Manhattan prior (`ablate.py`). Mapping, frontier selection and planning contributions are unmeasured |
+| R4 | Component contribution by offline ablation | Partly | Scan matching, loop closure, degeneracy filter, Manhattan prior (`evaluation/ablate.py`). Mapping, frontier selection and planning contributions are unmeasured |
 | R5 | Localization: ATE, RPE, drift, tracking loss, relocalization, with frames and definitions | Done | Section 3. Tracking-loss numbers are diagnostic: rejection reasons are not recorded |
 | R6 | Mapping: coverage, accuracy vs reference, throughput, size, incomplete regions | Done | Section 4. The reference grid uses the true pose; it is not an independent floor plan |
 | R7 | Compute: CPU, memory, GPU, latency, bottleneck, hardware | Done | GPU present but unused by any code path |
@@ -29,10 +29,10 @@ Status as of baseline run `20261024_210638` (details in `runs/20261024_210638/RE
 | R9 | All numbers dynamic; missing shown as unavailable | Done | |
 | R10 | Automated tests of the formulas (synthetic data only) | Done | `tests/test_run_telemetry.py` |
 | R11 | Non-blocking, bounded, failure-isolated, safety untouched | Partly | Bounded and isolated; file writes happen after the loop (not a background thread); the in-memory recording buffer grows with run length (peak 3 GB over 30 min) |
-| R12 | Validation: right files, units, formulas, duplicates, stale data, overhead, replay consistency | Partly | Overhead is a calibrated estimate, not an A/B run. Replay consistency in the ablation table |
-| R13 | Output sections 1-6 as tables with units and explanations | Done | `report.py` -> `REPORT.md` |
-| R14 | Phase B: direct and partial competitors with sources and fair-comparison caveats | Pending | Published numbers collected in `benchmarks.py`; not used until the baseline is verified |
-| R15 | Phase C: conclusions backed by measurements | Partly | Measured-only interpretation in `docs/BASELINE.md`; external parts pending |
+| R12 | Validation: right files, units, formulas, duplicates, stale data, overhead, replay consistency | Done, one gap | Replay matches the live run to 0.01 cm and is deterministic; overhead is a calibrated estimate, not an A/B run (F21) |
+| R13 | Output sections 1-6 as tables with units and explanations | Done | `evaluation/report.py` -> `REPORT.md`; `evaluation/baseline_pdf.py` -> PDF with classes |
+| R14 | Phase B: direct and partial competitors with sources and fair-comparison caveats | Done (partial matches only) | PDF section 3. No published system is directly comparable; closest are A1 SLAM, the ANYmal D evaluation and FARE. Key numbers re-checked against the sources on 2026-10-25. The fair head-to-head experiments are not done (F25-F27) |
+| R15 | Phase C: conclusions backed by measurements | Done | `docs/BASELINE.md` and PDF sections 1, 2 and 5 |
 
 ## Requests made during the work, and status
 | Request | Status |
@@ -40,10 +40,11 @@ Status as of baseline run `20261024_210638` (details in `runs/20261024_210638/RE
 | Run live and let the robot explore every room without stopping | **Not achieved**: ended at the 1800 s cap with 6/8 rooms; see `docs/BASELINE.md` for the cause |
 | Diagnose why it revisits rooms and cells | Done (diagnosis); fixes not applied yet |
 | Explain agent efficiency and whether changes alter results | Answered; profiling pending |
-| Commit baseline snapshot, finish baseline, update docs, clean the repo | Done in this change |
+| Commit baseline snapshot, finish baseline, update docs, clean the repo | Done |
+| Draft results, compare with published systems, PDF with explanations and good/improve/poor classes, fix register, organize the repo | Done (`docs/BASELINE_REPORT.pdf`, `docs/FIXES.md`, `evaluation/` package) |
 
-## Next steps (in order)
-1. Profile one short run (`cProfile`) to find where the 3074 s outside the agents goes.
-2. Apply the four exploration fixes (see `docs/BASELINE.md`), run uncapped, compare against this baseline.
-3. Speed-ups that must not change results; verify by replaying the same recording.
-4. Phase B comparison against the verified baseline.
+## Next steps (in order; details and acceptance checks in `docs/FIXES.md`)
+1. Profile one short run (`cProfile`) to find where the 3074 s outside the agents goes (F12).
+2. Apply the exploration fixes F1-F4, run uncapped, compare against this baseline.
+3. Speed-ups (F12-F15) that must not change results; verify by replaying the baseline recording.
+4. Fair comparison experiments F25-F27, then repeat runs (F18).

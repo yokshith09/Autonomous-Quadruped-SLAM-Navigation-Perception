@@ -36,9 +36,9 @@ from robot import LizardRobot, patch_coppelasim_scripts, norm_angle
 from sensors import initialize_sensors, get_depth_heatmap
 from grid import BayesianOccupancyGrid
 from viz import create_debug_dashboard
-from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
-import report
-from run_telemetry import RunTelemetry
+from evaluation.accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
+from evaluation import report
+from evaluation.run_telemetry import RunTelemetry
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -562,7 +562,7 @@ def main():
                 if os.path.exists(src):
                     shutil.copy(src, art)
             report.build(tel.dir)
-            print(f"  Next: python ablate.py {tel.dir}   then   python report.py {tel.dir}", flush=True)
+            print(f"  Next: python -m evaluation.ablate {tel.dir}   then   python -m evaluation.report {tel.dir}", flush=True)
         except Exception as e:
             print(f"  [WARN] Report generation failed: {e}", flush=True)
 
