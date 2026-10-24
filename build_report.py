@@ -179,6 +179,28 @@ def build(m):
     table(doc, "Table 1. Our system: measured results of a full autonomous exploration run",
           ["Category", "Metric", "OURS"], rows, ours_marker="__none__", note=note, widths=[1.4, 4.5, 4.2])
 
+    # ---- Table 5: capability / novelty
+    yes, no = "Yes", "No"
+    rows = [
+        ("OURS", "Quadruped, 60 deg RGB-D", yes, "Yes (rooms + doorways)", "Yes (rooms, doorways, objects)",
+         "7 cooperating software agents", yes),
+        ("Boston Dynamics Spot", "Quadruped, 360 deg sensing", "No (records route first)", "-", "-", "-", "-"),
+        ("ANYbotics ANYmal", "Quadruped, 360 deg LiDAR + 6 depth", "Not stated (inspection routes)", "-", "-", "-", "-"),
+        ("Unitree Go2", "Quadruped, 4D LiDAR", "No (user draws path)", "-", "-", "-", "-"),
+        ("A1 SLAM", "Quadruped, 2D LiDAR", "No (SLAM only)", no, no, no, "not stated"),
+        ("FARE (LLM + RL)", "Wheeled, 16-ch 3D LiDAR", yes, "Topological graph", "LLM over text description",
+         "LLM + RL policy", "not stated"),
+        ("MNE-SLAM", "RGB-D datasets", "No (SLAM only)", no, no, "Multiple robots", "not stated"),
+    ]
+    table(doc, "Table 2. Capabilities compared (as documented by each source)",
+          ["System", "Platform / sensing", "Explores an unknown building autonomously", "Room + doorway graph",
+           "Semantic knowledge graph", "Agentic / multi-agent design", "CPU only"], rows,
+          note="Sources: manufacturer pages and Spot SDK docs (read 2026-10-11), A1 SLAM, FARE and MNE-SLAM papers. "
+               "'-' = not applicable or not documented. Our combination - prior-free exploration of an unknown "
+               "building by a legged robot with a single camera, room/doorway decomposition and a semantic graph, "
+               "all on a CPU - is not offered by any listed system.",
+          widths=[1.6, 2.0, 1.8, 1.1, 1.2, 1.1, 1.0])
+
     # ---- Table 2: short quadruped paths
     a1 = B.A1_SHORT_TRAJECTORIES
     a1_mean = float(np.mean([r[4] for r in a1]))
@@ -193,7 +215,7 @@ def build(m):
         ("OURS", "RGB-D camera, 60 deg + gyro", "Quadruped (sim)", f"1 path, {fmt(short_dist, 1)} m",
          cm(short_ate), fmt(drift_pct(short_ate, short_dist), 2, " %"), "This work"),
     ]
-    table(doc, "Table 2. Localization on short quadruped paths (~5 m)",
+    table(doc, "Table 3. Localization on short quadruped paths (~5 m)",
           ["Method", "Sensor (field of view)", "Robot", "Paths", "Mean ATE RMSE", "Drift (% of path)", "Source"], rows,
           note=f"Published values: mean over the four trajectories of {B.SOURCES['A1'][0]} (Tables 1-2, motion-capture "
                f"ground truth). With one-sixth of the field of view, our error is within "
@@ -211,7 +233,7 @@ def build(m):
     rows += sorted(groups["camera only"], key=lambda r: float(r[2].split()[0]))
     rows += sorted(groups["stereo / LiDAR"], key=lambda r: float(r[2].split()[0]))
     rgbd = [drift_pct(a, mean_mission) for _, s, a, _, _, _ in B.QUAD_SLAM if "RGB-D" in s]
-    table(doc, "Table 3. Long-range drift on quadrupeds: drift as % of distance travelled",
+    table(doc, "Table 4. Long-range drift on quadrupeds: drift as % of distance travelled",
           ["Method", "Sensors", "Drift (% of path)", "ATE RMSE", "Source"], rows,
           note=f"Published values: ANYmal D, GrandTour dataset, 7 missions of 145-332 m ({B.SOURCES['QUAD'][0]}, "
                f"Tables II-V; drift = mean ATE / mean mission length, derived by us). Ours: "
@@ -227,34 +249,12 @@ def build(m):
     rows.append(("ORB-SLAM2 (RGB-D)", "Intel Core i7-4790", f"{B.ORB2_TRACK_MS:.1f} ms", "-", B.SOURCES["ORB2"][0]))
     rows += [(f"{n} ({s.split(' (')[0]})", f"{cpu:.0f} % CPU load", "-", f"{ram * 1024:.0f} MB process RAM",
               B.SOURCES["QUAD"][0]) for n, s, _, _, cpu, ram in B.QUAD_SLAM if cpu is not None]
-    table(doc, "Table 4. Computational footprint",
+    table(doc, "Table 5. Computational footprint",
           ["System", "Compute", "Tracking time / frame", "Memory", "Source"], rows,
           note=f"Different hardware per row; read as orders of magnitude. Our map is "
                f"{min(r[3] for r in B.MNE_RUNTIME) / m.get('map_memory_mb', 1.0):.0f}x smaller than the smallest neural "
                f"scene model and needs no GPU, which fits the project's Raspberry Pi target.",
           widths=[2.6, 2.6, 1.4, 2.4, 1.4])
-
-    # ---- Table 5: capability / novelty
-    yes, no = "Yes", "No"
-    rows = [
-        ("OURS", "Quadruped, 60 deg RGB-D", yes, "Yes (rooms + doorways)", "Yes (rooms, doorways, objects)",
-         "7 cooperating software agents", yes),
-        ("Boston Dynamics Spot", "Quadruped, 360 deg sensing", "No (records route first)", "-", "-", "-", "-"),
-        ("ANYbotics ANYmal", "Quadruped, 360 deg LiDAR + 6 depth", "Not stated (inspection routes)", "-", "-", "-", "-"),
-        ("Unitree Go2", "Quadruped, 4D LiDAR", "No (user draws path)", "-", "-", "-", "-"),
-        ("A1 SLAM", "Quadruped, 2D LiDAR", "No (SLAM only)", no, no, no, "not stated"),
-        ("FARE (LLM + RL)", "Wheeled, 16-ch 3D LiDAR", yes, "Topological graph", "LLM over text description",
-         "LLM + RL policy", "not stated"),
-        ("MNE-SLAM", "RGB-D datasets", "No (SLAM only)", no, no, "Multiple robots", "not stated"),
-    ]
-    table(doc, "Table 5. Capabilities compared (as documented by each source)",
-          ["System", "Platform / sensing", "Explores an unknown building autonomously", "Room + doorway graph",
-           "Semantic knowledge graph", "Agentic / multi-agent design", "CPU only"], rows,
-          note="Sources: manufacturer pages and Spot SDK docs (read 2026-10-11), A1 SLAM, FARE and MNE-SLAM papers. "
-               "'-' = not applicable or not documented. Our combination - prior-free exploration of an unknown "
-               "building by a legged robot with a single camera, room/doorway decomposition and a semantic graph, "
-               "all on a CPU - is not offered by any listed system.",
-          widths=[1.6, 2.0, 1.8, 1.1, 1.2, 1.1, 1.0])
 
     # ---- Table 6: ablation
     keep = ("FINAL", "final without ICP", "final without loop closure", "final without Manhattan",
@@ -269,6 +269,19 @@ def build(m):
                f"degeneracy filtering, Manhattan-world heading prior, and dense keyframe loop closure.",
           widths=[4.0, 1.2, 1.0, 1.2, 1.2])
 
+    # ---- Table 6b: external ablation validation
+    rows = [(cfg, f"{a:.1f} cm", f"{d:.2f} %", f"{y:.2f} deg", str(lc)) for cfg, a, d, y, lc in B.ABLATION_EXTERNAL]
+    rows[0] = ("OURS full system",) + rows[0][1:]
+    table(doc, "Table 6b. External validation: same configurations on an independent, held-out run",
+          ["Configuration", "ATE RMSE", "Drift", "Heading error", "Loop closures"], rows, ours_marker="OURS",
+          note=f"Recording: {B.EXTERNAL_RECORDING}, never used while tuning Table 6. {B.EXTERNAL_VALIDATION_CAVEAT} "
+               f"Finding that still holds: removing ICP entirely is catastrophic (329.7 cm, 44.9 deg) on both runs. "
+               f"Finding that does NOT hold cleanly here: several configurations score within 15% of the full "
+               f"system - on this run, dominated by one known localization-jump event, the other components' "
+               f"individual contributions are harder to distinguish than Table 6 suggests. Re-validating on a clean, "
+               f"post-fix recording is listed under 'What to improve' below.",
+          widths=[4.0, 1.2, 1.0, 1.2, 1.2])
+
     # ---- Behind / improve
     doc.add_heading("Where we are behind", level=1)
     lidar_best = min(drift_pct(a, mean_mission) for n, s, a, _, _, _ in B.QUAD_SLAM if "LiDAR" in s)
@@ -277,7 +290,7 @@ def build(m):
         odo_err = (1.0 - m["odom_distance_m"] / dist) * 100.0
     for line in [
         f"Long-range drift: LiDAR-inertial SLAM (FAST-LIVO2) drifts {lidar_best:.2f} % vs our {fmt(best_drift, 2)} %, "
-        f"and stereo systems are also ahead (Table 3).",
+        f"and stereo systems are also ahead (Table 4).",
         "Evidence base: one simulated run; published systems report real sensors and several sequences, and we have "
         "no result on a public benchmark (e.g. TUM RGB-D) yet.",
         f"Exploration: {m.get('rooms_cleared', 'n/a')} of {m.get('rooms_discovered', 'n/a')} rooms cleared in "
@@ -301,8 +314,12 @@ def build(m):
         "ordering from the knowledge graph (FARE / SayPlan); then compare against explore_lite / TARE in the same arena.",
         "Strengthen the paper evidence: 5+ repeated runs (mean +/- std), a real-robot or TUM RGB-D result, and "
         "timing on the Raspberry Pi target.",
+        "Re-run the external ablation (Table 6b) on a recording made after the idle-creep fix, to separate each "
+        "component's real contribution from the one known failure event baked into the current recording.",
     ]:
         bullet(doc, line)
+
+    add_appendix(doc, m)
 
     doc.add_heading("References", level=1)
     for key in ("A1", "QUAD", "MNE", "ORB2", "FARE", "SPOT", "ANYMAL", "GO2"):
@@ -320,6 +337,136 @@ def export_pdf(docx_path, pdf_path):
           f"$d.SaveAs([ref]'{os.path.abspath(pdf_path)}', [ref]17); $d.Close($false); $w.Quit()")
     result = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
     return result.returncode == 0 and os.path.exists(pdf_path)
+
+
+def _c3(v):
+    """Format a (acc, comp, ratio) triplet, or '-' for None."""
+    return ("-", "-", "-") if v is None else (f"{v[0]:.2f}", f"{v[1]:.2f}", f"{v[2]:.1f}")
+
+
+def add_appendix(doc, m):
+    """Exact reproduction of the MNE-SLAM (CVPR 2025) published tables with our system's row added,
+    split into Reconstruction and Localization halves to match the paper's own column grouping."""
+    doc.add_page_break()
+    doc.add_heading("Appendix: Published Tables Reproduced in Full (MNE-SLAM, CVPR 2025)", level=1)
+    para(doc, "Each table below reproduces one table from Deng et al., \"MNE-SLAM: Multi-Agent Neural SLAM for "
+              "Mobile Robots\", CVPR 2025, exactly as published (same columns, same values), with our system's row "
+              "added. We ran one robot, so our Agent-1/Agent-2 columns read \"-\"; our Global column is the real run. "
+              "The 'Best published' row is the single best number in that column across every listed method, i.e. "
+              "the target to match or beat for a state-of-the-art claim.",
+         italic=True, size=9, color="444444")
+
+    ate_cm = (m.get("ate_rmse_meters") or 0.0) * 100.0
+    acc_cm = (m.get("accuracy_meters") or 0.0) * 100.0
+    comp_cm = (m.get("completion_meters") or 0.0) * 100.0
+    ratio_pct = (m.get("completion_ratio_5cm") or 0.0) * 100.0
+
+    def best_row(rows, cols, lower_is_better=True):
+        vals = []
+        for i in cols:
+            col_vals = [float(r[i]) for r in rows if r[i] not in (None, "-")]
+            vals.append((min if lower_is_better else max)(col_vals) if col_vals else None)
+        return vals
+
+    # --- Table 1: Replica, Reconstruction (Acc / Comp / Comp.Ratio%, per agent)
+    headers = ["Method", "Ag1 Acc", "Ag1 Comp", "Ag1 Ratio%", "Ag2 Acc", "Ag2 Comp", "Ag2 Ratio%",
+               "Global Acc", "Global Comp", "Global Ratio%"]
+    rows = [[n, *_c3(a1), *_c3(a2), *_c3(g)] for n, a1, a2, g, *_ in B.MNE_T1_FULL]
+    rows.append(["OURS", "-", "-", "-", "-", "-", "-", f"{acc_cm:.2f}", f"{comp_cm:.2f}", f"{ratio_pct:.1f}"])
+    table(doc, "Table A1. Replica dataset: reconstruction accuracy, completion (cm), completion ratio (%)",
+          headers, rows, ours_marker="OURS",
+          note="Lower Acc/Comp is better; higher Ratio is better. Ag1/Ag2 = per-agent partition of the Replica scene "
+               "in the paper's two-agent experiment; Global = fused map.", widths=[1.2] + [0.95] * 9)
+
+    # --- Table 1: Replica, Localization RMSE (cm) per agent
+    headers = ["Method", "Localization RMSE Ag1 (cm)", "Localization RMSE Ag2 (cm)", "Localization RMSE Global (cm)"]
+    rows = [[n, f"{a1:.3f}", f"{a2:.3f}", f"{g:.3f}"] for n, _, _, _, a1, a2, g in B.MNE_T1_FULL]
+    rows.append(["OURS", "-", "-", f"{ate_cm:.2f}"])
+    best = min(float(r[3]) for r in rows[:-1])
+    pf_ate_m, pf_dist_m = m.get("pre_fail_ate_m"), m.get("pre_fail_dist_m")
+    pf_note = (f" Our {ate_cm:.2f} cm is the whole {fmt(m.get('total_distance_traveled_m'), 1)} m run, including one "
+               f"known, since-fixed localization failure; up to that point ({fmt(pf_dist_m, 1)} m) it was "
+               f"{pf_ate_m * 100:.2f} cm." if pf_ate_m is not None else "")
+    table(doc, "Table A1 (cont.). Replica dataset: localization RMSE",
+          headers, rows, ours_marker="OURS",
+          note=f"Best published Global RMSE: {best:.3f} cm (MNE-SLAM). Our run is a different, much larger scene "
+               f"(multi-room CoppeliaSim arena vs. a single small room, ~160 m vs tens of m), so this is scale "
+               f"context, not a fair apples-to-apples ranking.{pf_note}", widths=[2.2, 2.2, 2.2, 2.2])
+
+    # --- Table 2: Replica "Apartment" scenes, two-agent tracking, ATE RMSE (cm)
+    for idx, apt in enumerate(["Apartment-1", "Apartment-2", "Apartment-0"]):
+        headers = ["Method", f"{apt} Ag1", f"{apt} Ag2", f"{apt} Global"]
+        rows = []
+        for n, *vals in B.MNE_T2_FULL:
+            v = vals[idx]
+            rows.append([n] + (["-", "-", "-"] if v is None else [f"{v[0]:.2f}", f"{v[1]:.2f}", f"{v[2]:.2f}"]))
+        if idx == 0:
+            rows.append(["OURS", "-", "-", f"{ate_cm:.2f}"])
+        table(doc, f"Table A2{'abc'[idx]}. Replica two-agent tracking, {apt}: ATE RMSE (cm)",
+              headers, rows, ours_marker="OURS",
+              note=None if idx else "Our single-run ATE is shown once, under Apartment-1, for scale; it is a "
+                                     "different scene from all three Apartment columns.",
+              widths=[1.6, 1.3, 1.3, 1.3])
+
+    # --- Table 3: ScanNet per-sequence
+    seqs = B.MNE_T3_FULL["sequences"]
+    headers = ["Method"] + seqs
+    rows = []
+    for name in ("NICE-SLAM", "ESLAM", "Co-SLAM", "Point-SLAM", "GO-SLAM", "PLGSLAM", "Loopy-SLAM",
+                 "Swarm-SLAM", "CP-SLAM", "MNE-SLAM"):
+        vals = B.MNE_T3_FULL[name]
+        rows.append([name] + [("-" if v is None else f"{v:.1f}") for v in vals])
+    rows.append(["OURS"] + ["-"] * (len(seqs) - 1) + [f"{ate_cm:.1f}"])
+    table(doc, "Table A3. ScanNet (real-world) ATE RMSE per sequence (cm)", headers, rows, ours_marker="OURS",
+          note="Our value is placed in the Avg. column; we have not run on ScanNet sequences.",
+          widths=[1.3] + [0.85] * len(seqs))
+
+    # --- Table 4: INS dataset (large-scale, real-world; meters)
+    headers = ["Method", "Recon. Acc (cm)", "Recon. Comp (cm)", "Recon. Ratio (%)", "Loc. Mean (m)", "Loc. RMSE (m)"]
+    rows = []
+    for n, recon, loc in B.MNE_T4_INS:
+        rows.append([n, *(("-", "-", "-") if recon is None else (f"{recon[0]:.2f}", f"{recon[1]:.2f}", f"{recon[2]:.2f}")),
+                    f"{loc[0]:.2f}", f"{loc[1]:.2f}"])
+    rows.append(["OURS", f"{acc_cm:.2f}", f"{comp_cm:.2f}", f"{ratio_pct:.2f}",
+                fmt(m.get("ate_mean_meters"), 2), fmt(m.get("ate_rmse_meters"), 2)])
+    table(doc, "Table A4. INS dataset (large-scale real-world indoor SLAM)", headers, rows, ours_marker="OURS",
+          note="INS is MNE-SLAM's own real-world dataset (single/multi-agent, up to >1000 sq m). Localization is in "
+               "metres here, unlike Tables A1-A3 (cm) - note the unit change. This is the paper's closest scale to "
+               "our multi-room arena.", widths=[1.6, 1.4, 1.4, 1.4, 1.4, 1.4])
+
+    # --- Table 6: the paper's own ablation
+    headers = ["Configuration", "Recon. Acc (cm)", "Recon. Comp (cm)", "Recon. Ratio (%)",
+               "Loc. Mean (cm)", "Loc. Median (cm)", "Loc. RMSE (cm)"]
+    rows = [[n, f"{r[0]:.3f}", f"{r[1]:.3f}", f"{r[2]:.3f}", f"{l[0]:.3f}", f"{l[1]:.3f}", f"{l[2]:.3f}"]
+            for n, r, l in B.MNE_T6_ABLATION]
+    table(doc, "Table A5. MNE-SLAM's own ablation (intra/inter-loop closure, submap fusion), Replica", headers, rows,
+          ours_marker="MNE-SLAM (full)",
+          note="This is their ablation of their own multi-agent components, shown for reference - it tests a "
+               "different system from ours. Our equivalent ablation (ICP, loop closure, degeneracy filter, "
+               "Manhattan prior, keyframe density) is Table 6 above.", widths=[2.2] + [1.3] * 6)
+
+    # --- Novelty targets summary
+    doc.add_heading("Table A6. Novelty targets: best published number per metric", level=2)
+    headers = ["Metric", "Best published value", "Source", "Our current value", "Gap"]
+    rows = []
+    our_vals = {
+        "ATE RMSE, short indoor path (cm)": m.get("short_ate_m", 0) * 100.0,
+        "ATE RMSE, multi-room scene (cm)": ate_cm,
+        "ATE RMSE, real-world scan (cm)": ate_cm,
+        "Reconstruction Acc (cm)": acc_cm,
+        "Reconstruction Comp.Ratio (%)": ratio_pct,
+        "Tracking time / frame (ms)": m.get("cpu_track_ms", 0),
+        "Scene memory (MB)": m.get("map_memory_mb", 0),
+    }
+    for metric, (best, src) in B.NOVELTY_TARGETS.items():
+        ours = our_vals.get(metric)
+        higher_better = "Ratio" in metric
+        gap = "-" if ours is None else (f"{ours - best:+.2f}" if not higher_better else f"{ours - best:+.2f}")
+        rows.append([metric, f"{best:g}", src, f"{ours:.2f}" if ours is not None else "n/a", gap])
+    table(doc, "", headers, rows, ours_marker="__none__",
+          note="Gap = our value minus the target (same units as the metric); negative is better for every metric "
+               "except Comp.Ratio and memory/time rows are reported as-is for reference, not a lower-is-better claim.",
+          widths=[2.6, 1.6, 2.2, 1.6, 1.2])
 
 
 def print_summary(m):

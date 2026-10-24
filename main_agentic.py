@@ -38,6 +38,7 @@ from viz import create_debug_dashboard
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
 from evaluate_all_metrics import print_full_evaluation_suite
 import build_report
+from run_telemetry import RunTelemetry
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -123,7 +124,8 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
     parser.add_argument("--closed-loop-slam", action="store_true", default=True, help="Navigate strictly using closed-loop SLAM pose (default)")
     parser.add_argument("--ground-truth-nav", action="store_true", help="Bypass SLAM drift with ground-truth navigation (for ablation only)")
-    parser.add_argument("--record", default=None, help="Save the raw SLAM input stream (.npz) for offline replay with slam_replay.py")
+    parser.add_argument("--record", default=None, help="SLAM input recording path (.npz); default runs/<run_id>/recording.npz")
+    parser.add_argument("--no-record", action="store_true", help="Do not save the SLAM input recording (disables offline ablation)")
     args, _ = parser.parse_known_args()
 
     print("\n" + "=" * 75)
@@ -187,6 +189,11 @@ def main():
     ]
     for agent in agents:
         agent.initialize()
+    tel = RunTelemetry()
+    tel.attach(bus, agents)
+    if not args.no_record and not args.record:
+        args.record = os.path.join(tel.dir, "recording.npz")
+    print(f"  Run {tel.run_id}: results -> {tel.dir}")
 
     # Pre-seed ground in robot vicinity on both SLAM grid and True reference grid
     rgx, rgy = mapping_agent.grid.world_to_grid(init_x, init_y)
@@ -237,6 +244,7 @@ def main():
                 end_reason = f"timeout ({args.max_time:.0f}s) before all frontiers were cleared"
                 break
 
+            loop_t0 = time.perf_counter()
             # A. Sample Ground Truth Pose
             true_x, true_y, true_heading, _ = robot.get_pose()
             bus.publish("pose/ground_truth", PoseMsg(timestamp=t, x=true_x, y=true_y, yaw=true_heading, is_ground_truth=True))
@@ -246,20 +254,25 @@ def main():
 
             # B. Step Multi-Rate Agents
             # Step 1: Perception & SLAM (every step / 10Hz)
-            perception_agent.step(t)
+            tel.step(perception_agent, t)
             if args.record:
                 rec_scan = bus.get_latest("sensor/scan")
-                rec["scans"].append(np.asarray(rec_scan.points_2d, dtype=np.float32) if rec_scan else np.empty((0, 2), np.float32))
+                # float64, matching what SLAM actually consumes: float32 here would truncate points enough to
+                # flip borderline ICP/loop-closure accept decisions, making the replay silently diverge from the
+                # live run it is supposed to reproduce exactly.
+                rec["scans"].append(np.asarray(rec_scan.points_2d, dtype=np.float64) if rec_scan else np.empty((0, 2), np.float64))
                 rec["t"].append(t)
                 rec["gt"].append((true_x, true_y, true_heading))
-            slam_agent.step(t)
+            n_track = len(slam_agent.track_times_ms)
+            tel.step(slam_agent, t)
+            tel.slam_tracked(slam_agent, n_track, t)
             # One SLAM pose per ground-truth sample, so index i of both trajectories is the same instant.
             slam_pose = bus.get_latest("pose/slam")
             slam_trajectory_poses.append((slam_pose.x, slam_pose.y, slam_pose.yaw) if slam_pose
                                          else (init_x, init_y, init_heading))
 
             # Step 2: Mapping Agent (Bayesian raycasting & periodic room segmentation)
-            mapping_agent.step(t)
+            tel.step(mapping_agent, t)
 
             # Update Reference True Grid with true pose (for rigorous, unbiased benchmark comparison)
             scan = bus.get_latest("sensor/scan")
@@ -275,7 +288,7 @@ def main():
 
             # Step 3: Frontier Agent (Hierarchical Room-by-Room selection)
             if step_count % 10 == 0:
-                frontier_agent.step(t)
+                tel.step(frontier_agent, t)
                 complete_streak = complete_streak + 1 if frontier_agent.state == "MISSION_COMPLETE" else 0
                 if complete_streak >= 3:
                     print(f"  [COMPLETED] No reachable frontiers left at t={t:.1f}s. All rooms explored.")
@@ -284,13 +297,13 @@ def main():
 
             # Step 4: Planning Agent (A* search towards room frontier / doorway)
             if step_count % 5 == 0:
-                planning_agent.step(t)
+                tel.step(planning_agent, t)
                 latest_path = bus.get_latest("plan/path")
                 if latest_path and latest_path.waypoints:
                     draw_planned_path_in_sim(sim, latest_path.waypoints)
 
             # Step 5: Locomotion Agent (Gait cycle & heading steering)
-            locomotion_agent.step(t)
+            tel.step(locomotion_agent, t)
             if args.record:
                 act = bus.get_latest("control/actuation")
                 fresh = act is not None and act.timestamp == t
@@ -299,7 +312,7 @@ def main():
 
             # Step 6: Supervisor Agent (Knowledge graph & memory events)
             if step_count % 10 == 0:
-                supervisor_agent.step(t)
+                tel.step(supervisor_agent, t)
 
             # C. Real-Time Diagnostics, Telemetry & Dashboard
             actuation_msg = bus.get_latest("control/actuation")
@@ -380,7 +393,7 @@ def main():
                         pass
 
             # Real-time console telemetry & live accuracy evaluation
-            if step_count % 20 == 0:
+            if step_count % 200 == 0:
                 slam_pose = bus.get_latest("pose/slam")
                 icp_rmse = getattr(slam_pose, 'rmse', 0.0) if slam_pose else 0.0
                 live_drift_m = math.hypot(slam_pose.x - true_x, slam_pose.y - true_y) if slam_pose else 0.0
@@ -412,14 +425,12 @@ def main():
                 exp_pct = grid_msg.explored_pct if grid_msg else 0.0
                 gait_str = actuation_msg.state_str if actuation_msg else "IDLE"
 
-                print("-" * 80, flush=True)
-                print(f"  [AGENTIC TELEMETRY - STEP {step_count:4d} | TIME {t:5.1f}s]", flush=True)
-                print(f"    -> Pose: ({true_x:.2f}, {true_y:.2f}) | Heading: {math.degrees(true_heading):.1f}° | State: [{frontier_agent.state}]", flush=True)
-                print(f"    -> Active Room: {active_room_str} | Cleared: {len(frontier_agent.explored_rooms)} | Target: {target_desc}", flush=True)
-                print(f"    -> Live Map Accuracy: F1: {live_f1 * 100:.1f}% | Wall Chamfer: {live_chamfer * 100:.1f}cm | Explored: {exp_pct:.1f}% ({grid_msg.free_cells if grid_msg else 0} free, {grid_msg.occupied_cells if grid_msg else 0} occ)", flush=True)
-                print(f"    -> Trajectory Fidelity: Drift: {live_drift_m * 100:.1f}cm | ATE RMSE: {live_ate_rmse * 100:.1f}cm | Yaw Err: {live_heading_err_deg:.1f}° | ICP RMSE: {icp_rmse:.3f} | Gait: {gait_str}", flush=True)
-                print("-" * 80, flush=True)
+                if step_count % 600 == 0:  # concise progress line every 30 s of sim time
+                    print(f"  [t={t:6.0f}s] state {frontier_agent.state} | rooms cleared {len(frontier_agent.explored_rooms)}"
+                          f" | explored {exp_pct:.1f}% | ATE {live_ate_rmse * 100:.0f} cm | err now {live_drift_m * 100:.0f} cm"
+                          f" | yaw err {live_heading_err_deg:.1f} deg | F1 {live_f1 * 100:.0f}% | {gait_str}", flush=True)
 
+            tel.loop_time((time.perf_counter() - loop_t0) * 1000.0)
             step_count += 1
             sim.step()
 
@@ -447,7 +458,7 @@ def main():
             scans = rec["scans"][:n_rec]
             np.savez_compressed(
                 args.record, t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
-                scan_points=np.concatenate(scans) if scans else np.empty((0, 2), np.float32),
+                scan_points=np.concatenate(scans) if scans else np.empty((0, 2), np.float64),
                 scan_offsets=np.cumsum([0] + [len(sc) for sc in scans]),
                 initial_pose=np.array([init_x, init_y, init_heading]))
             print(f"  [SAVED] SLAM input recording ({n_rec} steps) -> {args.record}")
@@ -461,6 +472,7 @@ def main():
         print("  [SAVED] Spatial Knowledge Graph -> accuracy_results/knowledge_graph.json")
         print("  [SAVED] Episodic Timeline -> accuracy_results/mission_timeline.md")
 
+        grid_metrics = None
         # Save trajectory poses for evaluation
         if len(true_trajectory_poses) > 5:
             np.savez_compressed(
@@ -520,6 +532,35 @@ def main():
             build_report.main()
         except Exception as e:
             print(f"  [WARN] Evaluation / report failed: {e}", flush=True)
+
+        free_cells, _, _, explored_pct = mapping_agent.grid.get_grid_stats()
+        n_rooms = len(supervisor_agent.knowledge_graph.rooms)
+        tel.finalize(
+            agents=agents, gt=true_trajectory_poses, est=slam_trajectory_poses, times=trajectory_timestamps,
+            grid_metrics=grid_metrics,
+            ctx={
+                "end_reason": end_reason, "closed_loop_slam": not bool(args.ground_truth_nav),
+                "rooms_discovered": n_rooms, "rooms_completed": len(frontier_agent.explored_rooms),
+                "free_area_m2": float(free_cells) * GRID_RES ** 2, "explored_pct": float(explored_pct),
+                "frontiers_remaining": len(mapping_agent.grid.detect_frontiers()),
+                "map_memory_mb": mapping_agent.grid.grid_log_odds.nbytes / 2 ** 20,
+                "odom_distance_m": slam_agent.odom_distance_m, "cpu_name": cpu_name(),
+                "recording": args.record if args.record and rec["act"] else None,
+                "config": {"max_time_s": args.max_time, "max_steps": args.max_steps, "grid_res_m": GRID_RES,
+                           "map_bounds_m": [MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX],
+                           "ground_truth_nav": bool(args.ground_truth_nav), "headless": bool(args.headless),
+                           "agent_rates_hz": {a.name: a.update_rate_hz for a in agents}},
+                "agent_task": {
+                    "PerceptionAgent": f"median {int(np.median(tel.scan_pts)) if tel.scan_pts else 0} scan pts/update",
+                    "SLAMAgent": f"{100.0 * np.mean(tel.track_ok) if tel.track_ok else 0:.1f}% scans matched, "
+                                 f"{len(slam_agent.pose_estimator.loop_manager.loop_closures)} loop closures",
+                    "MappingAgent": f"{explored_pct:.1f}% of grid observed",
+                    "FrontierAgent": f"{len(frontier_agent.explored_rooms)} rooms completed",
+                    "PlanningAgent": f"{planning_agent.replan_count} paths, {tel.events.get('PATH_UNREACHABLE', 0)} unreachable",
+                    "LocomotionAgent": f"{tel.events.get('ROBOT_STUCK', 0)} stuck/watchdog events",
+                    "SupervisorAgent": f"{sum(tel.events.values())} events logged, {n_rooms} rooms in graph",
+                },
+            })
 
     print("=" * 75)
     print("  MULTI-AGENT EXPLORATION MISSION COMPLETE")
