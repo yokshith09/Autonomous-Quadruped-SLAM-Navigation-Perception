@@ -4,8 +4,8 @@
 The recording holds exactly what SLAM received each step (body-frame scan, gait odometry, gyro increment,
 gait speed) plus ground truth for scoring, so SLAM variants can be compared on identical data in seconds.
 
-  python slam_replay.py run.npz
-  python slam_replay.py run.npz --set icp_yaw_weight=0.2 --set degeneracy_filter=False
+  python -m evaluation.slam_replay run.npz
+  python -m evaluation.slam_replay run.npz --set icp_yaw_weight=0.2 --set degeneracy_filter=False
 """
 
 import argparse
@@ -15,7 +15,7 @@ import numpy as np
 
 from agents import MessageBus, SLAMAgent
 from agents.bus import ActuationMsg, ScanMsg
-from accuracy_evaluator import evaluate_trajectory
+from evaluation.accuracy_evaluator import evaluate_trajectory
 from robot import gait_body_speed
 
 

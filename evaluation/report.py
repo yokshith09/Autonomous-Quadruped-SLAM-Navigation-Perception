@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build runs/<run_id>/REPORT.md (+ map_overlay.png) from the files a run saved.
 
-  python report.py runs/<run_id>
+  python -m evaluation.report runs/<run_id>
 
 Pure measurement report: every number is read from the run's own files (metrics.json, ablation.json,
 trajectory.csv, manifest.json, artifacts/). Anything recomputed after the run is listed under
@@ -15,8 +15,8 @@ import sys
 
 import numpy as np
 
-from audit import audit
-from run_telemetry import extra_warnings, overhead_per_step_ms
+from evaluation.audit import audit
+from evaluation.run_telemetry import extra_warnings, overhead_per_step_ms
 
 
 def fmt(v, d=1, unit=""):
@@ -173,7 +173,7 @@ def build(run_dir):
                   f"{f0.get('replay_steps')} steps. One recording only: differences are not statistically tested, and a component that "
                   f"does not change the ATE here may still matter in other conditions.\n")
     else:
-        md.append("n/a (ablation not run: `python ablate.py runs/<run_id>`)\n")
+        md.append("n/a (ablation not run: `python -m evaluation.ablate runs/<run_id>`)\n")
 
     # ---- 3
     md.append("## 3. Localization performance (independent of mapping)\n")

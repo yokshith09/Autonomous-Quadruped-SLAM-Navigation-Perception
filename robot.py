@@ -16,7 +16,8 @@ SLOW_ANGLE = 0.30
 HEADING_RATE = 0.18
 
 # Proprioceptive odometry model: body speed (m/s) vs. gait speed command, piecewise linear.
-# Calibration knob: measured offline from recordings/arena_gtnav_420s.npz (ground truth used only there).
+# Calibration knob: measured offline from an early recording made with ground-truth navigation (ground truth used only
+# there; that recording is no longer kept). Re-calibrate from a current run's recording (fix F5).
 GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.047), (0.75, 0.053), (1.0, 0.0785))
 GYRO_NOISE_RAD_S = math.radians(0.10)   # white noise on z-rate (MPU-6050 class)
 GYRO_BIAS_RAD_S = math.radians(0.05)    # constant turn-on bias magnitude

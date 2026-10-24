@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from run_telemetry import RunTelemetry, extra_warnings, loss_episodes, overhead_per_step_ms, path_length, rpe_distance  # noqa: E402
+from evaluation.run_telemetry import RunTelemetry, extra_warnings, loss_episodes, overhead_per_step_ms, path_length, rpe_distance  # noqa: E402
 
 
 def straight(n=201, length=10.0):

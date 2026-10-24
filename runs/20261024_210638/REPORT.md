@@ -120,7 +120,7 @@ Reference = occupancy grid built from the same depth stream with the ground-trut
 | GPU | NVIDIA GeForce RTX 3050 6GB Laptop GPU, 6144 MiB: n/a (no code path uses the GPU (NumPy/SciPy/OpenCV on CPU); nothing to attribute) |
 | SLAM tracking p50 / p95 | 10.6 / 23.6 ms |
 | Largest agent by total time | MappingAgent |
-| Telemetry overhead (estimate) | 0.0016 ms/step, about 0.002 % of the median loop step |
+| Telemetry overhead (estimate) | 0.0015 ms/step, about 0.002 % of the median loop step |
 
 ## 6. Data quality and limitations
 
@@ -148,7 +148,7 @@ Reference = occupancy grid built from the same depth stream with the ground-trut
 **Post-run corrections** (the raw `metrics.json` is unchanged)
 
 - doorways_detected: the as-run value (0) came from a bus-event counter that never fires (doorways are logged to episodic memory); replaced by 17 from artifacts/knowledge_graph.json
-- telemetry overhead: the as-run value (0.0034 ms/step) counted only the SLAM bookkeeping; recomputed as a calibrated estimate (0.0016 ms/step = timing-wrapper micro-benchmark x 158407 calls / 36001 steps)
+- telemetry overhead: the as-run value (0.0034 ms/step) counted only the SLAM bookkeeping; recomputed as a calibrated estimate (0.0015 ms/step = timing-wrapper micro-benchmark x 158407 calls / 36001 steps)
 - 2 data-quality warning(s) added after the run (the live summary now uses the same function)
 
 **Metric definitions**
