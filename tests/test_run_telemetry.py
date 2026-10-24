@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from run_telemetry import RunTelemetry, loss_episodes, path_length, rpe_distance  # noqa: E402
+from run_telemetry import RunTelemetry, extra_warnings, loss_episodes, overhead_per_step_ms, path_length, rpe_distance  # noqa: E402
 
 
 def straight(n=201, length=10.0):
@@ -92,6 +92,18 @@ def test_finalize_end_to_end():
         files = set(os.listdir(tel.dir))
         assert {"metrics.json", "agents.csv", "trajectory.csv", "manifest.json"} <= files
         json.load(open(os.path.join(tel.dir, "manifest.json"), encoding="utf-8"))
+
+
+def test_extra_warnings():
+    cap = extra_warnings({"end_reason": "timeout (10s) before all frontiers were cleared", "task_success": False}, {"icp_acceptance_pct": 20.0})
+    assert len(cap) == 2 and "not by mission completion" in cap[0]
+    assert extra_warnings({"end_reason": "all reachable frontiers explored", "task_success": True}, {"icp_acceptance_pct": 90.0}) == []
+
+
+def test_overhead_estimate_is_small_and_scales():
+    one = overhead_per_step_ms(1000, 1000, n=5000)
+    two = overhead_per_step_ms(2000, 1000, n=5000)
+    assert 0 <= one < 0.05 and two > one * 1.2
 
 
 if __name__ == "__main__":

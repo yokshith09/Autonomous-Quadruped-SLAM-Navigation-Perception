@@ -1,0 +1,58 @@
+{
+  "run_id": "20261024_210638",
+  "started": "2026-10-24T21:06:38",
+  "command": "main_agentic.py --max-time 1800",
+  "git": {
+    "commit": "1f231d2",
+    "uncommitted_changes": true
+  },
+  "python": "3.12.10",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "cpu": "AMD Ryzen 7 7735HS with Radeon Graphics",
+  "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU, 6144 MiB",
+  "config": {
+    "max_time_s": 1800.0,
+    "max_steps": null,
+    "grid_res_m": 0.05,
+    "map_bounds_m": [
+      -5.5,
+      5.5,
+      -5.5,
+      5.5
+    ],
+    "ground_truth_nav": false,
+    "headless": false,
+    "agent_rates_hz": {
+      "PerceptionAgent": 10.0,
+      "SLAMAgent": 10.0,
+      "MappingAgent": 10.0,
+      "FrontierAgent": 1.0,
+      "PlanningAgent": 5.0,
+      "LocomotionAgent": 20.0,
+      "SupervisorAgent": 2.0
+    }
+  },
+  "ground_truth": "CoppeliaSim /Base pose every control step (used for scoring only)",
+  "sources": {
+    "recording": "runs\\20261024_210638\\recording.npz",
+    "trajectory": "trajectory.csv",
+    "grids": [
+      "captured_matrices/true_grid.npy",
+      "captured_matrices/slam_grid.npy"
+    ]
+  },
+  "metric_definitions": {
+    "frame": "2D world frame of the CoppeliaSim scene (x, y in m, yaw in rad, CCW); SLAM initialised at the GT start pose, no trajectory alignment",
+    "ate": "per-step Euclidean position error |p_est - p_gt| over every control step; RMSE/mean/median/max",
+    "final_drift_pct": "final position error / GT path length * 100",
+    "rpe": "distance-based relative pose error over 1.0 m GT segments, relative motion in the start body frame; trans RMSE (m), mean trans error as % of segment, rot RMSE (deg/m)",
+    "icp_acceptance": "share of SLAM updates whose scan match passed the acceptance gates (else odometry-only)",
+    "tracking_loss_episode": ">= 10 consecutive rejected SLAM updates",
+    "relocalized": "tracking-loss episode followed by an accepted loop closure within 30 s",
+    "wall_accuracy/completion": "mean distance SLAM->reference occupied cells / reference->SLAM (m)",
+    "precision/recall/f1": "occupied-cell agreement with reference grid within tolerance_m",
+    "free_space_iou": "IoU of free cells between SLAM grid and reference grid",
+    "latency": "wall-clock time of each agent.step() call (ms), p50/p95/max over all calls",
+    "real_time_factor": "simulated seconds per wall-clock second"
+  }
+}

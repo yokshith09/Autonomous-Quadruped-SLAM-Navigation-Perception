@@ -18,6 +18,7 @@ import time
 import json
 import argparse
 import platform
+import shutil
 import numpy as np
 import cv2
 
@@ -36,8 +37,7 @@ from sensors import initialize_sensors, get_depth_heatmap
 from grid import BayesianOccupancyGrid
 from viz import create_debug_dashboard
 from accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
-from evaluate_all_metrics import print_full_evaluation_suite
-import build_report
+import report
 from run_telemetry import RunTelemetry
 
 try:
@@ -45,7 +45,7 @@ try:
 except Exception:
     pass
 
-MAX_TIME = 900.0
+MAX_TIME = 3600.0  # safety cap on simulated seconds; a run is meant to end on MISSION_COMPLETE
 MAP_X_MIN, MAP_X_MAX = -5.5, 5.5
 MAP_Y_MIN, MAP_Y_MAX = -5.5, 5.5
 GRID_RES = 0.05
@@ -377,9 +377,7 @@ def main():
 
                 # Persist live dashboard image so output can be inspected visually at any time
                 os.makedirs("accuracy_results", exist_ok=True)
-                os.makedirs("evaluation_results_images", exist_ok=True)
                 cv2.imwrite("accuracy_results/live_hud_latest.png", dashboard)
-                cv2.imwrite("evaluation_results_images/live_hud_latest.png", dashboard)
 
                 if not args.headless:
                     try:
@@ -527,12 +525,6 @@ def main():
             except Exception as e:
                 print(f"  [WARN] Benchmark evaluation skipped: {e}", flush=True)
 
-        try:
-            print_full_evaluation_suite()
-            build_report.main()
-        except Exception as e:
-            print(f"  [WARN] Evaluation / report failed: {e}", flush=True)
-
         free_cells, _, _, explored_pct = mapping_agent.grid.get_grid_stats()
         n_rooms = len(supervisor_agent.knowledge_graph.rooms)
         tel.finalize(
@@ -540,7 +532,7 @@ def main():
             grid_metrics=grid_metrics,
             ctx={
                 "end_reason": end_reason, "closed_loop_slam": not bool(args.ground_truth_nav),
-                "rooms_discovered": n_rooms, "rooms_completed": len(frontier_agent.explored_rooms),
+                "rooms_discovered": n_rooms, "doorways_detected": len(supervisor_agent.knowledge_graph.doorways), "rooms_completed": len(frontier_agent.explored_rooms),
                 "free_area_m2": float(free_cells) * GRID_RES ** 2, "explored_pct": float(explored_pct),
                 "frontiers_remaining": len(mapping_agent.grid.detect_frontiers()),
                 "map_memory_mb": mapping_agent.grid.grid_log_odds.nbytes / 2 ** 20,
@@ -561,6 +553,18 @@ def main():
                     "SupervisorAgent": f"{sum(tel.events.values())} events logged, {n_rooms} rooms in graph",
                 },
             })
+
+        try:
+            art = os.path.join(tel.dir, "artifacts")
+            os.makedirs(art, exist_ok=True)
+            for src in ("captured_matrices/slam_grid.npy", "captured_matrices/true_grid.npy",
+                        "accuracy_results/knowledge_graph.json", "accuracy_results/mission_timeline.md"):
+                if os.path.exists(src):
+                    shutil.copy(src, art)
+            report.build(tel.dir)
+            print(f"  Next: python ablate.py {tel.dir}   then   python report.py {tel.dir}", flush=True)
+        except Exception as e:
+            print(f"  [WARN] Report generation failed: {e}", flush=True)
 
     print("=" * 75)
     print("  MULTI-AGENT EXPLORATION MISSION COMPLETE")

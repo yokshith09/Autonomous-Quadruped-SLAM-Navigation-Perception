@@ -187,42 +187,6 @@ INNOVATION_URLS = {
     "Kimera-Multi": "https://arxiv.org/abs/2106.14386",
 }
 
-# --- Our own measured ablations ---------------------------------------------------------------------------
-
-# Closed-loop 60 s runs in robot_working.ttt from the same start pose (gyro seed 0), measured 2026-10-11.
-# (configuration, GT distance m, ATE RMSE cm, ATE max cm, mean heading error deg, wall Chamfer cm, wall F1 %,
-#  loop closures). None = not recorded for that run.
-ABLATION_60S = [
-    ("A. Stride uncalibrated (0.22 m/s), ICP yaw blended 50/50 with gyro, loose loop closure",
-     5.43, 24.2, 56.9, 8.47, None, None, 0),
-    ("B. Stride calibrated, gyro-led yaw, ICP translation only when full ICP passes gates, loose loop closure",
-     5.34, 59.4, 101.7, 2.27, 18.8, 49.5, 4),
-    ("C. As B, translation always by ICP with rotation fixed to gyro yaw, strict loop-closure acceptance",
-     5.39, 8.74, 24.3, 1.99, 3.08, 98.6, 4),
-]
-
-# Offline replay (slam_replay.py) of recordings/arena_gtnav_420s.npz: 420 s, 38.16 m, 8400 steps.
-# Identical input data for every row. (configuration, ATE RMSE cm, ATE max cm, drift %, heading err deg, loops)
-REPLAY_RECORDING = "recordings/arena_gtnav_420s.npz (420 s, 38.2 m, recorded with ground-truth navigation)"
-ABLATION_REPLAY = [
-    ("FINAL: keyframes 0.5 m / 25 deg, gyro-led yaw (ICP weight 0.1), Manhattan heading prior, degeneracy-aware "
-     "fixed-rotation ICP, strict loop closure", 8.5, 21.1, 0.22, 0.73, 28),
-    ("final without ICP (gait odometry + gyro only)", 61.2, 137.7, 1.60, 10.10, 0),
-    ("final without loop closure", 31.7, 66.2, 0.83, 0.70, 0),
-    ("final with ICP yaw weight 0.5", 25.2, 56.0, 0.66, 1.12, 22),
-    ("final without degeneracy filter", 15.9, 32.2, 0.42, 0.73, 27),
-    ("final without Manhattan heading prior", 15.3, 32.6, 0.40, 2.23, 28),
-    ("final with keyframes 1.5 m / 40 deg (previous default)", 14.4, 35.4, 0.38, 0.76, 10),
-    ("final with ICP yaw weight 0 (gyro only for yaw increments)", 13.2, 25.3, 0.35, 0.76, 23),
-]
-
-# Full closed-loop exploration runs (robot_working.ttt), measured 2026-10-11/12.
-# (run, sim time s, path m, ATE RMSE cm, drift %, mean heading err deg, rooms cleared / segmented, outcome)
-LONG_RUNS = [
-    ("Before long-run fixes (no heading prior; A* allowed through unknown cells)", 1090, 86.2, 71.5, 0.83, 20.1,
-     "2 / 5", "stopped by hand: stuck against outer wall, 46 deg heading error"),
-]
-
 # ================================================================================================
 # Exact reproduction of MNE-SLAM (Deng et al., CVPR 2025) published tables, for Appendix.
 # Columns match the paper precisely (Agent1 / Agent2 / Global, or per-sequence). Source: paper PDF
@@ -311,31 +275,3 @@ NOVELTY_TARGETS = {
     "Tracking time / frame (ms)": (22.1, "MNE-SLAM, Table 5"),
     "Scene memory (MB)": (20.73, "ESLAM, Table 5"),
 }
-
-# External ablation validation: same 6 configurations as ABLATION_REPLAY, replayed against an
-# INDEPENDENT recording never used for tuning (final_closed_loop_run2.npz: the actual 1800s/160.5m
-# closed-loop run, recorded 2026-10-12). Caveats, both real and disclosed in the report:
-# (1) this recording predates the stop_motors() idle-creep fix, so a known ~1m localization jump
-#     from that bug is baked into every row equally (it is in the raw odometry/gyro stream itself,
-#     not something any SLAM configuration can correct);
-# (2) this recording stored scan points as float32 (fixed in main_agentic.py after this run), so
-#     absolute numbers differ slightly from the live run's float64 trajectory - confirmed by diffing
-#     the two directly: both tracks agree to <5 cm for the first 18,492 of 36,001 steps, then a
-#     borderline ICP/loop-closure accept decision flips under the precision loss and the two tracks
-#     diverge. The relative ranking between the 6 configurations below is unaffected, since all 6
-#     see identical (float32-precision) input.
-EXTERNAL_RECORDING = "recordings/final_closed_loop_run2.npz (1800 s, 160.5 m, independent closed-loop run)"
-EXTERNAL_VALIDATION_CAVEAT = (
-    "This recording predates the idle-creep fix (one known ~1 m jump is baked equally into every row) "
-    "and stored scans at float32 precision (fixed since), which makes a borderline ICP/loop-closure "
-    "decision flip partway through and the absolute numbers diverge from the live run's 84.7 cm. The "
-    "relative comparison between configurations is unaffected, since all six see identical input."
-)
-ABLATION_EXTERNAL = [
-    ("FINAL (full system)", 108.8, 0.68, 5.94, 114),
-    ("without ICP (gait odometry + gyro only)", 329.7, 2.05, 44.87, 0),
-    ("without loop closure", 98.6, 0.61, 0.85, 0),
-    ("without degeneracy filter", 100.8, 0.63, 0.90, 97),
-    ("without Manhattan heading prior", 93.7, 0.58, 3.33, 122),
-    ("with keyframes 1.5 m / 40 deg (previous default)", 99.4, 0.62, 0.88, 76),
-]
