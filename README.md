@@ -4,7 +4,8 @@ CPU-only 2D SLAM, room segmentation and room-by-room exploration for a legged ro
 (`robot_working.ttt`). Seven cooperating agents run in one Python process and talk over a message bus.
 
 Current state: the system has been **measured honestly but not yet improved**. Read these first:
-- [`docs/BASELINE_REPORT.pdf`](docs/BASELINE_REPORT.pdf): results, what each value means and why, Good / Improve / Poor classes, comparison with published systems.
+- [`docs/RESULTS.pdf`](docs/RESULTS.pdf): **for sharing**. Measured results (each value defined in one line) and the comparison with published systems. No explanations.
+- [`docs/DIAGNOSTIC_REPORT.pdf`](docs/DIAGNOSTIC_REPORT.pdf): **for internal diagnosis**. Why each value came out as it did, Good / Improve / Poor classes, fixes, limits.
 - [`docs/BASELINE.md`](docs/BASELINE.md): short summary and diagnosis. [`docs/FIXES.md`](docs/FIXES.md): every fix needed. [`docs/OBJECTIVES.md`](docs/OBJECTIVES.md): what was asked and its status.
 
 ## Setup
@@ -19,7 +20,8 @@ Open CoppeliaSim EDU 4.5+ and load `robot_working.ttt` (do not press play; the s
 | Run the robot and measure it | `python main_agentic.py` (`--headless` skips the HUD window, `--max-time S` changes the safety cap, default 3600 simulated seconds) |
 | Component ablation by offline replay of that run | `python -m evaluation.ablate runs/<run_id>` |
 | Rebuild the run report (after the ablation) | `python -m evaluation.report runs/<run_id>` |
-| Build the baseline PDF for a run | `python -m evaluation.baseline_pdf runs/<run_id>` |
+| Build the shareable results PDF | `python -m evaluation.results_pdf runs/<run_id>` |
+| Build the internal diagnostic PDF | `python -m evaluation.baseline_pdf runs/<run_id>` |
 | Replay SLAM variants on a recording | `python -m evaluation.slam_replay runs/<run_id>/recording.npz --set icp_yaw_weight=0.2` |
 | Tests | `python tests/test_agents.py`, `python tests/test_slam_accuracy.py`, `python tests/test_run_telemetry.py` |
 
@@ -43,10 +45,11 @@ summary at the end. The baseline run is `runs/20261024_210638`.
 main_agentic.py   entry point: wires the agents to CoppeliaSim, runs the mission, records the run
 slam.py grid.py planner.py robot.py sensors.py viz.py   algorithm and simulator-interface code
 agents/           the seven agents and the message bus
-evaluation/       run_telemetry (measurement), report (REPORT.md), baseline_pdf (PDF), ablate (offline ablation),
+evaluation/       run_telemetry (measurement), report (REPORT.md), results_pdf + baseline_pdf (the two PDFs), comparison
+                  (our values next to published ones), ablate (offline ablation),
                   slam_replay, audit (ground-truth independence), accuracy_evaluator (map and trajectory metrics),
                   benchmarks (published third-party numbers with sources)
 tests/            formula and algorithm tests
-docs/             baseline report, objectives, fixes, panel review documents, architecture diagram
+docs/             RESULTS.pdf, DIAGNOSTIC_REPORT.pdf, objectives, fixes, panel review documents, architecture diagram
 runs/             one folder per measured run (the raw recording stays local)
 ```
