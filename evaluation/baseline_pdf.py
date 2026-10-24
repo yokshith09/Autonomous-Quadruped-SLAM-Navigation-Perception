@@ -24,6 +24,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 from evaluation import benchmarks as B  # noqa: E402
+from evaluation import comparison as C  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLASS_CSS = {"Good": "good", "Improve": "improve", "Poor": "poor", "Helps": "good", "Weak": "improve",
@@ -395,13 +396,24 @@ def build_html(d, x, figs):
              "The closest are partial matches: the A1 SLAM paper (same robot type, short paths), the ANYmal D evaluation (quadruped, long "
              "missions, real outdoors) and FARE (autonomous exploration, wheeled). Numbers below are quoted from the cited tables; "
              "'derived' means we divided two published numbers. Differences are listed so a reader can judge.</p>")
-    h.append("<h3>3a. Localization (partially comparable)</h3>")
+    h.append("<h3>3a. SLAM as a whole: pose and map together (partially comparable)</h3>")
+    hh, rr, ww = C.slam_combined(d, x)
+    h.append(tbl(hh, rr, ww, raw_cols=(0,)))
+    h.append("<p><b>Reading:</b> on both halves of SLAM we are an order of magnitude behind the neural RGB-D systems on Replica: pose error "
+             f"{loc['ate_rmse_m'] * 100:.1f} cm against 0.4-1.1 cm, wall accuracy {m['mapping']['wall_accuracy_m'] * 100:.1f} cm against 1.6-2.1 cm. "
+             "We are far cheaper: a map of 0.19 MB against 20-40 MB, and 0.02 s of mapping per frame against 0.14-10.5 s, on a CPU. These are not "
+             "like-for-like: Replica is small single scenes with a 3D mesh map and GPU; ours is a 2D wall-cell map, 5 cm cells (which cannot resolve "
+             "finer than about 2.5 cm), a forward camera with a 57 deg field of view, and gait odometry. The comparison shows where the gap is, not a ranking.</p>")
+    hh, rr, ww = C.apartment(d, x)
+    h.append("<p><b>Multi-room scenes</b> (closest scene type to ours): ATE RMSE of published systems on Replica apartments against our arena.</p>")
+    h.append(tbl(hh, rr, ww, raw_cols=(0,)))
+    h.append("<h3>3b. Localization (partially comparable)</h3>")
     h.append(tbl(["System", "Sensors", "Environment", "Path (m)", "ATE RMSE", "ATE / path"], comparison(d, x), [150, 120, 80, 50, 100, 60], raw_cols=(0,)))
     h.append(f"<p><b>Reading:</b> our drift per path length ({x['ate_pct_path']:.2f} %) is the same order as ORB-SLAM3 stereo (derived {0.330 / (sum(B.QUAD_MISSION_DIST_M) / 7) * 100:.2f} %) and above FAST-LIVO2 ({0.105 / (sum(B.QUAD_MISSION_DIST_M) / 7) * 100:.2f} %); we do not claim "
              "to beat them. Not like-for-like: ours is simulation with exact ground truth, a small arena that the robot loops through repeatedly "
              "(which helps loop closure), and a 2D estimate; theirs are real, mostly outdoor missions with 3D estimates. The RGB-D configurations in that "
              "study (closest to our depth sensor) performed worst (2.4-8.2 m), so sensor type alone does not decide the result.</p>")
-    h.append("<h3>3b. Runtime and resources (reference only: different tasks and hardware)</h3>")
+    h.append("<h3>3c. Runtime and resources (reference only: different tasks and hardware)</h3>")
     h.append(tbl(["System", "Quantity", "Value", "Hardware / note"],
                  [("<b>Ours</b>", "SLAM update, median", f"{x['agents']['SLAMAgent']['p50_ms']:.1f} ms", f"CPU only, {esc(d['man'].get('cpu'))}; 2D scan matching"),
                   ("ORB-SLAM2 (RGB-D)", "tracking per frame", f"{B.ORB2_TRACK_MS} ms", "Intel Core i7-4790, TUM fr3_office, feature-based"),
@@ -412,7 +424,7 @@ def build_html(d, x, figs):
                    f"({d['m']['compute']['rss_mb_peak'] / 1000:.1f} GB peak)", "includes the recording buffer; simulator excluded")], [110, 90, 130, 180], raw_cols=(0,)))
     h.append("<p><b>Reading:</b> our SLAM step is cheaper than the camera-based systems, which is expected for 2D scan matching against feature tracking "
              "and says nothing about accuracy. Our whole control loop is not real time (section 2).</p>")
-    h.append("<h3>3c. Exploration speed and time (partially comparable: task similar, robot and environment differ)</h3>")
+    h.append("<h3>3d. Exploration speed and time (partially comparable: task similar, robot and environment differ)</h3>")
     fi = B.FARE_INDOOR
     rows = [("<b>Ours</b>", f"{x['dist']:.0f}", f"{o['sim_time_s']:.0f} (not finished)", f"{x['speed']:.3f}", "quadruped, forward RGB-D, 10 x 10 m arena")]
     rows += [(f"FARE paper: {n}", f"{dist}", f"{t}", f"{dist / t:.2f} (derived)", "wheeled, 16-channel 3D LiDAR, Gazebo indoor, max 2 m/s") for n, dist, _, t, _ in fi]
@@ -423,7 +435,7 @@ def build_html(d, x, figs):
     h.append("<p><b>Reading:</b> distances and times cannot be compared (their environments are far larger and the robot differs), and we did not finish. "
              f"Speed is a property of the robot: ours ({x['speed']:.3f} m/s) is slower than every system listed. Spot and Go2 are documented as needing a recorded map "
              "or a user-given path; the ANYmal page does not say whether it explores unknown space. None of the three product pages gives exploration time or accuracy figures.</p>")
-    h.append("<h3>3d. Mapping (not comparable)</h3>")
+    h.append("<h3>3e. Mapping on its own (not comparable)</h3>")
     mn = [r for r in B.MNE_REPLICA if r[0] == "MNE-SLAM"][0]
     h.append(tbl(["System", "Accuracy", "Completion", "Completion ratio", "Representation"],
                  [("<b>Ours</b>", f"{d['m']['mapping']['wall_accuracy_m'] * 100:.1f} cm", f"{d['m']['mapping']['wall_completion_m'] * 100:.1f} cm",
@@ -431,7 +443,7 @@ def build_html(d, x, figs):
                   (f"MNE-SLAM (Replica)", f"{mn[1]} cm", f"{mn[2]} cm", f"{mn[3]} %", "3D neural implicit map, mesh surfaces, GPU")], [110, 70, 70, 80, 200], raw_cols=(0,)))
     h.append("<p><b>Reading:</b> the metrics share names but not definitions or scenes. A 5 cm grid cannot resolve better than about 2.5 cm, so a "
              "cell-to-cell comparison with a 1.7 cm mesh error is not fair. We make no better/worse claim.</p>")
-    h.append("<h3>3e. Experiments that would make a fair comparison possible</h3>")
+    h.append("<h3>3f. Experiments that would make a fair comparison possible</h3>")
     h.append("<p>(1) Run Cartographer or another open 2D SLAM on this run's recorded scans and odometry: identical data and ground truth, the only "
              "head-to-head available (F25). (2) Run a standard nearest-frontier explorer in the same arena with the same robot for time to complete (F26). "
              "(3) Repeat our run at least three times with different gyro seeds to give a spread (F18). (4) Hardware validation (F24).</p>")
@@ -455,12 +467,9 @@ def build_html(d, x, figs):
     return "".join(h)
 
 
-def build(run_dir, out=None):
-    d = load_run(run_dir)
-    x = derived(d)
-    figs = figures(d, x)
-    out = out or os.path.join(ROOT, "docs", "BASELINE_REPORT.pdf")
-    story = fitz.Story(html=build_html(d, x, figs), user_css=CSS, archive=fitz.Archive(run_dir))
+def render(html_text, run_dir, out, footer):
+    """HTML -> A4 PDF with page numbers (shared with results_pdf)."""
+    story = fitz.Story(html=html_text, user_css=CSS, archive=fitz.Archive(run_dir))
     raw = out + ".raw"
     writer = fitz.DocumentWriter(raw)
     page = fitz.paper_rect("a4")
@@ -474,7 +483,7 @@ def build(run_dir, out=None):
     writer.close()
     doc = fitz.open(raw)
     for i, pg in enumerate(doc):
-        pg.insert_text((34, 818), f"Baseline run {d['m']['run_id']}", fontsize=7, color=(0.4, 0.4, 0.4))
+        pg.insert_text((34, 818), footer, fontsize=7, color=(0.4, 0.4, 0.4))
         pg.insert_text((520, 818), f"page {i + 1} / {len(doc)}", fontsize=7, color=(0.4, 0.4, 0.4))
     doc.save(out, garbage=3, deflate=True)
     doc.close()
@@ -487,6 +496,14 @@ def build(run_dir, out=None):
         pass
     print(f"  [SAVED] {out}")
     return out
+
+
+def build(run_dir, out=None):
+    d = load_run(run_dir)
+    x = derived(d)
+    figs = figures(d, x)
+    out = out or os.path.join(ROOT, "docs", "DIAGNOSTIC_REPORT.pdf")
+    return render(build_html(d, x, figs), run_dir, out, f"Diagnostic report, run {d['m']['run_id']}")
 
 
 if __name__ == "__main__":

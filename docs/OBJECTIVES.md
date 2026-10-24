@@ -14,7 +14,7 @@ compare against.
 - Do not optimize to improve numbers; do not finalize competitor comparisons before the baseline is verified.
 
 ## Requirements and status
-Status as of baseline run `20261024_210638`. Results: `docs/BASELINE_REPORT.pdf` (shareable), `docs/BASELINE.md`, `runs/20261024_210638/REPORT.md` (raw). Fixes: `docs/FIXES.md`.
+Status as of baseline run `20261024_210638`. Results: `docs/RESULTS.pdf` (shareable), `docs/DIAGNOSTIC_REPORT.pdf` (internal), `docs/BASELINE.md`, `runs/20261024_210638/REPORT.md` (raw). Fixes: `docs/FIXES.md`.
 
 | # | Requirement | Status | Where / note |
 |---|---|---|---|
@@ -41,7 +41,8 @@ Status as of baseline run `20261024_210638`. Results: `docs/BASELINE_REPORT.pdf`
 | Diagnose why it revisits rooms and cells | Done (diagnosis); fixes not applied yet |
 | Explain agent efficiency and whether changes alter results | Answered; profiling pending |
 | Commit baseline snapshot, finish baseline, update docs, clean the repo | Done |
-| Draft results, compare with published systems, PDF with explanations and good/improve/poor classes, fix register, organize the repo | Done (`docs/BASELINE_REPORT.pdf`, `docs/FIXES.md`, `evaluation/` package) |
+| Draft results, compare with published systems, PDF with explanations and good/improve/poor classes, fix register, organize the repo | Done (`docs/DIAGNOSTIC_REPORT.pdf`, `docs/FIXES.md`, `evaluation/` package) |
+| Compare SLAM as a whole (pose + map), and a separate shareable PDF with results and comparison only, each value defined, no explanations | Done (`docs/RESULTS.pdf`) |
 
 ## Next steps (in order; details and acceptance checks in `docs/FIXES.md`)
 1. Profile one short run (`cProfile`) to find where the 3074 s outside the agents goes (F12).

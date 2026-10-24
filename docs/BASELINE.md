@@ -1,7 +1,7 @@
 # Baseline (run 20261024_210638)
 
-The shareable result is [`BASELINE_REPORT.pdf`](BASELINE_REPORT.pdf): our results with what each value is, why it came out that
-way and a Good / Improve / Poor class, then the comparison with published systems. The raw record is
+[`RESULTS.pdf`](RESULTS.pdf) is the shareable document (values, definitions, comparison). [`DIAGNOSTIC_REPORT.pdf`](DIAGNOSTIC_REPORT.pdf) is for
+internal use: why each value came out that way, a Good / Improve / Poor class, then the comparison with published systems. The raw record is
 [`runs/20261024_210638/REPORT.md`](../runs/20261024_210638/REPORT.md). Every fix needed is in [`FIXES.md`](FIXES.md).
 Nothing has been optimized yet.
 
@@ -38,7 +38,10 @@ Observation to investigate, not a conclusion: odometry plus gyro alone has a *lo
    (single targets planned 11-21 times; 1814 paths).
 4. Room labels change as the map grows: 18 room-entered events for 8 rooms, which restarts room sweeps.
 
-## Comparison (PDF section 3)
+## Comparison (diagnostic PDF section 3, shareable PDF sections 6-10)
+SLAM as a whole (pose and map together, against RGB-D systems evaluated on Replica): pose error 31.0 cm against 0.37-1.06 cm, wall accuracy 12.9 cm against
+1.6-2.1 cm, completion ratio 54 % against 90-97 %; but 0.19 MB of map against 20-31 MB and 0.02 s of mapping per frame against 0.14-10.5 s. The scenes,
+map representation (2D wall cells against 3D surfaces) and sensing differ, so this locates the gap, not a ranking.
 No published system was evaluated under our conditions, so **none is directly comparable**. Closest, all partial: the A1 SLAM paper
 (quadruped, 5 m paths), the ANYmal D evaluation (quadruped, 145-332 m, mostly outdoors) and FARE (exploration, wheeled).
 - Localization: our ATE per path length (0.20 %) is the same order as ORB-SLAM3 stereo (derived 0.14 %) and above FAST-LIVO2 (0.04 %); no claim to beat them.
