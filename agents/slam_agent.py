@@ -105,7 +105,7 @@ class SLAMAgent(BaseAgent):
                 rmse=float(getattr(slam_pose, 'rmse', 0.0))
             ))
 
-            if (current_time - getattr(self, 'last_log_time', 0.0)) > 3.0:
+            if (current_time - getattr(self, "last_log_time", 0.0)) > 30.0:
                 self.last_log_time = current_time
                 n_kfs = len(self.pose_estimator.loop_manager.keyframes)
                 rmse = float(getattr(slam_pose, 'rmse', 0.0))

@@ -14,3 +14,6 @@ accuracy_results/
 evaluation_results_images/
 recordings/
 
+
+# Per-run raw recordings are large; the rest of runs/<id>/ (metrics, manifest, csv) is kept
+runs/*/recording.npz

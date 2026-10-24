@@ -65,7 +65,7 @@ class PerceptionAgent(BaseAgent):
             world_points_3d=pts_map  # Backwards compatibility
         ))
 
-        if (timestamp - getattr(self, 'last_log_time', 0.0)) > 3.0:
+        if (timestamp - getattr(self, 'last_log_time', 0.0)) > 30.0:
             self.last_log_time = timestamp
             min_d = float(np.min(dist_obs)) if len(pts_obs) > 0 else 99.0
             print(f"  [PERCEPTION] Body-frame Scan: {len(sampled_2d)} pts | Closest obstacle: {min_d:.2f}m")
