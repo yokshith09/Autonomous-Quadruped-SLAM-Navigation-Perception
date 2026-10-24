@@ -85,6 +85,47 @@ def loss_episodes(accepted, times, min_len=TRACK_LOSS_MIN_UPDATES):
     return eps
 
 
+OVERHEAD_BASIS = ("calibrated estimate: micro-benchmarked cost of the per-agent timing wrapper x calls per step, plus measured "
+                  "tracking bookkeeping; recording the scan stream is not included and no uninstrumented A/B run was made")
+
+
+def overhead_per_step_ms(total_calls, steps, n=50_000):
+    """Estimated telemetry cost per control step: wrapper cost (timed here against a no-op agent) x calls / steps."""
+    class _A:
+        name = "x"
+
+        def step(self, t):
+            pass
+
+    a, lat, calls = _A(), [], Counter()
+    t0 = time.perf_counter()
+    for _ in range(n):
+        a.step(0.0)
+    base = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    for _ in range(n):
+        s = time.perf_counter()
+        a.step(0.0)
+        lat.append((time.perf_counter() - s) * 1000.0)
+        calls["x"] += 1
+    per_call_ms = max(0.0, (time.perf_counter() - t0) - base) * 1000.0 / n
+    return per_call_ms * total_calls / max(1, steps)
+
+
+def extra_warnings(overall, loc):
+    """Data-quality warnings derived from the computed metrics (shared by the live summary and the report)."""
+    w, end = [], str(overall.get("end_reason", ""))
+    if end.startswith(("timeout", "max steps")):
+        w.append(f"run ended by a limit ({end}), not by mission completion: coverage, rooms completed and task success are lower bounds")
+    elif overall.get("task_success") is False:
+        w.append(f"mission did not report completion ({end})")
+    acc = loc.get("icp_acceptance_pct")
+    if isinstance(acc, float) and acc < 50.0:
+        w.append(f"scan matching passed its acceptance gates on only {acc:.0f} % of updates; rejection reasons are not recorded "
+                 f"(and the flag is not refreshed for scans with <20 points), so this is a diagnostic indicator, not a failure rate")
+    return w
+
+
 def first_crossing(times, err, thr):
     idx = np.nonzero(np.asarray(err) > thr)[0]
     return float(times[idx[0]]) if len(idx) else None
@@ -202,7 +243,7 @@ class RunTelemetry:
             "distance_travelled_gt_m": dist,
             "rooms_discovered": ctx.get("rooms_discovered"),
             "rooms_completed": ctx.get("rooms_completed"),
-            "doorways_detected": ev.get("DOORWAY_DETECTED", 0),
+            "doorways_detected": ctx.get("doorways_detected", na("not supplied by the run")),
             "explored_free_area_m2": ctx.get("free_area_m2"),
             "explored_pct_of_bounding_box": ctx.get("explored_pct"),
             "stuck_events": ev.get("ROBOT_STUCK", 0),
@@ -305,7 +346,8 @@ class RunTelemetry:
             "slam_tracking_p50_ms": pctl(self.lat.get("SLAMAgent", []), 50),
             "slam_tracking_p95_ms": pctl(self.lat.get("SLAMAgent", []), 95),
             "bottleneck_agent": max(agent_rows, key=lambda r: r["total_s"])["agent"] if agent_rows else None,
-            "telemetry_overhead_ms_per_step": self.overhead_s * 1000.0 / max(1, n),
+            "telemetry_overhead_ms_per_step": overhead_per_step_ms(sum(self.calls.values()), n) + self.overhead_s * 1000.0 / max(1, n),
+            "telemetry_overhead_basis": OVERHEAD_BASIS,
             "note": "process CPU % is per-process and may exceed 100 on multi-core; CoppeliaSim runs in its own process and is not included",
         }
 
@@ -318,6 +360,7 @@ class RunTelemetry:
             warnings.append("run used --ground-truth-nav: navigation did not depend on SLAM")
         if sim_t < 120:
             warnings.append("run shorter than 2 min: metrics are not representative")
+        warnings += extra_warnings(overall, loc)
         limitations = [
             "Single run: no repeatability or variance claims.",
             "Ground truth = CoppeliaSim body pose (exact, same timestamps; no alignment applied because SLAM starts at the GT start pose).",
