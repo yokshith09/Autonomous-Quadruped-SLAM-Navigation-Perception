@@ -1,20 +1,19 @@
+# Python
 __pycache__/
 *.py[cod]
-*.class
 .ipynb_checkpoints/
+
+# Logs and raw per-run recordings (large; recording.npz stays local, its checksum is in each run's REPORT.md)
 *.log
-# Playwright CLI output (may contain credentials)
-.playwright-cli/
+runs/*/recording.npz
+*.pdf.raw
+
+# Written by main_agentic.py on every run (a copy is kept in runs/<run_id>/artifacts)
+accuracy_results/
+captured_matrices/
+
+# Local tooling
 .agents/
 .claude/
 .anchor/
-# Regenerated on every run by main_agentic.py / evaluate_all_metrics.py
-captured_matrices/
-accuracy_results/
-evaluation_results_images/
-recordings/
-
-
-# Per-run raw recordings are large; the rest of runs/<id>/ (metrics, manifest, csv) is kept
-runs/*/recording.npz
-*.pdf.raw
+.playwright-cli/

@@ -16,7 +16,7 @@ import numpy as np
 from agents import MessageBus, SLAMAgent
 from agents.bus import ActuationMsg, ScanMsg
 from evaluation.accuracy_evaluator import evaluate_trajectory
-from robot import gait_body_speed
+from core.robot import gait_body_speed
 
 
 def replay(path, overrides=None, verbose=False):

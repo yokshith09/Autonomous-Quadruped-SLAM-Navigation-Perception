@@ -6,7 +6,7 @@ from scipy.ndimage import distance_transform_edt
 from typing import List, Tuple, Dict, Optional
 from .base import BaseAgent
 from .bus import MessageBus, GridMapMsg, ScanMsg, PoseMsg, MissionEventMsg
-from grid import BayesianOccupancyGrid, GRID_RES
+from core.grid import BayesianOccupancyGrid, GRID_RES
 
 
 class MappingAgent(BaseAgent):

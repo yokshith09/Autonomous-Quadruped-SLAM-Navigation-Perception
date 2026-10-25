@@ -32,10 +32,10 @@ from agents import (
     MessageBus, PoseMsg, PerceptionAgent, SLAMAgent, MappingAgent, FrontierAgent, PlanningAgent,
     LocomotionAgent, SupervisorAgent
 )
-from robot import LizardRobot, patch_coppelasim_scripts, norm_angle
-from sensors import initialize_sensors, get_depth_heatmap
-from grid import BayesianOccupancyGrid
-from viz import create_debug_dashboard
+from core.robot import LizardRobot, patch_coppelasim_scripts, norm_angle
+from core.sensors import initialize_sensors, get_depth_heatmap
+from core.grid import BayesianOccupancyGrid
+from core.viz import create_debug_dashboard
 from evaluation.accuracy_evaluator import evaluate_grid_accuracy, evaluate_trajectory
 from evaluation import report
 from evaluation.run_telemetry import RunTelemetry
@@ -462,11 +462,11 @@ def main():
             print(f"  [SAVED] SLAM input recording ({n_rec} steps) -> {args.record}")
 
         # Export Knowledge Graph & Episodic Memory
-        report = supervisor_agent.export_mission_report()
+        mission_report = supervisor_agent.export_mission_report()
         with open("accuracy_results/knowledge_graph.json", "w", encoding="utf-8") as f:
-            f.write(report["knowledge_graph"])
+            f.write(mission_report["knowledge_graph"])
         with open("accuracy_results/mission_timeline.md", "w", encoding="utf-8") as f:
-            f.write(report["timeline_markdown"])
+            f.write(mission_report["timeline_markdown"])
         print("  [SAVED] Spatial Knowledge Graph -> accuracy_results/knowledge_graph.json")
         print("  [SAVED] Episodic Timeline -> accuracy_results/mission_timeline.md")
 
@@ -561,6 +561,9 @@ def main():
                         "accuracy_results/knowledge_graph.json", "accuracy_results/mission_timeline.md"):
                 if os.path.exists(src):
                     shutil.copy(src, art)
+            if os.path.exists(os.path.join("evaluation", "data", "scene_truth.json")):  # scene geometry for scoring only (evaluation/scene_truth.py)
+                from evaluation import truth_eval
+                truth_eval.evaluate(tel.dir)
             report.build(tel.dir)
             print(f"  Next: python -m evaluation.ablate {tel.dir}   then   python -m evaluation.report {tel.dir}", flush=True)
         except Exception as e:

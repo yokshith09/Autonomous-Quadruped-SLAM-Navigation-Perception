@@ -2,7 +2,7 @@
 import math
 from .base import BaseAgent
 from .bus import MessageBus, PoseMsg, ScanMsg, ActuationMsg, MissionEventMsg
-from slam import ICPPoseEstimator, wrap_angle
+from core.slam import ICPPoseEstimator, wrap_angle
 
 
 class SLAMAgent(BaseAgent):

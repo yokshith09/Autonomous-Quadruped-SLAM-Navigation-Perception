@@ -3,7 +3,7 @@ import numpy as np
 from typing import Optional
 from .base import BaseAgent
 from .bus import MessageBus, RGBDMsg, ScanMsg
-from sensors import depth_to_base_points, grab_depth_frame, grab_rgb_frame
+from core.sensors import depth_to_base_points, grab_depth_frame, grab_rgb_frame
 
 
 class PerceptionAgent(BaseAgent):

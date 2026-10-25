@@ -111,6 +111,19 @@ Reference = occupancy grid built from the same depth stream with the ground-trut
 
 ![map overlay](map_overlay.png)
 
+### 4b. Against the real scene (wall and object geometry read from CoppeliaSim, scoring only)
+
+| Metric | Value | Meaning |
+|---|---|---|
+| Map accuracy / completion | 10.6 / 9.2 cm | mapped obstacle cells to real ones / real to mapped (mean) |
+| Map precision / recall / F1 | 73.9 / 81.8 / 77.7 % | within 15 cm of a real wall or object |
+| Same, map built with the true pose | accuracy 0.2 cm, recall 89.5 % | what the sensor allows with perfect localization |
+| Real floor mapped as free | 88.2 % of 85.2 m2 | true coverage |
+| Free space mapped outside the arena | 0.59 m2 | impossible in reality; source of phantom frontiers |
+| Object detections on a real object | 24 of 113 (21.2 %) | within 0.5 m of one of 13 real objects |
+| Real objects with a detection nearby | 13 of 13 | inflated by the many scattered detections |
+| 'Chair' labels on the real chair | 1 of 113 (scene has 1 chair) | chair label = blob 0.18-1.05 m across |
+
 ## 5. Computational performance
 
 | Metric | Value |
