@@ -5,7 +5,7 @@ A legged robot that explores an unknown building on its own. It works out where 
 This repository also contains a **measurement framework** that evaluates the system honestly: every number in this README is computed from a recorded run and scored against the simulator's ground truth.
 
 > **Demo video:** [Watch the demo](PASTE_GOOGLE_DRIVE_LINK_HERE)
-> **Full report:** [`docs/results/PROJECT_REPORT.pdf`](docs/results/PROJECT_REPORT.pdf) (20 pages) | **Results to share:** [`docs/results/RESULTS.pdf`](docs/results/RESULTS.pdf)
+> **Full report:** [`PROJECT_REPORT.pdf`](docs/results/PROJECT_REPORT.pdf) (20 pages) or the editable Word version [`PROJECT_REPORT.docx`](docs/results/PROJECT_REPORT.docx) | **Results to share:** [`docs/results/RESULTS.pdf`](docs/results/RESULTS.pdf)
 
 <p align="center"><img src="docs/images/map_overlay.png" width="900" alt="Map built by the robot, with the true and estimated paths, next to the reference map"></p>
 <p align="center"><em>Left: the map the robot built in one 30-minute run (true path blue, estimated path orange, unexplored boundaries red). Right: the same scene mapped with the true position, for reference.</em></p>
@@ -151,7 +151,7 @@ scene/               the CoppeliaSim scene
 tests/               formula and algorithm tests
 runs/                one folder per measured run (the raw recording stays local)
 docs/
-  results/           PROJECT_REPORT.pdf, RESULTS.pdf (to share), DIAGNOSTIC_REPORT.pdf (internal)
+  results/           PROJECT_REPORT.pdf and .docx, RESULTS.pdf (to share), DIAGNOSTIC_REPORT.pdf (internal)
   project/           OBJECTIVES.md, BASELINE.md, FIXES.md
   system_architecture_diagram.html   project architecture diagram (course document)
   images/            figures used in this README
@@ -168,7 +168,7 @@ Each run folder contains `REPORT.md`, `metrics.json`, `trajectory.csv`, `manifes
 | Read the scene's wall and object geometry | `python -m evaluation.scene_truth` (simulator open, not running) |
 | Rebuild a run's report | `python -m evaluation.report runs/<run_id>` |
 | Internal diagnostic PDF | `python -m evaluation.baseline_pdf runs/<run_id>` |
-| Full project report PDF | `python -m evaluation.project_report runs/<run_id>` |
+| Full project report (PDF and Word) | `python -m evaluation.project_report runs/<run_id>` |
 | Regenerate the README figures | `python -m evaluation.make_figures runs/<run_id>` |
 | Replay SLAM variants on a recording | `python -m evaluation.slam_replay runs/<run_id>/recording.npz --set icp_yaw_weight=0.2` |
 | Tests | `python tests/test_agents.py`, `python tests/test_slam_accuracy.py`, `python tests/test_run_telemetry.py` |

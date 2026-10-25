@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Complete formal project report (PDF): problem, system, methods, evaluation method, results, comparison, analysis, roadmap.
 
-  python -m evaluation.project_report runs/<run_id> [out.pdf]
+  python -m evaluation.project_report runs/<run_id> [out.pdf]   # also writes the .docx next to it
 
 All measured numbers are read from the run directory (metrics.json, truth_eval.json, ablation.json, progress.csv,
 trajectory.csv, artifacts/) and all published numbers from evaluation/benchmarks.py, so the text cannot drift from the data.
@@ -505,7 +505,11 @@ def build(run_dir, out=None):
     d = load_run(run_dir)
     x = derived(d)
     out = out or os.path.join(ROOT, "docs", "results", "PROJECT_REPORT.pdf")
-    return render(build_html(d, x), IMG, out, f"Project report, baseline run {d['m']['run_id']}")
+    html = build_html(d, x)
+    footer = f"Project report, baseline run {d['m']['run_id']}"
+    render(html, IMG, out, footer)
+    from evaluation.docx_export import export  # the same content as an editable Word document
+    return export(html, IMG, os.path.splitext(out)[0] + ".docx", footer, "Autonomous Quadruped Multi-Agent SLAM and Exploration: project report")
 
 
 if __name__ == "__main__":

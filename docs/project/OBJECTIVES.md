@@ -44,7 +44,7 @@ Status as of baseline run `20261024_210638`. Results: `docs/results/RESULTS.pdf`
 | Draft results, compare with published systems, PDF with explanations and good/improve/poor classes, fix register, organize the repo | Done (`docs/results/DIAGNOSTIC_REPORT.pdf`, `docs/project/FIXES.md`, `evaluation/` package) |
 | Compare SLAM as a whole (pose + map), and a separate shareable PDF with results and comparison only, each value defined, no explanations | Done (`docs/results/RESULTS.pdf`) |
 | Measure only, no fixes; plain results for the IEEE draft; score against the real scene; documents for run 1 only | Done (`docs/results/RESULTS.pdf`, `docs/project/BASELINE.md`) |
-| Complete formal project report (what, inputs, outputs, processing, why, methods, all results, comparisons, evaluation, graphs) and a restructured README with quick start | Done (`docs/results/PROJECT_REPORT.pdf`, `README.md`) |
+| Complete formal project report (what, inputs, outputs, processing, why, methods, all results, comparisons, evaluation, graphs) and a restructured README with quick start | Done (`docs/results/PROJECT_REPORT.pdf` and `.docx`, `README.md`) |
 | Full market comparison and a like-for-like reference for later dataset runs | Done (RESULTS.pdf sections 13-14): 6 commercial systems; TUM RGB-D Pioneer reference, ours not yet run |
 
 ## Next steps (in order; details and acceptance checks in `docs/project/FIXES.md`)
