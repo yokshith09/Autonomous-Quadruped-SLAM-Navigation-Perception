@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from slam import (
+from core.slam import (
     estimate_normals_2d, icp_point_to_line,
     KeyframeLoopManager, ICPPoseEstimator, wrap_angle, world_to_base_points
 )
@@ -110,7 +110,7 @@ def test_loop_closure_rotated_keyframe():
 
 def test_degenerate_direction_removed():
     print("Running test_degenerate_direction_removed...", end=" ")
-    from slam import project_out_degenerate
+    from core.slam import project_out_degenerate
     xs = np.linspace(0.0, 3.0, 60)
     corridor = np.vstack([np.column_stack([xs, np.full(60, 1.0)]), np.column_stack([xs, np.full(60, -1.0)])])
     normals = estimate_normals_2d(corridor)
@@ -125,7 +125,7 @@ def test_degenerate_direction_removed():
 
 def test_dominant_wall_angle():
     print("Running test_dominant_wall_angle...", end=" ")
-    from slam import dominant_wall_angle
+    from core.slam import dominant_wall_angle
     xs = np.linspace(0.0, 3.0, 60)
     corner = np.vstack([np.column_stack([xs, np.zeros(60)]), np.column_stack([np.full(60, 3.0), xs])])
     th = math.radians(20.0)
@@ -149,7 +149,7 @@ def test_world_to_base_projection():
 
 def test_depth_to_base_projection():
     print("Running test_depth_to_base_projection...", end=" ")
-    from sensors import depth_to_base_points
+    from core.sensors import depth_to_base_points
     cam_matrix = {'fx': 100.0, 'fy': 100.0, 'cx': 50.0, 'cy': 50.0}
     # Synthetic depth: 100x100 array with 2.0 meters at center
     depth_img = np.zeros((100, 100), dtype=np.float32)

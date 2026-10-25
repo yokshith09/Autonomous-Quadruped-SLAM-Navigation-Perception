@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple, Set, Optional
 from .base import BaseAgent
 from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEventMsg
-from robot import norm_angle
+from core.robot import norm_angle
 
 
 class FrontierAgent(BaseAgent):

@@ -4,7 +4,7 @@ import numpy as np
 from typing import List, Tuple, Optional
 from .base import BaseAgent
 from .bus import MessageBus, ActuationMsg, PathMsg, PoseMsg, ScanMsg, MissionEventMsg
-from robot import LizardRobot, gait_body_speed, norm_angle
+from core.robot import LizardRobot, gait_body_speed, norm_angle
 
 
 class LocomotionAgent(BaseAgent):

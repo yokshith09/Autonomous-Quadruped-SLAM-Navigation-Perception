@@ -55,7 +55,7 @@ def load(path):
 
 def map_overlay(run_dir):
     import cv2
-    from grid import BayesianOccupancyGrid
+    from core.grid import BayesianOccupancyGrid
     art = os.path.join(run_dir, "artifacts")
     if not all(os.path.exists(os.path.join(art, n)) for n in ("slam_grid.npy", "true_grid.npy")):
         return None
@@ -90,6 +90,7 @@ def map_overlay(run_dir):
 def build(run_dir):
     m, man = load(os.path.join(run_dir, "metrics.json")), load(os.path.join(run_dir, "manifest.json"))
     abl = load(os.path.join(run_dir, "ablation.json"))
+    truth = load(os.path.join(run_dir, "truth_eval.json"))
     kg = load(os.path.join(run_dir, "artifacts", "knowledge_graph.json"))
     o, loc, mp, c, a, q = m["overall"], m["localization"], m["mapping"], m["compute"], m["agents"], m["data_quality"]
 
@@ -211,6 +212,19 @@ def build(run_dir):
         ("Frontiers remaining", fmt(mp["frontiers_remaining"]), "unexplored boundaries left (see map_overlay.png)")]))
     if map_overlay(run_dir):
         md.append("![map overlay](map_overlay.png)\n")
+
+    if truth:
+        g, f, dt = truth["map_vs_scene"], truth["reference_vs_scene"], truth["detection"]
+        md.append("### 4b. Against the real scene (wall and object geometry read from CoppeliaSim, scoring only)\n")
+        md.append(table(["Metric", "Value", "Meaning"], [
+            ("Map accuracy / completion", f"{cm(g['accuracy_meters']):.1f} / {cm(g['completion_meters']):.1f} cm", "mapped obstacle cells to real ones / real to mapped (mean)"),
+            ("Map precision / recall / F1", f"{100 * g['precision']:.1f} / {100 * g['recall']:.1f} / {100 * g['f1_score']:.1f} %", "within 15 cm of a real wall or object"),
+            ("Same, map built with the true pose", f"accuracy {cm(f['accuracy_meters']):.1f} cm, recall {100 * f['recall']:.1f} %", "what the sensor allows with perfect localization"),
+            ("Real floor mapped as free", f"{truth['floor_mapped_as_free_pct']:.1f} % of {truth['true_floor_area_m2']:.1f} m2", "true coverage"),
+            ("Free space mapped outside the arena", f"{truth['free_mapped_outside_arena_m2']:.2f} m2", "impossible in reality; source of phantom frontiers"),
+            ("Object detections on a real object", f"{dt['detections_on_a_real_object']} of {dt['detections']} ({dt['detection_precision_pct']:.1f} %)", f"within {truth['match_radius_m']} m of one of {dt['real_objects']} real objects"),
+            ("Real objects with a detection nearby", f"{dt['objects_found']} of {dt['real_objects']}", "inflated by the many scattered detections"),
+            ("'Chair' labels on the real chair", f"{dt['chair_labels_on_the_real_chair']} of {dt['labelled_chair']} (scene has {dt['real_chairs']} chair)", "chair label = blob 0.18-1.05 m across")]))
 
     # ---- 5
     md.append("## 5. Computational performance\n")

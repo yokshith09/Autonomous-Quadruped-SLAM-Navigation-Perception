@@ -1,29 +1,39 @@
 """Comparison tables: our measured values next to published numbers quoted from benchmarks.py (each tied to its source).
 
-Every function returns (headers, rows, widths). A first column starting with '<b>' marks our own row. 'derived' marks a value
-obtained by dividing two published numbers. Nothing here is typed in from memory: ours come from the run, theirs from benchmarks.py.
+Every function takes `runs` = [(label, d, x), ...] (one row of ours per run) and returns (headers, rows, widths). A first
+column starting with '<b>' marks our own rows. 'derived' marks a value obtained by dividing two published numbers. Nothing here
+is typed in from memory: ours come from the run files, theirs from benchmarks.py.
 """
 from evaluation import benchmarks as B
 
-REF = {"MNE": 1, "ORB2": 2, "A1": 3, "QUAD": 4, "FARE": 5, "SPOT": 6, "ANYMAL": 7, "GO2": 8}
+REF = {"MNE": 1, "ORB2": 2, "A1": 3, "QUAD": 4, "FARE": 5, "SPOT": 6, "ANYMAL": 7, "GO2": 8, "B2": 9, "X30": 10, "HOVERMAP": 11, "MM": 12}
 
 
 def ref_list():
     return [f"[{n}] {B.SOURCES[k][1]} {B.SOURCES[k][2]}" for k, n in REF.items()]
 
 
-def _ours(d, x):
-    m = d["m"]
-    return m["localization"], m["mapping"], x["agents"], m["compute"]
+def map_scores(d):
+    """(accuracy cm, completion cm, ratio within 5 cm %, basis): against the real scene when available, else the sensor reference."""
+    t = d.get("truth")
+    if t:
+        g = t["map_vs_scene"]
+        return g["accuracy_meters"] * 100, g["completion_meters"] * 100, g["completion_ratio_5cm"] * 100, "real scene walls and objects"
+    mp = d["m"]["mapping"]
+    return mp["wall_accuracy_m"] * 100, mp["wall_completion_m"] * 100, mp["completion_ratio_5cm_pct"], "reference grid (true pose)"
 
 
-def slam_combined(d, x):
+def slam_combined(runs):
     """Pose + map + cost together: the SLAM comparison against RGB-D systems evaluated on Replica."""
-    loc, mp, ag, c = _ours(d, x)
+    rows = []
+    for label, d, x in runs:
+        loc, mp = d["m"]["localization"], d["m"]["mapping"]
+        acc, comp, ratio, basis = map_scores(d)
+        rows.append((f"<b>Ours, {label}</b>", f"simulated 8-room arena, {x['dist']:.0f} m; forward RGB-D to 2D scan + gait odometry + gyro; "
+                     f"2D occupancy grid scored against {basis}; CPU [this work]",
+                     f"{loc['ate_rmse_m'] * 100:.1f}", f"{acc:.1f} / {comp:.1f} / {ratio:.1f}",
+                     f"{x['agents']['SLAMAgent']['p50_ms']:.1f}", f"{x['agents']['MappingAgent']['p50_ms'] / 1000:.3f}", f"{mp['map_memory_mb']:.2f}"))
     runtime = {n: (ms, mem, trk) for n, ms, trk, mem in B.MNE_RUNTIME}
-    rows = [("<b>Ours</b>", "simulated 8-room arena, 158 m; forward RGB-D to 2D scan + gait odometry + gyro; 2D occupancy grid; CPU [this work]",
-             f"{loc['ate_rmse_m'] * 100:.1f}", f"{mp['wall_accuracy_m'] * 100:.1f} / {mp['wall_completion_m'] * 100:.1f} / {mp['completion_ratio_5cm_pct']:.1f}",
-             f"{ag['SLAMAgent']['p50_ms']:.1f}", f"{ag['MappingAgent']['p50_ms'] / 1000:.3f}", f"{mp['map_memory_mb']:.2f}")]
     for name in ("MNE-SLAM", "Loopy-SLAM", "GO-SLAM", "ESLAM", "Co-SLAM", "Point-SLAM"):
         n, acc, comp, ratio, ate = next(r for r in B.MNE_REPLICA if r[0] == name)
         rt = runtime.get(name)
@@ -34,27 +44,27 @@ def slam_combined(d, x):
     return h, rows, [70, 150, 44, 92, 44, 44, 44]
 
 
-def apartment(d, x):
-    loc, _, _, _ = _ours(d, x)
-    rows = [("<b>Ours</b>", "own 8-room arena, 158 m [this work]", f"{loc['ate_rmse_m'] * 100:.1f}")]
+def apartment(runs):
+    rows = [(f"<b>Ours, {label}</b>", f"own 8-room arena, {x['dist']:.0f} m [this work]", f"{d['m']['localization']['ate_rmse_m'] * 100:.1f}")
+            for label, d, x in runs]
     for name in ("MNE-SLAM", "ESLAM", "Loopy-SLAM", "ORB-SLAM3", "Swarm-SLAM", "CP-SLAM"):
         _, a1, a2, a0 = next(r for r in B.MNE_APARTMENT if r[0] == name)
         rows.append((name, "Replica multi-room apartments 1 / 2 / 0 [1]", " / ".join("-" if v is None else f"{v:.2f}" for v in (a1, a2, a0))))
     return ["System", "Test conditions", "ATE RMSE (cm)"], rows, [90, 250, 120]
 
 
-def quadruped_pose(d, x):
-    loc, _, _, c = _ours(d, x)
+def quadruped_pose(runs):
     mean_dist = sum(B.QUAD_MISSION_DIST_M) / len(B.QUAD_MISSION_DIST_M)
     a1 = B.A1_SHORT_TRAJECTORIES
-    rows = [("<b>Ours</b>", "simulation, simulator pose [this work]", f"{x['dist']:.0f}", f"{loc['ate_rmse_m'] * 100:.1f}",
-             f"{x['ate_pct_path']:.2f}", f"{c['process_cpu_pct_mean']:.0f} / {c['rss_mb_mean'] / 1000:.1f}"),
-            ("A1 SLAM", "real Unitree A1, lab, motion capture [3]", f"{min(r[1] for r in a1):.1f}-{max(r[1] for r in a1):.1f}",
-             f"{min(r[4] for r in a1) * 100:.1f}-{max(r[4] for r in a1) * 100:.1f}",
-             f"{min(r[4] / r[1] for r in a1) * 100:.1f}-{max(r[4] / r[1] for r in a1) * 100:.1f}", "-"),
-            ("Cartographer", "real Unitree A1, lab, motion capture [3]", f"{min(r[1] for r in a1):.1f}-{max(r[1] for r in a1):.1f}",
-             f"{min(r[3] for r in a1) * 100:.1f}-{max(r[3] for r in a1) * 100:.1f}",
-             f"{min(r[3] / r[1] for r in a1) * 100:.1f}-{max(r[3] / r[1] for r in a1) * 100:.1f}", "-")]
+    rows = []
+    for label, d, x in runs:
+        loc, c = d["m"]["localization"], d["m"]["compute"]
+        rows.append((f"<b>Ours, {label}</b>", "simulation, simulator pose [this work]", f"{x['dist']:.0f}", f"{loc['ate_rmse_m'] * 100:.1f}",
+                     f"{x['ate_pct_path']:.2f}", f"{c['process_cpu_pct_mean']:.0f} / {c['rss_mb_mean'] / 1000:.1f}"))
+    for name, col in (("A1 SLAM", 4), ("Cartographer", 3)):
+        rows.append((name, "real Unitree A1, lab, motion capture [3]", f"{min(r[1] for r in a1):.1f}-{max(r[1] for r in a1):.1f}",
+                     f"{min(r[col] for r in a1) * 100:.1f}-{max(r[col] for r in a1) * 100:.1f}",
+                     f"{min(r[col] / r[1] for r in a1) * 100:.1f}-{max(r[col] / r[1] for r in a1) * 100:.1f}", "-"))
     for meth, sens, ate, _, cpu, ram in B.QUAD_SLAM:
         if (meth, sens) in (("FAST-LIVO2", "LiDAR + camera + IMU (Honeywell)"), ("ORB-SLAM3", "stereo (global shutter)"),
                             ("RTAB-Map", "stereo (global shutter)"), ("RTAB-Map", "RGB-D (ZED2i)"), ("ORB-SLAM3", "RGB-D (ZED2i)")):
@@ -64,21 +74,48 @@ def quadruped_pose(d, x):
     return (["System", "Test conditions", "Path (m)", "ATE RMSE (cm)", "ATE / path (%, derived)", "CPU (%) / RAM (GB)"], rows, [120, 120, 50, 80, 60, 60])
 
 
-def runtime(d, x):
-    _, _, ag, c = _ours(d, x)
-    rows = [("<b>Ours</b>", "SLAM update, median", f"{ag['SLAMAgent']['p50_ms']:.1f} ms", f"CPU only, {d['man'].get('cpu')} [this work]"),
-            ("ORB-SLAM2 (RGB-D)", "tracking per frame", f"{B.ORB2_TRACK_MS} ms", "Intel Core i7-4790, TUM fr3_office [2]"),
-            ("MNE-SLAM", "tracking per frame", "22.1 ms", "authors' hardware [1]"),
-            ("A1 SLAM / Cartographer", "optimization per scan", "1.65 / 0.96 ms", "optimizer call only [3]")]
+def runtime(runs):
+    rows = [(f"<b>Ours, {label}</b>", "SLAM update, median", f"{x['agents']['SLAMAgent']['p50_ms']:.1f} ms", f"CPU only, {d['man'].get('cpu')} [this work]")
+            for label, d, x in runs]
+    rows += [("ORB-SLAM2 (RGB-D)", "tracking per frame", f"{B.ORB2_TRACK_MS} ms", "Intel Core i7-4790, TUM fr3_office [2]"),
+             ("MNE-SLAM", "tracking per frame", "22.1 ms", "authors' hardware [1]"),
+             ("A1 SLAM / Cartographer", "optimization per scan", "1.65 / 0.96 ms", "optimizer call only [3]")]
     return ["System", "Quantity", "Value", "Hardware / note"], rows, [110, 100, 80, 190]
 
 
-def exploration(d, x):
-    o = d["m"]["overall"]
-    rows = [("<b>Ours</b>", "quadruped, forward RGB-D, 10 x 10 m arena [this work]", f"{x['dist']:.0f}", f"{o['sim_time_s']:.0f} (not completed)", f"{x['speed']:.3f}")]
+def exploration(runs):
+    rows = []
+    for label, d, x in runs:
+        o = d["m"]["overall"]
+        rows.append((f"<b>Ours, {label}</b>", "quadruped, forward RGB-D, 10 x 10 m arena [this work]", f"{x['dist']:.0f}",
+                     f"{o['sim_time_s']:.0f}" + ("" if o["task_success"] else " (not completed)"), f"{x['speed']:.3f}"))
     for n, dist, _, t, _ in B.FARE_INDOOR:
         rows.append((n, "wheeled robot, 16-channel 3D LiDAR, Gazebo indoor, max 2 m/s [5]", f"{dist}", f"{t}", f"{dist / t:.2f} (derived)"))
     rows += [("ANYmal (product page)", "quadruped, 360 deg LiDAR + depth cameras [7]", "-", "-", "0.75 normal walking"),
              ("Spot (product page)", "quadruped, 360 deg terrain sensing [6]", "-", "-", "1.6 maximum"),
              ("Go2 (product page)", "quadruped, 4D LiDAR [8]", "-", "-", "about 5 maximum (lab)")]
     return ["System", "Test conditions", "Distance (m)", "Time (s)", "Average speed (m/s)"], rows, [100, 220, 50, 70, 70]
+
+
+def market(runs):
+    """Capability comparison with commercial systems, from their product pages (not measured by us)."""
+    rows = []
+    for label, d, x in runs:
+        o = d["m"]["overall"]
+        rows.append((f"<b>Ours, {label}</b>", "quadruped (simulation)", "forward RGB-D camera, gait odometry, gyro",
+                     "Yes, frontier-based" + ("" if o["task_success"] else " (did not complete in our test)"), "No",
+                     f"{x['speed']:.3f} m/s measured", "not measured (simulation)", f"CPU laptop, {d['m']['compute']['process_cpu_pct_mean']:.0f} % of one core", "-"))
+    for e in B.MARKET + B.MARKET_2:
+        prior = {"SPOT": "Yes (recorded map / route)", "GO2": "Yes (user-specified path)"}.get(e["src"], "Not stated")
+        rows.append((f"{e['name']} [{REF[e['src']]}]", "quadruped" if e["src"] != "HOVERMAP" else "sensor payload",
+                     e["sensing"], e["explores_unknown"], prior, e["speed"], e["runtime"], e.get("compute", "not stated"), e.get("protection", "not stated")))
+    return (["System", "Platform", "Sensing", "Explores unknown space", "Needs prior map or path", "Speed", "Endurance", "Compute", "Protection"],
+            rows, [70, 50, 80, 60, 55, 55, 45, 60, 35])
+
+
+def tum_pioneer(runs):
+    """Like-for-like reference: published ATE on TUM RGB-D Pioneer robot sequences. Ours: not yet run."""
+    rows = [(f"<b>Ours</b>", *(["not yet run"] * (len(B.TUM_PIONEER_SEQS) + 1)))]
+    for name, vals, avg in B.TUM_PIONEER:
+        rows.append((f"{name} [12]", *(f"{v:.3f}" for v in vals), f"{avg:.3f}"))
+    return (["System"] + [q.replace("fr2/", "") for q in B.TUM_PIONEER_SEQS] + ["Average"], rows, [120] + [70] * (len(B.TUM_PIONEER_SEQS) + 1))

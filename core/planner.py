@@ -2,7 +2,7 @@ import math
 import heapq
 import cv2
 import numpy as np
-from grid import bresenham_line
+from core.grid import bresenham_line
 
 def a_star_search(grid, start, goal, smooth=False):
     """

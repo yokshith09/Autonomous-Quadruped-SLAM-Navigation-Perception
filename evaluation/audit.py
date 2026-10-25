@@ -8,7 +8,7 @@ import numpy as np
 
 GT_POSE_APIS = {"getObjectPosition", "getObjectOrientation", "getObjectMatrix", "getObjectPose", "getObjectVelocity"}
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NAV_FILES = ["slam.py"] + [os.path.join("agents", f) for f in (
+NAV_FILES = [os.path.join("core", "slam.py")] + [os.path.join("agents", f) for f in (
     "slam_agent.py", "mapping_agent.py", "perception_agent.py", "frontier_agent.py", "planning_agent.py")]
 
 
@@ -24,13 +24,13 @@ def audit(run_dir):
         if os.path.exists(os.path.join(ROOT, fname)):
             with open(os.path.join(ROOT, fname), encoding="utf-8") as f:
                 leaks += [f"{fname} {c}" for c in _gt_calls(ast.parse(f.read()))]
-    with open(os.path.join(ROOT, "robot.py"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "core", "robot.py"), encoding="utf-8") as f:
         tree = ast.parse(f.read())
     odom = next((n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "get_odometry_imu_delta"), None)
     if odom is None:
-        leaks.append("robot.py: get_odometry_imu_delta not found")
+        leaks.append("core/robot.py: get_odometry_imu_delta not found")
     else:  # the simulated gyro may read orientation (a per-step delta), never position
-        leaks += [f"robot.py get_odometry_imu_delta {c}" for c in _gt_calls(odom, {"getObjectOrientation"})]
+        leaks += [f"core/robot.py get_odometry_imu_delta {c}" for c in _gt_calls(odom, {"getObjectOrientation"})]
     checks.append(("No ground-truth pose API in SLAM, mapping, perception, planning or odometry (static source scan)",
                    not leaks, "; ".join(leaks) if leaks else f"{len(NAV_FILES)} files + odometry clean; gyro reads orientation delta only"))
 

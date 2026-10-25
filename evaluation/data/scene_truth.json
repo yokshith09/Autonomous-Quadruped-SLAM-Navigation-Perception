@@ -1,0 +1,2090 @@
+{
+ "objects": [
+  {
+   "alias": "/DefaultCamera",
+   "type": 3,
+   "pos": [
+    -5.012256670469255,
+    -1.0697263313958938,
+    10.31816782877244
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.75
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/DefaultLights",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/wall_back",
+   "type": 0,
+   "pos": [
+    0.0,
+    5.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    10.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/wall_front",
+   "type": 0,
+   "pos": [
+    0.0,
+    -5.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    10.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/wall_left",
+   "type": 0,
+   "pos": [
+    -5.0,
+    0.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    10.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/wall_right",
+   "type": 0,
+   "pos": [
+    5.0,
+    0.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    10.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard1",
+   "type": 0,
+   "pos": [
+    -2.75,
+    -3.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    4.5,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard2",
+   "type": 0,
+   "pos": [
+    2.5,
+    -3.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    4.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard3",
+   "type": 0,
+   "pos": [
+    -4.0,
+    2.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    2.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard4",
+   "type": 0,
+   "pos": [
+    4.0,
+    2.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    2.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard5",
+   "type": 0,
+   "pos": [
+    -1.0000008344650269,
+    3.25,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    2.5,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard6",
+   "type": 0,
+   "pos": [
+    1.0,
+    3.25,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    2.5,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard7",
+   "type": 0,
+   "pos": [
+    -1.500000238418579,
+    2.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    1.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard8",
+   "type": 0,
+   "pos": [
+    1.5,
+    2.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    1.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard9",
+   "type": 0,
+   "pos": [
+    -1.0000008344650269,
+    -1.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    2.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard10",
+   "type": 0,
+   "pos": [
+    -2.75,
+    0.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    3.5,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard11",
+   "type": 0,
+   "pos": [
+    1.0,
+    -1.5,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    3.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard12",
+   "type": 0,
+   "pos": [
+    2.0,
+    0.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    2.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard13",
+   "type": 0,
+   "pos": [
+    4.5,
+    0.0,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    1.0,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard14",
+   "type": 0,
+   "pos": [
+    -2.5,
+    -3.25,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    0.5,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/guard15",
+   "type": 0,
+   "pos": [
+    -2.5,
+    -4.75,
+    0.20000000298023224
+   ],
+   "bbox_size": [
+    0.5,
+    0.10000000894069672,
+    0.4000000059604645
+   ]
+  },
+  {
+   "alias": "/obstacle_3",
+   "type": 0,
+   "pos": [
+    -0.024999648332595825,
+    1.2500003576278687,
+    0.06666000187397003
+   ],
+   "bbox_size": [
+    0.699999988079071,
+    0.699999988079071,
+    0.20416374504566193
+   ]
+  },
+  {
+   "alias": "/customizableTable",
+   "type": 0,
+   "pos": [
+    -2.9000017642974854,
+    -1.8000000715255737,
+    0.44999998807907104
+   ],
+   "bbox_size": [
+    1.1999996900558472,
+    0.800000011920929,
+    0.10000000149011612
+   ]
+  },
+  {
+   "alias": "/laptop",
+   "type": 0,
+   "pos": [
+    -2.9500041007995605,
+    -1.6490799188613892,
+    0.5799999833106995
+   ],
+   "bbox_size": [
+    0.18028396591477513,
+    0.3504794841177228,
+    0.4105734834561565
+   ]
+  },
+  {
+   "alias": "/diningChair",
+   "type": 0,
+   "pos": [
+    -2.950000762939453,
+    -0.8999993801116943,
+    0.4500003755092621
+   ],
+   "bbox_size": [
+    0.4000614009209247,
+    0.45001979109580403,
+    0.9087860842724382
+   ]
+  },
+  {
+   "alias": "/Bill[0]",
+   "type": 4,
+   "pos": [
+    -2.975001096725464,
+    -1.3250000476837158,
+    0.0
+   ]
+  },
+  {
+   "alias": "/cupboard",
+   "type": 0,
+   "pos": [
+    -4.599001407623291,
+    -3.9250001907348633,
+    0.9850001335144043
+   ],
+   "bbox_size": [
+    0.5800007581710815,
+    1.2001338005065918,
+    1.9700815677642822
+   ]
+  },
+  {
+   "alias": "/ConcretBlock",
+   "type": 0,
+   "pos": [
+    -2.97499942779541,
+    3.475001096725464,
+    0.25
+   ],
+   "bbox_size": [
+    0.683864414691925,
+    0.9267657995223999,
+    0.5
+   ]
+  },
+  {
+   "alias": "/Cylinder3",
+   "type": 0,
+   "pos": [
+    3.925001621246338,
+    -1.4249995946884155,
+    0.25
+   ],
+   "bbox_size": [
+    0.5,
+    0.5,
+    0.5
+   ]
+  },
+  {
+   "alias": "/Bill[1]",
+   "type": 4,
+   "pos": [
+    2.4000003337860107,
+    -1.5249996185302734,
+    0.0
+   ]
+  },
+  {
+   "alias": "/indoorPlant",
+   "type": 0,
+   "pos": [
+    3.4750027656555176,
+    -4.025001525878906,
+    0.16500011086463928
+   ],
+   "bbox_size": [
+    0.30000007152557373,
+    0.30000007152557373,
+    0.3300001323223114
+   ]
+  },
+  {
+   "alias": "/beacon_8",
+   "type": 0,
+   "pos": [
+    6.034970283508301e-07,
+    -1.475000262260437,
+    0.25
+   ],
+   "bbox_size": [
+    0.20000001788139343,
+    0.20000001788139343,
+    0.5
+   ]
+  },
+  {
+   "alias": "/beacon_9",
+   "type": 0,
+   "pos": [
+    2.4750001430511475,
+    3.5249998569488525,
+    0.25
+   ],
+   "bbox_size": [
+    0.20000001788139343,
+    0.20000001788139343,
+    0.5
+   ]
+  },
+  {
+   "alias": "/beacon_10",
+   "type": 0,
+   "pos": [
+    -3.9999990463256836,
+    1.0249994993209839,
+    0.25
+   ],
+   "bbox_size": [
+    0.20000001788139343,
+    0.20000001788139343,
+    0.5
+   ]
+  },
+  {
+   "alias": "/script[0]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[1]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[2]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[3]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[4]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[5]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[6]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[7]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[8]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[9]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[10]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[11]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[12]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[13]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[14]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[15]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[16]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[17]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[18]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[19]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[20]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[21]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[22]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[23]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[24]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[25]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy/DefaultXViewCamera",
+   "type": 3,
+   "pos": [
+    20.0,
+    0.0,
+    0.75
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy/DefaultYViewCamera",
+   "type": 3,
+   "pos": [
+    0.0,
+    20.0,
+    0.75
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy/DefaultZViewCamera",
+   "type": 3,
+   "pos": [
+    0.0,
+    0.0,
+    20.75
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy/DefaultNXViewCamera",
+   "type": 3,
+   "pos": [
+    -20.0,
+    -1.748455588312936e-06,
+    0.75
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy/DefaultNYViewCamera",
+   "type": 3,
+   "pos": [
+    1.748455588312936e-06,
+    -20.0,
+    0.75
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy/DefaultNZViewCamera",
+   "type": 3,
+   "pos": [
+    1.8140226529794745e-06,
+    1.5858690229075822e-13,
+    -20.75
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element",
+   "type": 0,
+   "pos": [
+    -2.5,
+    -2.5,
+    -0.020000072196125984
+   ],
+   "bbox_size": [
+    5.0,
+    5.0,
+    0.039999961853027344
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element0",
+   "type": 0,
+   "pos": [
+    -2.5,
+    2.5,
+    -0.020000072196125984
+   ],
+   "bbox_size": [
+    5.0,
+    5.0,
+    0.039999961853027344
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element1",
+   "type": 0,
+   "pos": [
+    2.5,
+    -2.5,
+    -0.020000072196125984
+   ],
+   "bbox_size": [
+    5.0,
+    5.0,
+    0.039999961853027344
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element2",
+   "type": 0,
+   "pos": [
+    2.5,
+    2.5,
+    -0.020000072196125984
+   ],
+   "bbox_size": [
+    5.0,
+    5.0,
+    0.039999961853027344
+   ]
+  },
+  {
+   "alias": "/DefaultLights/DefaultLightA",
+   "type": 13,
+   "pos": [
+    1.5535461902618408,
+    -0.8391069173812866,
+    2.5
+   ]
+  },
+  {
+   "alias": "/DefaultLights/DefaultLightB",
+   "type": 13,
+   "pos": [
+    -0.1828123927116394,
+    1.8430930376052856,
+    2.5
+   ]
+  },
+  {
+   "alias": "/DefaultLights/DefaultLightC",
+   "type": 13,
+   "pos": [
+    -1.150916337966919,
+    -1.2177112102508545,
+    2.5
+   ]
+  },
+  {
+   "alias": "/DefaultLights/DefaultLightD",
+   "type": 13,
+   "pos": [
+    0.0,
+    -3.019916050561733e-07,
+    2.5
+   ]
+  },
+  {
+   "alias": "/guard15/Base",
+   "type": 0,
+   "pos": [
+    4.000000000000017,
+    4.000000000000021,
+    0.04833700135350172
+   ],
+   "bbox_size": [
+    0.15000000596046448,
+    0.019999999552965164,
+    0.009999999776482582
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder",
+   "type": 0,
+   "pos": [
+    -2.9000017642974854,
+    -1.8000000715255737,
+    0.44999998807907104
+   ],
+   "bbox_size": [
+    1.1999996900558472,
+    0.800000011920929,
+    0.10000000149011612
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_tableTop",
+   "type": 0,
+   "pos": [
+    -2.9000017642974854,
+    -1.8000000715255737,
+    0.5
+   ],
+   "bbox_size": [
+    1.200000286102295,
+    0.7999999523162842,
+    0.0
+   ]
+  },
+  {
+   "alias": "/laptop/_laptop",
+   "type": 0,
+   "pos": [
+    -2.950004863232202,
+    -1.6022722335464399,
+    0.6365829090367607
+   ],
+   "bbox_size": [
+    0.3500003814697268,
+    0.31194633245468145,
+    0.2679460048675537
+   ]
+  },
+  {
+   "alias": "/diningChair/_diningChair",
+   "type": 0,
+   "pos": [
+    -2.9500007629683846,
+    -0.9000000208616403,
+    0.4500001370907241
+   ],
+   "bbox_size": [
+    0.4000004827976228,
+    0.4500003457069399,
+    0.9000005125999453
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes",
+   "type": 0,
+   "pos": [
+    -2.9752858274779896,
+    -1.378769561172107,
+    0.052479531615972574
+   ],
+   "bbox_size": [
+    0.10284663736820221,
+    0.255571186542511,
+    0.29109781980514526
+   ]
+  },
+  {
+   "alias": "/cupboard/_cupboard",
+   "type": 0,
+   "pos": [
+    -4.599001439877597,
+    -3.925000250333047,
+    0.9850000143091519
+   ],
+   "bbox_size": [
+    0.5800010561943054,
+    1.2001341581344604,
+    1.970081627368927
+   ]
+  },
+  {
+   "alias": "/cupboard/_cupboardJointLeft",
+   "type": 1,
+   "pos": [
+    -4.309001444874613,
+    -3.3250002287064255,
+    1.0000000065993577
+   ]
+  },
+  {
+   "alias": "/cupboard/_cupboardJointRight",
+   "type": 1,
+   "pos": [
+    -4.309001444877008,
+    -4.525000279144441,
+    0.9999999589189851
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8",
+   "type": 0,
+   "pos": [
+    2.4000003933906555,
+    -1.5250002145767212,
+    0.9153702855110168
+   ],
+   "bbox_size": [
+    0.17863911390304565,
+    0.28306758403778076,
+    0.3501264452934265
+   ]
+  },
+  {
+   "alias": "/indoorPlant/indoorPlant_visible",
+   "type": 0,
+   "pos": [
+    3.496803269815228,
+    -4.067134287022908,
+    0.552414894104004
+   ],
+   "bbox_size": [
+    0.784098893404007,
+    0.7853469848632815,
+    1.1048292517662053
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element/ResizableFloor_5_25_visibleElement",
+   "type": 0,
+   "pos": [
+    -2.5,
+    -2.5,
+    3.5390257835388184e-08
+   ],
+   "bbox_size": [
+    5.000003814697266,
+    5.000003814697266,
+    3.791681706388772e-07
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element0/ResizableFloor_5_25_visibleElement0",
+   "type": 0,
+   "pos": [
+    -2.5,
+    2.5,
+    3.5390257835388184e-08
+   ],
+   "bbox_size": [
+    5.000003814697266,
+    5.000003814697266,
+    3.791681706388772e-07
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element1/ResizableFloor_5_25_visibleElement1",
+   "type": 0,
+   "pos": [
+    2.5,
+    -2.5,
+    3.5390257835388184e-08
+   ],
+   "bbox_size": [
+    5.000003814697266,
+    5.000003814697266,
+    3.791681706388772e-07
+   ]
+  },
+  {
+   "alias": "/ResizableFloor_5_25/ResizableFloor_5_25_element2/ResizableFloor_5_25_visibleElement2",
+   "type": 0,
+   "pos": [
+    2.5,
+    2.5,
+    3.5390257835388184e-08
+   ],
+   "bbox_size": [
+    5.000003814697266,
+    5.000003814697266,
+    3.791681706388772e-07
+   ]
+  },
+  {
+   "alias": "/guard15/Base/BackJoint",
+   "type": 1,
+   "pos": [
+    3.97912338605471,
+    4.066814039984533,
+    0.04811096407785141
+   ]
+  },
+  {
+   "alias": "/guard15/Base/FrontJoint",
+   "type": 1,
+   "pos": [
+    4.020876613945323,
+    3.9331859600155097,
+    0.048563038629152025
+   ]
+  },
+  {
+   "alias": "/guard15/Base/Kinect_camera_support",
+   "type": 12,
+   "pos": [
+    4.017911685875752,
+    3.9427531906305258,
+    0.0535306698056815
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint",
+   "type": 4,
+   "pos": [
+    4.000040694183625,
+    4.000052171542521,
+    0.059999833326753016
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint1",
+   "type": 1,
+   "pos": [
+    -2.9000017642974854,
+    -1.8000000715255737,
+    0.44999998807907104
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint2",
+   "type": 1,
+   "pos": [
+    -2.9000017642974854,
+    -1.8000000715255737,
+    0.44999998807907104
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint",
+   "type": 1,
+   "pos": [
+    -2.9749999383773096,
+    -1.3033578215950836,
+    0.10382003972818374
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_shoesRespondable",
+   "type": 0,
+   "pos": [
+    -2.9752859752246295,
+    -1.3806672719300046,
+    0.019789319325460852
+   ],
+   "bbox_size": [
+    0.03746649150785246,
+    0.25557126210077774,
+    0.28730246468585297
+   ]
+  },
+  {
+   "alias": "/cupboard/_cupboardJointLeft/_cupboardLeftBoard",
+   "type": 0,
+   "pos": [
+    -4.299001215992777,
+    -3.6146998427544297,
+    1.0350008076857835
+   ],
+   "bbox_size": [
+    0.02000528573989868,
+    0.5993689894676208,
+    1.8701186776161194
+   ]
+  },
+  {
+   "alias": "/cupboard/_cupboardJointRight/_cupboardRightBoard",
+   "type": 0,
+   "pos": [
+    -4.299001186192849,
+    -4.234500237381458,
+    1.0349998317267914
+   ],
+   "bbox_size": [
+    0.02000504732131958,
+    0.5992575287818909,
+    1.8700829148292542
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17",
+   "type": 0,
+   "pos": [
+    2.395032694753016,
+    -1.5246756559623955,
+    1.1776396039304597
+   ],
+   "bbox_size": [
+    0.256468266248703,
+    0.5039385557174683,
+    0.590130090713501
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint",
+   "type": 1,
+   "pos": [
+    2.384429524629993,
+    -1.4141481402652354,
+    0.9077792839021126
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint",
+   "type": 1,
+   "pos": [
+    2.3844294874079077,
+    -1.6358522719204909,
+    0.9077793303021309
+   ]
+  },
+  {
+   "alias": "/guard15/Base/BackJoint/BackLink",
+   "type": 0,
+   "pos": [
+    3.9790889062450097,
+    4.066769185813899,
+    0.038110943651640014
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.10000000149011612,
+    0.009999999776482582
+   ]
+  },
+  {
+   "alias": "/guard15/Base/FrontJoint/FrontLink",
+   "type": 0,
+   "pos": [
+    4.020840000713335,
+    3.933140938841342,
+    0.03856302639397949
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.10000000149011612,
+    0.009999999776482582
+   ]
+  },
+  {
+   "alias": "/guard15/Base/Kinect_camera_support/kinect",
+   "type": 0,
+   "pos": [
+    4.0179222101885275,
+    3.9427666280509657,
+    0.05653060125396084
+   ],
+   "bbox_size": [
+    0.010374998673796654,
+    0.009125000797212124,
+    0.005152632715180516
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint/imu_link",
+   "type": 4,
+   "pos": [
+    4.0000406943266045,
+    4.000052171725827,
+    0.0599998743042869
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint1/customizableTable_yJoint1",
+   "type": 1,
+   "pos": [
+    -2.332501769065858,
+    -1.8000001045316472,
+    0.45000001788139343
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint1/customizableTable_yJoint2",
+   "type": 1,
+   "pos": [
+    -2.332501769065858,
+    -1.8000001045316472,
+    0.45000001788139343
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint2/customizableTable_yJoint3",
+   "type": 1,
+   "pos": [
+    -3.4675017595291098,
+    -1.8000000046938776,
+    0.4500000178813934
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint2/customizableTable_yJoint4",
+   "type": 1,
+   "pos": [
+    -3.4675017595291098,
+    -1.8000000046938776,
+    0.4500000178813934
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs",
+   "type": 0,
+   "pos": [
+    -2.975308491709259,
+    -1.3133417221161527,
+    0.27852457663764574
+   ],
+   "bbox_size": [
+    0.16071783006191254,
+    0.29381537437438965,
+    0.478576123714447
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_leftShoulderJoint",
+   "type": 1,
+   "pos": [
+    2.3712307761939964,
+    -1.3599289081217605,
+    1.2911650169072009
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_rightShoulderJoint",
+   "type": 1,
+   "pos": [
+    2.371230762089053,
+    -1.6900717637659861,
+    1.2911650169072022
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_neck",
+   "type": 1,
+   "pos": [
+    2.3820003254180397,
+    -1.525000083353843,
+    1.4730206731138094
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint/Group27",
+   "type": 0,
+   "pos": [
+    2.3903415395574252,
+    -1.4529487134173198,
+    0.6734969245815514
+   ],
+   "bbox_size": [
+    0.16208213567733765,
+    0.19786419719457626,
+    0.4772161841392517
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint/Group1",
+   "type": 0,
+   "pos": [
+    2.3890781559716263,
+    -1.6058273440018065,
+    0.6721265240517469
+   ],
+   "bbox_size": [
+    0.1622290462255478,
+    0.19786196947097778,
+    0.4759368300437927
+   ]
+  },
+  {
+   "alias": "/guard15/Base/BackJoint/BackLink/BackLeftJoint",
+   "type": 1,
+   "pos": [
+    4.021998879469148,
+    4.080135464768492,
+    0.025901236519702428
+   ]
+  },
+  {
+   "alias": "/guard15/Base/BackJoint/BackLink/BackRightJoint",
+   "type": 1,
+   "pos": [
+    3.9360951930977555,
+    4.053295548984902,
+    0.026321036788230494
+   ]
+  },
+  {
+   "alias": "/guard15/Base/FrontJoint/FrontLink/FrontLeftJoint",
+   "type": 1,
+   "pos": [
+    4.063749973933769,
+    3.9465072177976626,
+    0.026353319250914636
+   ]
+  },
+  {
+   "alias": "/guard15/Base/FrontJoint/FrontLink/FrontRightJoint",
+   "type": 1,
+   "pos": [
+    3.977846270866032,
+    3.9196673208322714,
+    0.02677330205794711
+   ]
+  },
+  {
+   "alias": "/guard15/Base/Kinect_camera_support/kinect/kinect_joint",
+   "type": 1,
+   "pos": [
+    4.017926883589914,
+    3.9427725768807385,
+    0.057704259384348755
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint/imu_link/GyroSensor",
+   "type": 0,
+   "pos": [
+    4.000040911693322,
+    4.000052459066164,
+    0.05999948106103217
+   ],
+   "bbox_size": [
+    0.005000054836273193,
+    0.005000054836273193,
+    0.005000054836273193
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint/imu_link/Accelerometer",
+   "type": 0,
+   "pos": [
+    4.0000406943266045,
+    4.000052171725827,
+    0.0599998743042869
+   ],
+   "bbox_size": [
+    0.005000054836273193,
+    0.005000054836273193,
+    0.005000054836273193
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint1/customizableTable_yJoint1/customizableTable_foot1",
+   "type": 0,
+   "pos": [
+    -2.3325017599926348,
+    -2.1675000222772374,
+    0.24499997496604933
+   ],
+   "bbox_size": [
+    0.054999999701976776,
+    0.054999999701976776,
+    0.48826685547828674
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint1/customizableTable_yJoint2/customizableTable_foot2",
+   "type": 0,
+   "pos": [
+    -2.332501716183178,
+    -1.432499829158192,
+    0.24499993026256572
+   ],
+   "bbox_size": [
+    0.054999999701976776,
+    0.054999999701976776,
+    0.48826685547828674
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint2/customizableTable_yJoint3/customizableTable_foot3",
+   "type": 0,
+   "pos": [
+    -3.467501533942009,
+    -2.1675001608580553,
+    0.24499997496604906
+   ],
+   "bbox_size": [
+    0.054999999701976776,
+    0.054999999701976776,
+    0.48826685547828674
+   ]
+  },
+  {
+   "alias": "/customizableTable/customizableTable_forwarder/customizableTable_xJoint2/customizableTable_yJoint4/customizableTable_foot4",
+   "type": 0,
+   "pos": [
+    -3.467501684741787,
+    -1.4325000869482951,
+    0.24499990046024317
+   ],
+   "bbox_size": [
+    0.054999999701976776,
+    0.054999999701976776,
+    0.48826685547828674
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint",
+   "type": 1,
+   "pos": [
+    -2.9750009605819243,
+    -1.322099890007237,
+    0.5146698045318148
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_lowerLegsRespondable",
+   "type": 0,
+   "pos": [
+    -2.9752650370787626,
+    -1.3115365529725036,
+    0.25411289534512316
+   ],
+   "bbox_size": [
+    0.12070883131930926,
+    0.29629519832437096,
+    0.430264686555454
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_leftShoulderJoint/Group28",
+   "type": 0,
+   "pos": [
+    2.3694235112015867,
+    -1.3143487564876115,
+    1.1404534336713823
+   ],
+   "bbox_size": [
+    0.12695902585983276,
+    0.10169515013694763,
+    0.3068915605545044
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_rightShoulderJoint/Group33",
+   "type": 0,
+   "pos": [
+    2.3686811589274486,
+    -1.7354919738443435,
+    1.140484830168034
+   ],
+   "bbox_size": [
+    0.1269591599702835,
+    0.10174371302127838,
+    0.30688905715942383
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_neck/Group36",
+   "type": 0,
+   "pos": [
+    2.4033675847609985,
+    -1.524675492488586,
+    1.5360206368741853
+   ],
+   "bbox_size": [
+    0.22150786221027383,
+    0.1633505523204804,
+    0.2850238084793092
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint/Group27/Bill_leftKneeJoint",
+   "type": 1,
+   "pos": [
+    2.397100129460846,
+    -1.4169725136641738,
+    0.514669698346644
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint/Group1/Bill_rightKneeJoint",
+   "type": 1,
+   "pos": [
+    2.3971000948505425,
+    -1.6330192922289788,
+    0.5146697886392511
+   ]
+  },
+  {
+   "alias": "/guard15/Base/BackJoint/BackLink/BackLeftJoint/leg3",
+   "type": 0,
+   "pos": [
+    4.021911494414871,
+    4.080023106160467,
+    0.0008016557498564444
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/guard15/Base/BackJoint/BackLink/BackRightJoint/leg4",
+   "type": 0,
+   "pos": [
+    3.936007766815001,
+    4.053183293818929,
+    0.001221230315820887
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/guard15/Base/FrontJoint/FrontLink/FrontLeftJoint/leg1",
+   "type": 0,
+   "pos": [
+    4.063662616084746,
+    3.946394859987759,
+    0.0012537672540378162
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/guard15/Base/FrontJoint/FrontLink/FrontRightJoint/leg2",
+   "type": 0,
+   "pos": [
+    3.9777588709845104,
+    3.919555058921046,
+    0.0016736762030783638
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/guard15/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body",
+   "type": 0,
+   "pos": [
+    4.0179385427511365,
+    3.9427869458884177,
+    0.060606823864792714
+   ],
+   "bbox_size": [
+    0.03499923273921013,
+    0.00768810510635376,
+    0.004750004969537258
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint/imu_link/GyroSensor/GyroSensor_reference",
+   "type": 4,
+   "pos": [
+    4.000040911693322,
+    4.000052459066164,
+    0.05999948106103217
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint/imu_link/Accelerometer/Accelerometer_reference",
+   "type": 4,
+   "pos": [
+    4.0000406943266045,
+    4.000052171725827,
+    0.0599998743042869
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint/imu_link/Accelerometer/Accelerometer_forceSensor",
+   "type": 12,
+   "pos": [
+    4.0000406943266045,
+    4.000052171725827,
+    0.0599998743042869
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs",
+   "type": 0,
+   "pos": [
+    -2.9753068459325327,
+    -1.16235822968489,
+    0.5152287979225831
+   ],
+   "bbox_size": [
+    0.20870578289031982,
+    0.3332374691963196,
+    0.4794984757900238
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_leftShoulderJoint/Group28/Bill_leftElbowJoint",
+   "type": 1,
+   "pos": [
+    2.371147512280776,
+    -1.3599289837104178,
+    1.0484772902897388
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_rightShoulderJoint/Group33/Bill_rightElbowJoint",
+   "type": 1,
+   "pos": [
+    2.371144459250523,
+    -1.6900716846870525,
+    1.0484773635066984
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint/Group27/Bill_leftKneeJoint/Mesh20",
+   "type": 0,
+   "pos": [
+    2.387655306411318,
+    -1.438658041566419,
+    0.2786999309049413
+   ],
+   "bbox_size": [
+    0.11358898878097534,
+    0.1531693935394287,
+    0.47894400358200073
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint/Group1/Bill_rightKneeJoint/Mesh24",
+   "type": 0,
+   "pos": [
+    2.3875699472149727,
+    -1.6122815904198706,
+    0.2786232688234143
+   ],
+   "bbox_size": [
+    0.11699327826499939,
+    0.15788522362709045,
+    0.47885411977767944
+   ]
+  },
+  {
+   "alias": "/guard15/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body/kinect_depth",
+   "type": 9,
+   "pos": [
+    4.020710713576203,
+    3.9398231444947025,
+    0.06058346724576849
+   ]
+  },
+  {
+   "alias": "/guard15/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body/kinect_glass",
+   "type": 0,
+   "pos": [
+    4.016234836627083,
+    3.938390630695044,
+    0.06062725759146753
+   ],
+   "bbox_size": [
+    0.011625003069639206,
+    1.7229467630386353e-08,
+    0.002250010147690773
+   ]
+  },
+  {
+   "alias": "/guard15/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body/kinect_rgb",
+   "type": 9,
+   "pos": [
+    4.020711200052882,
+    3.939823012702484,
+    0.06058317958902622
+   ]
+  },
+  {
+   "alias": "/guard15/Base/imu_link_joint/imu_link/Accelerometer/Accelerometer_forceSensor/Accelerometer_mass",
+   "type": 0,
+   "pos": [
+    4.0000406943266045,
+    4.000052171725827,
+    0.0599998743042869
+   ],
+   "bbox_size": [
+    0.005000054836273193,
+    0.005000054836273193,
+    0.005000054836273193
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint",
+   "type": 1,
+   "pos": [
+    -2.974921857885667,
+    -0.9289902911402396,
+    0.5019991734533228
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_leftShoulderJoint/Group28/Bill_leftElbowJoint/Group30",
+   "type": 0,
+   "pos": [
+    2.371436872373919,
+    -1.3093271915083027,
+    0.8552609739144219
+   ],
+   "bbox_size": [
+    0.123045913875103,
+    0.09161263704299927,
+    0.3910447359085082
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_rightShoulderJoint/Group33/Bill_rightElbowJoint/Group7",
+   "type": 0,
+   "pos": [
+    2.3713983655571313,
+    -1.7409342319201402,
+    0.8552644351812022
+   ],
+   "bbox_size": [
+    0.1230460107326508,
+    0.09161162376403811,
+    0.3910447955131532
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint/Group27/Bill_leftKneeJoint/Mesh20/Cylinder",
+   "type": 0,
+   "pos": [
+    2.3868042868355226,
+    -1.4383568260689847,
+    0.25410997565495674
+   ],
+   "bbox_size": [
+    0.12069647759199142,
+    0.12069649249315262,
+    0.4296993166208267
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint/Group27/Bill_leftKneeJoint/Mesh20/Bill_leftAnkleJoint",
+   "type": 1,
+   "pos": [
+    2.3783580899388053,
+    -1.4480842759676877,
+    0.10382007080783423
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint/Group1/Bill_rightKneeJoint/Mesh24/Cylinder0",
+   "type": 0,
+   "pos": [
+    2.3862906345731,
+    -1.6122072211916407,
+    0.2541096971980467
+   ],
+   "bbox_size": [
+    0.1206965297460556,
+    0.12069651484489441,
+    0.42969895899295807
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint/Group1/Bill_rightKneeJoint/Mesh24/Bill_rightAnkleJoint",
+   "type": 1,
+   "pos": [
+    2.3783580739488963,
+    -1.6018988658175701,
+    0.10382002895831677
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body",
+   "type": 0,
+   "pos": [
+    -2.974618560439002,
+    -0.9244631402287162,
+    0.7402258932228187
+   ],
+   "bbox_size": [
+    0.2825285792350769,
+    0.503937840461731,
+    0.6589552760124207
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_leftShoulderJoint/Group28/Bill_leftElbowJoint/Group30/Cylinder1",
+   "type": 0,
+   "pos": [
+    2.3737985156904364,
+    -1.3086913020938418,
+    0.8539825341688755
+   ],
+   "bbox_size": [
+    0.09597917984164371,
+    0.09597423125532503,
+    0.3920029856001175
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Mesh17/Bill_rightShoulderJoint/Group33/Bill_rightElbowJoint/Group7/Cylinder2",
+   "type": 0,
+   "pos": [
+    2.3737599088444434,
+    -1.741572757145544,
+    0.8539860703504009
+   ],
+   "bbox_size": [
+    0.09597878548557723,
+    0.0959746984690758,
+    0.39200275684120034
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint/Group27/Bill_leftKneeJoint/Mesh20/Bill_leftAnkleJoint/Group16",
+   "type": 0,
+   "pos": [
+    2.4540267266745985,
+    -1.4478648627697015,
+    0.05247942539739911
+   ],
+   "bbox_size": [
+    0.2905838191509247,
+    0.10073766484856606,
+    0.10284657776355743
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint/Group1/Bill_rightKneeJoint/Mesh24/Bill_rightAnkleJoint/Group24",
+   "type": 0,
+   "pos": [
+    2.453512828465943,
+    -1.6026981836376626,
+    0.05247955168218821
+   ],
+   "bbox_size": [
+    0.29058361053466797,
+    0.1007377952337265,
+    0.10284659639000893
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_neck",
+   "type": 1,
+   "pos": [
+    -2.9749222548025327,
+    -0.926561072007116,
+    1.0672403667159147
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_rightShoulderJoint",
+   "type": 1,
+   "pos": [
+    -3.189993305952089,
+    -0.9157798165432924,
+    0.8853845238826894
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_leftShoulderJoint",
+   "type": 1,
+   "pos": [
+    -2.759821165512877,
+    -0.9158032261088052,
+    0.8853846124770355
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_leftLegJoint/Group27/Bill_leftKneeJoint/Mesh20/Bill_leftAnkleJoint/Group16/Rectangle7",
+   "type": 0,
+   "pos": [
+    2.4559245196334474,
+    -1.4434931914403102,
+    0.01978939893806371
+   ],
+   "bbox_size": [
+    0.037466444075107574,
+    0.09199430048465729,
+    0.2867882251739502
+   ]
+  },
+  {
+   "alias": "/Bill[1]/Group8/Bill_rightLegJoint/Group1/Bill_rightKneeJoint/Mesh24/Bill_rightAnkleJoint/Group24/Rectangle8",
+   "type": 0,
+   "pos": [
+    2.455410495228046,
+    -1.6070699760418385,
+    0.017243349385988475
+   ],
+   "bbox_size": [
+    0.03237408027052879,
+    0.09199419617652893,
+    0.28678829967975616
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_neck/Bill_head",
+   "type": 0,
+   "pos": [
+    -2.974598839866226,
+    -0.9479283398951758,
+    1.1302403336258
+   ],
+   "bbox_size": [
+    0.22150786221027383,
+    0.1633505523204804,
+    0.2850238084793092
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_rightShoulderJoint/Bill_rightUpperArm",
+   "type": 0,
+   "pos": [
+    -3.185411978463756,
+    -0.8871039332046857,
+    0.7374362312095334
+   ],
+   "bbox_size": [
+    0.1269591599702835,
+    0.10174371302127838,
+    0.30688905715942383
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_leftShoulderJoint/Bill_leftUpperArm",
+   "type": 0,
+   "pos": [
+    -2.7642686996158314,
+    -0.8878524055175471,
+    0.7372764266160747
+   ],
+   "bbox_size": [
+    0.12695902585983276,
+    0.10169515013694763,
+    0.3068915605545044
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_rightShoulderJoint/Bill_rightUpperArm/Bill_rightElbowJoint",
+   "type": 1,
+   "pos": [
+    -3.189990957734781,
+    -0.8735526332096767,
+    0.646398733016502
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_leftShoulderJoint/Bill_leftUpperArm/Bill_leftElbowJoint",
+   "type": 1,
+   "pos": [
+    -2.7598187582765017,
+    -0.8735789765308865,
+    0.6463982148569176
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_rightShoulderJoint/Bill_rightUpperArm/Bill_rightElbowJoint/Bill_rightForearm",
+   "type": 0,
+   "pos": [
+    -3.1904442158205835,
+    -0.9814310895486593,
+    0.48499805991413214
+   ],
+   "bbox_size": [
+    0.08825063705444335,
+    0.11735254526138308,
+    0.38878095149993896
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_leftShoulderJoint/Bill_leftUpperArm/Bill_leftElbowJoint/Bill_leftForearm",
+   "type": 0,
+   "pos": [
+    -2.758905727148745,
+    -0.9817799117893852,
+    0.48518664725353183
+   ],
+   "bbox_size": [
+    0.0947489738464356,
+    0.11283074319362646,
+    0.38872045278549205
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_rightShoulderJoint/Bill_rightUpperArm/Bill_rightElbowJoint/Bill_rightForearm/Bill_rightForearmRespondable",
+   "type": 0,
+   "pos": [
+    -3.1915411684452075,
+    -0.9782291352479235,
+    0.4824612565438129
+   ],
+   "bbox_size": [
+    0.09567774313296512,
+    0.09571766384978649,
+    0.39200592858331484
+   ]
+  },
+  {
+   "alias": "/Bill[0]/Bill_shoes/Bill_ankleJoint/Bill_lowerLegs/Bill_kneeJoint/Bill_upperLegs/Bill_legJoint/Bill_body/Bill_leftShoulderJoint/Bill_leftUpperArm/Bill_leftElbowJoint/Bill_leftForearm/Bill_leftForearmRespondable",
+   "type": 0,
+   "pos": [
+    -2.758675163766454,
+    -0.9782858243043246,
+    0.4824736577830715
+   ],
+   "bbox_size": [
+    0.09597297460521181,
+    0.09596492449264692,
+    0.39200592750439023
+   ]
+  }
+ ]
+}

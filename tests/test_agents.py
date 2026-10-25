@@ -9,7 +9,7 @@ from agents import (
     MessageBus, PoseMsg, ScanMsg, GridMapMsg, FrontierTargetMsg, PathMsg,
     SpatialKnowledgeGraph, EpisodicMemory, MappingAgent, FrontierAgent, SupervisorAgent
 )
-from grid import BayesianOccupancyGrid
+from core.grid import BayesianOccupancyGrid
 
 
 def test_message_bus():
@@ -169,7 +169,7 @@ def test_planning_agent():
 
 def test_planner_avoids_unknown_space():
     print("Running test_planner_avoids_unknown_space...", end=" ")
-    from planner import a_star_search
+    from core.planner import a_star_search
     grid = BayesianOccupancyGrid(-5.0, 5.0, -5.0, 5.0, 0.1)
     # A thin never-observed strip (like the space beyond an unseen wall) almost splits the free area. Crossing
     # it is short; the only known-free route goes around its end, far away.

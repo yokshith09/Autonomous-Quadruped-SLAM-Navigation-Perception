@@ -44,7 +44,16 @@ Priority: **P1** blocks mission completion, **P2** large effect on accuracy or t
 | F19 | P3 | Map reference is not independent of the sensor | Build a reference occupancy grid from the scene geometry (known arena dimensions) |
 | F20 | P3 | The baseline never finished, so time-to-complete of the current system is unknown | After F1-F4, run uncapped and record time-to-complete; keep a separate capped run of the old behaviour only if needed for comparison |
 | F21 | P3 | Telemetry overhead is a calibrated estimate | An A/B run with telemetry disabled (needs a `--no-telemetry` switch) |
+| F32 | P3 | PDF builder defect found on 2026-10-25: PyMuPDF's HTML renderer silently dropped content when a table was split across a page break (an earlier `RESULTS.pdf` was missing its comparison heading, sections 8 and 9 and a table) | **Fixed**: every block is laid out and drawn separately, tables split only between rows, and the builder raises if any heading or caption is missing from the finished PDF | Done |
+| F31 | P3 | The automatic report at the end of a run failed: a local variable named `report` hid the report module | **Fixed** (variable renamed; verified by a live smoke run) | Done |
 | F22 | P3 | `accuracy_results/` and `captured_matrices/` are still written by `main_agentic.py`, duplicating the run directory | Write everything into `runs/<id>/` directly; needs a live smoke run to verify |
+
+## Perception and knowledge graph (found by scoring against the real scene)
+| ID | Pri | Problem and evidence | Planned change | Verify by |
+|---|---|---|---|---|
+| F28 | P2 | There is no object recognition: any occupied blob 0.18-1.05 m across is labelled "chair" by size (`mapping_agent.extract_semantic_entities`); the RGB image is not used. Baseline: 113 "chair" detections for 1 real chair; 21 % of detections lie on any real object | Detect objects from the RGB-D image (or at least classify blobs that are not part of a wall); drop detections that are no longer supported by the map | Detection precision at least 80 %, chair labels on real chairs |
+| F29 | P3 | Knowledge-graph placeholders: every doorway is recorded as connecting rooms 1 and 2 (`supervisor_agent.py` hard-codes it) and every room centroid stays (0, 0) | Take room connectivity and centroids from the mapping agent's segmentation | Graph matches the arena layout |
+| F30 | P3 | 0.59 m2 of free space is mapped outside the outer wall (same cause as F1) | Fixed with F1 | Free space outside the arena about 0 |
 
 ## Realism
 | ID | Pri | Problem | Planned change |

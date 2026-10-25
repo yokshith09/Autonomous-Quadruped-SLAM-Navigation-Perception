@@ -34,7 +34,7 @@ CLASS_CSS = {"Good": "good", "Improve": "improve", "Poor": "poor", "Helps": "goo
 # ------------------------------------------------------------------------------------------------ data
 def load_run(run_dir):
     j = lambda n: json.load(open(os.path.join(run_dir, n), encoding="utf-8")) if os.path.exists(os.path.join(run_dir, n)) else None
-    d = {"m": j("metrics.json"), "man": j("manifest.json"), "abl": j("ablation.json"), "dir": run_dir}
+    d = {"m": j("metrics.json"), "man": j("manifest.json"), "abl": j("ablation.json"), "truth": j("truth_eval.json"), "dir": run_dir}
     d["traj"] = np.loadtxt(os.path.join(run_dir, "trajectory.csv"), delimiter=",", skiprows=1)
     prog = os.path.join(run_dir, "progress.csv")
     log = os.path.join(run_dir, "terminal.log")
@@ -61,14 +61,14 @@ def derived(d):
     o, loc, mp, c = m["overall"], m["localization"], m["mapping"], m["compute"]
     seg = np.hypot(*np.diff(t[:, 1:3], axis=0).T)
     cum = np.concatenate([[0.0], np.cumsum(seg)])
-    out = {"dist": float(cum[-1]), "speed": float(cum[-1] / t[-1, 0])}
+    out = {"dist": float(o["distance_travelled_gt_m"]), "speed": float(o["distance_travelled_gt_m"] / t[-1, 0])}  # the run's recorded distance
     if d["prog"]:
         final = d["prog"][-1]["explored"]
         for frac, key in ((0.95, "t95"), (0.97, "t97")):
             out[key] = next(r["t"] for r in d["prog"] if r["explored"] >= frac * final)
         i = int(np.searchsorted(t[:, 0], out["t97"]))
         out["dist_after_plateau"] = float(cum[-1] - cum[min(i, len(cum) - 1)])
-        out["waste_pct"] = 100.0 * out["dist_after_plateau"] / out["dist"]
+        out["waste_pct"] = 100.0 * out["dist_after_plateau"] / float(cum[-1])
         out["coverage_gain_after_plateau"] = final - next(r["explored"] for r in d["prog"] if r["t"] == out["t97"])
     ev = m["data_quality"]["events"]
     out["stuck_per_100m"] = o["stuck_events"] / out["dist"] * 100.0
@@ -79,7 +79,7 @@ def derived(d):
     out["agent_share"] = sum(a["total_s"] for a in m["agents"]) / o["wall_time_s"] * 100.0
     out["control_p95"] = m["agents_extra"]["control_loop_p95_ms"]
     out["control_max"] = m["agents_extra"]["control_loop_max_ms"]
-    gait = re.search(r"GAIT_SPEED_CURVE = \(\((.*?)\)\)", open(os.path.join(ROOT, "robot.py"), encoding="utf-8").read())
+    gait = re.search(r"GAIT_SPEED_CURVE = \(\((.*?)\)\)", open(os.path.join(ROOT, "core", "robot.py"), encoding="utf-8").read())
     out["gait_max"] = float(gait.group(1).split("(")[-1].split(",")[-1]) if gait else None
     out["overhead_pct"] = 100.0 * c["telemetry_overhead_ms_per_step"] / m["agents_extra"]["control_loop_p50_ms"]
     if d["abl"]:
@@ -192,6 +192,28 @@ def metric_rows(d, x):
     add(G, "Map memory", mp["map_memory_mb"], "MB", 25, 100, True, "published", "Occupancy grid size.",
         "A 2D grid is tiny; published neural scene models use 20-40 MB (MNE-SLAM Table 5; not like-for-like).", 2)
 
+    t = d.get("truth")
+    if t:
+        G = "Mapping and detection against the real scene (scene geometry read from CoppeliaSim)"
+        g, f = t["map_vs_scene"], t["reference_vs_scene"]
+        add(G, "Map accuracy vs real walls/objects", cm(g["accuracy_meters"]), "cm", 5, 10, True, "published",
+            "Mean distance from each mapped obstacle cell to the nearest real wall or object.",
+            f"The map built with the true pose scores {cm(f['accuracy_meters']):.1f} cm, so almost all of this comes from pose error smearing walls.")
+        add(G, "Map recall vs real scene", 100 * g["recall"], "%", 85, 70, False, "target",
+            "Share of real wall and object cells found within 15 cm.", f"The true-pose map reaches {100 * f['recall']:.0f} %: the rest was never in view.")
+        add(G, "Map precision vs real scene", 100 * g["precision"], "%", 85, 70, False, "target",
+            "Share of mapped obstacle cells within 15 cm of a real wall or object.", "Smeared and doubled walls add cells away from the real walls.")
+        add(G, "Real floor mapped as free", t["floor_mapped_as_free_pct"], "%", 95, 80, False, "target",
+            f"Share of the real floor area ({t['true_floor_area_m2']:.0f} m2) marked free in the map.", "Corners and spaces behind furniture were not observed.")
+        add(G, "Free space mapped outside the arena", t["free_mapped_outside_arena_m2"], "m2", 0.1, 0.5, True, "target",
+            "Area marked free beyond the outer wall (impossible in reality).", "Depth rays leak past walls; these cells create the phantom frontiers (F1).", 2)
+        dt = t["detection"]
+        add(G, "Object detection precision", dt["detection_precision_pct"], "%", 80, 50, False, "target",
+            f"Share of {dt['detections']} object detections lying within {t['match_radius_m']} m of one of the {dt['real_objects']} real objects.",
+            "Any occupied blob 0.18-1.05 m across is labelled 'chair' by size alone (mapping_agent.py); fragments of smeared walls count, and detections are never removed.")
+        add(G, "'Chair' labels on the real chair", f"{dt['chair_labels_on_the_real_chair']} of {dt['labelled_chair']}", "", None, None, True, "task",
+            f"The scene has {dt['real_chairs']} chair.", "There is no object recognition; the RGB image is not used for detection.", cls="Poor")
+
     G = "Agents and real-time operation"
     add(G, "SLAM update time (median)", ag["SLAMAgent"]["p50_ms"], "ms", 20, 50, True, "published", "Time per SLAM update (scan match and loop checks).",
         f"CPU only. Published tracking: ORB-SLAM2 RGB-D {B.ORB2_TRACK_MS} ms/frame, MNE-SLAM 22.1 ms (different tasks and hardware).")
@@ -294,7 +316,7 @@ CSS = """
 body { font-family: sans-serif; font-size: 9pt; color: #1b1f24; }
 h1 { font-size: 19pt; margin-bottom: 2pt; } h2 { font-size: 13pt; margin-top: 12pt; margin-bottom: 3pt; color: #0b3d91; }
 h3 { font-size: 10.5pt; margin-top: 8pt; margin-bottom: 2pt; }
-p { margin-top: 2pt; margin-bottom: 4pt; line-height: 1.25; } .note { font-size: 8pt; color: #555555; }
+p { margin-top: 2pt; margin-bottom: 4pt; line-height: 1.25; } .note { font-size: 8pt; color: #555555; } .cap { font-size: 8pt; color: #333333; margin-top: 4pt; } ul { margin-top: 2pt; margin-bottom: 4pt; } li { font-size: 9pt; line-height: 1.25; }
 table { width: 100%; margin-top: 3pt; margin-bottom: 6pt; }
 td.hdr { background-color: #e8eef9; font-weight: bold; font-size: 8pt; padding: 2pt; border: 0.5pt solid #b8c2d6; }
 td { font-size: 8pt; padding: 2pt; border: 0.5pt solid #d5dbe6; vertical-align: top; }
@@ -397,14 +419,15 @@ def build_html(d, x, figs):
              "missions, real outdoors) and FARE (autonomous exploration, wheeled). Numbers below are quoted from the cited tables; "
              "'derived' means we divided two published numbers. Differences are listed so a reader can judge.</p>")
     h.append("<h3>3a. SLAM as a whole: pose and map together (partially comparable)</h3>")
-    hh, rr, ww = C.slam_combined(d, x)
+    runs1 = [(f"run {m['run_id']}", d, x)]
+    hh, rr, ww = C.slam_combined(runs1)
     h.append(tbl(hh, rr, ww, raw_cols=(0,)))
     h.append("<p><b>Reading:</b> on both halves of SLAM we are an order of magnitude behind the neural RGB-D systems on Replica: pose error "
              f"{loc['ate_rmse_m'] * 100:.1f} cm against 0.4-1.1 cm, wall accuracy {m['mapping']['wall_accuracy_m'] * 100:.1f} cm against 1.6-2.1 cm. "
              "We are far cheaper: a map of 0.19 MB against 20-40 MB, and 0.02 s of mapping per frame against 0.14-10.5 s, on a CPU. These are not "
              "like-for-like: Replica is small single scenes with a 3D mesh map and GPU; ours is a 2D wall-cell map, 5 cm cells (which cannot resolve "
              "finer than about 2.5 cm), a forward camera with a 57 deg field of view, and gait odometry. The comparison shows where the gap is, not a ranking.</p>")
-    hh, rr, ww = C.apartment(d, x)
+    hh, rr, ww = C.apartment(runs1)
     h.append("<p><b>Multi-room scenes</b> (closest scene type to ours): ATE RMSE of published systems on Replica apartments against our arena.</p>")
     h.append(tbl(hh, rr, ww, raw_cols=(0,)))
     h.append("<h3>3b. Localization (partially comparable)</h3>")
@@ -443,13 +466,25 @@ def build_html(d, x, figs):
                   (f"MNE-SLAM (Replica)", f"{mn[1]} cm", f"{mn[2]} cm", f"{mn[3]} %", "3D neural implicit map, mesh surfaces, GPU")], [110, 70, 70, 80, 200], raw_cols=(0,)))
     h.append("<p><b>Reading:</b> the metrics share names but not definitions or scenes. A 5 cm grid cannot resolve better than about 2.5 cm, so a "
              "cell-to-cell comparison with a 1.7 cm mesh error is not fair. We make no better/worse claim.</p>")
-    h.append("<h3>3f. Experiments that would make a fair comparison possible</h3>")
+    h.append("<h3>3f. Market systems: capabilities (manufacturer pages, not measured by us)</h3>")
+    hh, rr, ww = C.market(runs1)
+    h.append(tbl(hh, rr, ww, raw_cols=(0,)))
+    h.append("<p><b>Reading:</b> commercial quadrupeds are physical products (endurance, protection, speed) and we are a simulation, so only capabilities "
+             "compare. Spot and Go2 are documented as following a recorded map or a user-given path; ANYmal, B2 and X30 pages do not say whether they "
+             "explore unknown space. Hovermap, a LiDAR payload used mainly on drones, does offer an autonomous exploration mode, so autonomous "
+             "exploration is not unique to us. Every listed product is far faster than our measured speed.</p>")
+    h.append("<h3>3g. Like-for-like reference: TUM RGB-D Pioneer robot sequences, ATE RMSE (m)</h3>")
+    hh, rr, ww = C.tum_pioneer(runs1)
+    h.append(tbl(hh, rr, ww, raw_cols=(0,)))
+    h.append("<p><b>Reading:</b> the closest public dataset to our robot (a wheeled robot with a forward Kinect on a flat floor). Running our "
+             "pipeline on it gives the first like-for-like number. Handheld 6-DoF datasets (TUM handheld, Replica, EuRoC) do not fit a planar 2D SLAM.</p>")
+    h.append("<h3>3h. Experiments that would make a fair comparison possible</h3>")
     h.append("<p>(1) Run Cartographer or another open 2D SLAM on this run's recorded scans and odometry: identical data and ground truth, the only "
              "head-to-head available (F25). (2) Run a standard nearest-frontier explorer in the same arena with the same robot for time to complete (F26). "
              "(3) Repeat our run at least three times with different gyro seeds to give a spread (F18). (4) Hardware validation (F24).</p>")
 
     # 4. fixes
-    h.append("<h2>4. Fixes needed</h2><p>Full register with evidence and acceptance checks: docs/FIXES.md. Highest priority first:</p>")
+    h.append("<h2>4. Fixes needed</h2><p>Full register with evidence and acceptance checks: docs/project/FIXES.md. Highest priority first:</p>")
     h.append(tbl(["ID", "Fix", "Why (evidence in this run)"], [
         ("F1-F3", "Remove phantom frontiers, keep the blacklist, freeze room labels", f"{m['mapping']['frontiers_remaining']} frontiers left, most unclearable; "
                                                                                   f"{x.get('waste_pct', 0):.0f} % of the path wasted; {x['room_entries_per_room']:.1f} entries per room"),
@@ -467,19 +502,103 @@ def build_html(d, x, figs):
     return "".join(h)
 
 
+def missing_content(html_text, pdf_path):
+    """PyMuPDF's HTML renderer can silently drop content at a page break inside a long table. Return every heading,
+    table caption and figure caption of the HTML that cannot be found in the finished PDF."""
+    import html as _html
+    import re
+    import unicodedata
+
+    def norm(t):
+        return re.sub(r"\s+", "", unicodedata.normalize("NFKC", _html.unescape(re.sub(r"<[^>]+>", "", t)))).replace("\u00ad", "")
+
+    doc = fitz.open(pdf_path)
+    got = norm(" ".join(pg.get_text() for pg in doc))
+    doc.close()
+    want = [m for m in re.findall(r"<h[1-3]>(.*?)</h[1-3]>", html_text)]
+    want += [f"Table {n}." for n in re.findall(r"<b>Table (\d+)\.</b>", html_text)]
+    want += [f"Figure {n}." for n in re.findall(r"<b>Figure (\d+)\.</b>", html_text)]
+    return [w for w in want if norm(w) not in got]
+
+
 def render(html_text, run_dir, out, footer):
-    """HTML -> A4 PDF with page numbers (shared with results_pdf)."""
-    story = fitz.Story(html=html_text, user_css=CSS, archive=fitz.Archive(run_dir))
+    """HTML -> A4 PDF with page numbers (shared by all PDF builders).
+
+    PyMuPDF's HTML renderer silently drops content when a table is split across a page break, so the document is laid
+    out block by block: each heading, paragraph, table, list or figure is measured, a block that does not fit in the
+    space left on the page moves whole to the next page, and a heading is kept with the block that follows it. A
+    completeness check at the end raises if any heading or caption is still missing."""
+    import re
+    arch = fitz.Archive(run_dir)
+    page = fitz.paper_rect("a4")
+    left, top, right, bottom = page.x0 + 34, page.y0 + 36, page.x1 - 34, page.y1 - 40
+    blocks = [m.group(0) for m in re.finditer(r"<(h[1-3]|p|table|ul)\b.*?</\1>", html_text, re.S)]
+
+    def story(html):
+        return fitz.Story(html=html, user_css=CSS, archive=arch)
+
+    def height(html):
+        more, filled = story(html).place(fitz.Rect(0, 0, right - left, 4000))
+        return fitz.Rect(filled).height
+
     raw = out + ".raw"
     writer = fitz.DocumentWriter(raw)
-    page = fitz.paper_rect("a4")
-    where = page + (34, 36, -34, -40)
-    more = 1
-    while more:
-        dev = writer.begin_page(page)
-        more, _ = story.place(where)
-        story.draw(dev)
-        writer.end_page()
+    state = {"dev": None, "y": top}
+
+    def new_page():
+        if state["dev"] is not None:
+            writer.end_page()
+        state["dev"] = writer.begin_page(page)
+        state["y"] = top
+
+    new_page()
+    i = 0
+    while i < len(blocks):
+        blk = blocks[i]
+        h = height(blk)
+        is_table = blk.startswith("<table")
+        gap = 0 if state["y"] == top else (6 if blk.startswith("<h") else 2)
+        room = bottom - state["y"] - gap
+        # a table that does not fit is split between rows (header repeated); each piece is its own block
+        if is_table and h > room and room > 120:
+            rows = re.findall(r"<tr>.*?</tr>", blk, re.S)
+            head, body = rows[0], rows[1:]
+            k = 0
+            for n in range(1, len(body)):
+                if height("<table>" + head + "".join(body[:n]) + "</table>") <= room:
+                    k = n
+                else:
+                    break
+            if k >= 2 and len(body) - k >= 1:
+                blocks[i:i + 1] = ["<table>" + head + "".join(body[:k]) + "</table>", "<table>" + head + "".join(body[k:]) + "</table>"]
+                continue
+        # a heading or caption stays with (the start of) the block that follows it
+        need, j, cur = gap + h, i, blk
+        while (cur.startswith("<h") or "class='cap'" in cur[:30]) and j + 1 < len(blocks) and j - i < 3:
+            j += 1
+            cur = blocks[j]
+            need += min(height(cur), 130 if cur.startswith("<table") else 70)
+        need = min(need, bottom - top)
+        if state["y"] + need > bottom and state["y"] > top:
+            new_page()
+            gap = 0
+        if h > bottom - top:  # taller than a page (not expected: tables are split between rows)
+            st = story(blk)
+            more = 1
+            while more:
+                more, _ = st.place(fitz.Rect(left, state["y"], right, bottom))
+                st.draw(state["dev"])
+                if more:
+                    new_page()
+            state["y"] = bottom
+            i += 1
+            continue
+        st = story(blk)
+        st.place(fitz.Rect(left, state["y"] + gap, right, state["y"] + gap + h + 3))
+        st.draw(state["dev"])
+        state["y"] += gap + h
+        i += 1
+    writer.end_page()
     writer.close()
     doc = fitz.open(raw)
     for i, pg in enumerate(doc):
@@ -487,13 +606,16 @@ def render(html_text, run_dir, out, footer):
         pg.insert_text((520, 818), f"page {i + 1} / {len(doc)}", fontsize=7, color=(0.4, 0.4, 0.4))
     doc.save(out, garbage=3, deflate=True)
     doc.close()
-    del writer, story
+    del writer
     import gc
     gc.collect()
     try:
         os.remove(raw)  # the writer can keep the handle on Windows; a leftover .raw is git-ignored
     except OSError:
         pass
+    lost = missing_content(html_text, out)
+    if lost:
+        raise RuntimeError(f"{out}: renderer dropped content ({len(lost)} items), first: {lost[:3]}")
     print(f"  [SAVED] {out}")
     return out
 
@@ -502,7 +624,7 @@ def build(run_dir, out=None):
     d = load_run(run_dir)
     x = derived(d)
     figs = figures(d, x)
-    out = out or os.path.join(ROOT, "docs", "DIAGNOSTIC_REPORT.pdf")
+    out = out or os.path.join(ROOT, "docs", "results", "DIAGNOSTIC_REPORT.pdf")
     return render(build_html(d, x, figs), run_dir, out, f"Diagnostic report, run {d['m']['run_id']}")
 
 
