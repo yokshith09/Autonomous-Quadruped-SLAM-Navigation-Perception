@@ -153,7 +153,7 @@ runs/                one folder per measured run (the raw recording stays local)
 docs/
   results/           PROJECT_REPORT.pdf, RESULTS.pdf (to share), DIAGNOSTIC_REPORT.pdf (internal)
   project/           OBJECTIVES.md, BASELINE.md, FIXES.md
-  course/            project panel documents and architecture diagram
+  system_architecture_diagram.html   project architecture diagram (course document)
   images/            figures used in this README
 ```
 
