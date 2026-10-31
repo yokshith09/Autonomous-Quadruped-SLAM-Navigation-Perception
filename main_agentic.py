@@ -427,6 +427,8 @@ def main():
                     print(f"  [t={t:6.0f}s] state {frontier_agent.state} | rooms cleared {len(frontier_agent.explored_rooms)}"
                           f" | explored {exp_pct:.1f}% | ATE {live_ate_rmse * 100:.0f} cm | err now {live_drift_m * 100:.0f} cm"
                           f" | yaw err {live_heading_err_deg:.1f} deg | F1 {live_f1 * 100:.0f}% | {gait_str}", flush=True)
+                    tel.record_progress(t, frontier_agent.state, len(frontier_agent.explored_rooms), exp_pct, live_ate_rmse * 100,
+                                        live_drift_m * 100, live_heading_err_deg, live_f1 * 100)
 
             tel.loop_time((time.perf_counter() - loop_t0) * 1000.0)
             step_count += 1

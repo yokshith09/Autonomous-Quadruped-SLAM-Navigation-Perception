@@ -147,6 +147,7 @@ class RunTelemetry:
         self.event_log = []
         self.track_ok, self.track_t, self.scan_pts = [], [], []
         self.loop_ms = []
+        self.progress = []            # one row per 30 s of simulated time, written to progress.csv
         self.res = []                 # (wall_s, cpu_pct, rss_mb)
         self._stop = threading.Event()
         self._sampler = None
@@ -200,6 +201,15 @@ class RunTelemetry:
             scan = slam_agent.latest_scan
             self.scan_pts.append(len(scan.points_2d) if scan is not None else 0)
         self.overhead_s += time.perf_counter() - s
+
+    def record_progress(self, t, state, rooms_cleared, explored_pct, ate_cm, err_now_cm, yaw_err_deg, f1_pct):
+        """Called from the progress line; never raises into the control loop."""
+        try:
+            if len(self.progress) < 100_000:
+                self.progress.append((f"{t:.0f}", state, rooms_cleared, f"{explored_pct:.1f}", f"{ate_cm:.0f}", f"{err_now_cm:.0f}",
+                                      f"{yaw_err_deg:.1f}", f"{f1_pct:.0f}"))
+        except Exception:
+            pass
 
     def loop_time(self, ms):
         self._push(self.loop_ms, "loop", ms)
@@ -382,6 +392,11 @@ class RunTelemetry:
                 w.writeheader()
                 w.writerows(m["agents"])
         n = min(len(gt), len(est), len(times))
+        if self.progress:
+            with open(os.path.join(self.dir, "progress.csv"), "w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["t_s", "state", "rooms_cleared", "explored_pct", "ate_cm", "err_now_cm", "yaw_err_deg", "f1_pct"])
+                w.writerows(self.progress)
         with open(os.path.join(self.dir, "trajectory.csv"), "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["t_s", "gt_x_m", "gt_y_m", "gt_yaw_rad", "est_x_m", "est_y_m", "est_yaw_rad"])

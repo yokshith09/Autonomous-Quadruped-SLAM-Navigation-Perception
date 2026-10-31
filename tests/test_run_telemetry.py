@@ -106,6 +106,17 @@ def test_overhead_estimate_is_small_and_scales():
     assert 0 <= one < 0.05 and two > one * 1.2
 
 
+def test_progress_is_written_and_failures_are_isolated():
+    with tempfile.TemporaryDirectory() as d:
+        tel = RunTelemetry(out_root=d, argv=["test"])
+        tel.record_progress(30.0, "INTRA_ROOM_SWEEP", 0, 16.1, 3.0, 5.0, 1.9, 98.0)
+        tel.record_progress("bad", None, None, None, None, None, None, None)      # must not raise
+        gt = straight(n=101, length=5.0)
+        tel.finalize(agents=[], gt=gt, est=gt, times=[i * 0.05 for i in range(101)], grid_metrics=None, ctx={"end_reason": "test"})
+        rows = open(os.path.join(tel.dir, "progress.csv"), encoding="utf-8").read().strip().splitlines()
+        assert rows[0].startswith("t_s,state") and len(rows) == 2 and rows[1].startswith("30,INTRA_ROOM_SWEEP,0,16.1")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
