@@ -78,7 +78,7 @@ The seven agents run in one Python process. Each simulation step the main loop c
 | Robot and gait | `core/robot.py` | Walking gait, steering, calibrated odometry, simulated gyro |
 | Sensors | `core/sensors.py` | Camera model and depth back-projection |
 | Telemetry | `evaluation/run_telemetry.py` | Per-run metrics, timing of every agent, run manifest |
-| Scoring | `evaluation/truth_eval.py`, `accuracy_evaluator.py` | Scores pose, map and objects against ground truth and the real scene geometry |
+| Scoring and comparison | `evaluation/truth_eval.py`, `accuracy_evaluator.py`, `compare_runs.py` | Scores pose, map and objects against ground truth and the real scene geometry |
 | Offline replay and ablation | `evaluation/slam_replay.py`, `ablate.py` | Re-runs SLAM on recorded data to measure each component |
 | Integrity audit | `evaluation/audit.py` | Checks that no ground truth leaks into the estimator |
 | Reports and figures | `evaluation/report.py`, `results_pdf.py`, `baseline_pdf.py`, `project_report.py`, `make_figures.py` | Automatic reports and PDFs |
@@ -166,6 +166,7 @@ Each run folder contains `REPORT.md`, `metrics.json`, `trajectory.csv`, `manifes
 | Run options | `python main_agentic.py --headless` (no HUD window), `--max-time S` (safety limit in simulated seconds, default 3600) |
 | Score a run against the real scene | `python -m evaluation.truth_eval runs/<run_id>` (also runs automatically after a run) |
 | Read the scene's wall and object geometry | `python -m evaluation.scene_truth` (simulator open, not running) |
+| Compare new runs with the baseline | `python -m evaluation.compare_runs runs/20261024_210638 runs/<new_run>` (several new runs give mean and spread) |
 | Rebuild a run's report | `python -m evaluation.report runs/<run_id>` |
 | Internal diagnostic PDF | `python -m evaluation.baseline_pdf runs/<run_id>` |
 | Full project report (PDF and Word) | `python -m evaluation.project_report runs/<run_id>` |

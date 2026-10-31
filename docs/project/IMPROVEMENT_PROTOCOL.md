@@ -25,7 +25,14 @@ The recording exists only on one computer. Copy it somewhere safe (external driv
 | Any change | `python tests/test_agents.py`, `python tests/test_slam_accuracy.py`, `python tests/test_run_telemetry.py` |
 
 ## Comparing with the baseline
-After a run, compare `runs/<new>/metrics.json` with `runs/20261024_210638/metrics.json` on the same rows used in `docs/results/RESULTS.pdf`: task completed, time to complete, distance and speed, real floor mapped, ATE and drift, RPE, map accuracy/precision/recall against the real scene, frontiers remaining and room entries, per-agent time and real-time factor. Report **before and after together**, and say how many runs each number comes from.
+One command prints the whole comparison, with a Better / Worse / Same verdict per metric and the mean and spread when several runs are given:
+
+```
+python -m evaluation.compare_runs runs/20261024_210638 runs/<new_run> [runs/<another_new_run> ...] --out comparison.md
+```
+
+Each run folder now also saves its own `progress.csv` (coverage, rooms and error every 30 simulated seconds), which the coverage-plateau metric needs.
+It compares the same rows as `docs/results/RESULTS.pdf`: task completed, time to complete, distance and speed, real floor mapped, ATE and drift, RPE, map accuracy/precision/recall against the real scene, frontiers remaining and room entries, per-agent time and real-time factor. Report **before and after together**, and say how many runs each number comes from.
 
 ## Order of work
 1. F1 to F4: make exploration finish (without this no timing or coverage comparison is meaningful).

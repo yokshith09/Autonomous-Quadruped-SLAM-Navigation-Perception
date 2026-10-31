@@ -47,6 +47,8 @@ Status as of baseline run `20261024_210638`. Results: `docs/results/RESULTS.pdf`
 | Complete formal project report (what, inputs, outputs, processing, why, methods, all results, comparisons, evaluation, graphs) and a restructured README with quick start | Done (`docs/results/PROJECT_REPORT.pdf` and `.docx`, `README.md`) |
 | Full market comparison and a like-for-like reference for later dataset runs | Done (RESULTS.pdf sections 13-14): 6 commercial systems; TUM RGB-D Pioneer reference, ours not yet run |
 
+| Tool to compare each improvement against the baseline | Done (`evaluation/compare_runs.py`) |
+
 ## Next steps (in order; details and acceptance checks in `docs/project/FIXES.md`)
 1. Profile one short run (`cProfile`) to find where the 3074 s outside the agents goes (F12).
 2. Apply the exploration fixes F1-F4, run uncapped, compare against this baseline.
