@@ -5,6 +5,10 @@ internal use: why each value came out that way, a Good / Improve / Poor class, t
 [`runs/20261024_210638/REPORT.md`](../../runs/20261024_210638/REPORT.md). Every fix needed is in [`FIXES.md`](FIXES.md).
 Nothing has been optimized yet.
 
+## Saved reference points
+Git tags `baseline-code-run1` (the exact code that produced the run) and `baseline-v1` (the baseline with its documents). How to improve from here without losing
+the comparison: [`IMPROVEMENT_PROTOCOL.md`](IMPROVEMENT_PROTOCOL.md).
+
 ## Setup
 - Code: snapshot commit `6f9c01e` (the run recorded `1f231d2` plus uncommitted changes, which are exactly that commit).
 - One run, 1800 simulated seconds (a cap I set), 5666 s of wall time (0.32x real time). Ended by **timeout**, not completion:
