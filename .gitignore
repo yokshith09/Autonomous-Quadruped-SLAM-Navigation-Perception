@@ -12,8 +12,4 @@ runs/*/recording.npz
 accuracy_results/
 captured_matrices/
 
-# Local tooling
-.agents/
-.claude/
-.anchor/
 .playwright-cli/
