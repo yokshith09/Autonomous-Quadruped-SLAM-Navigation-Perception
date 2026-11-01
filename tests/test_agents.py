@@ -272,6 +272,50 @@ def test_semantic_entity_extraction():
     print("PASSED")
 
 
+def _walled_room():
+    """3 x 3 m free room inside a one-cell wall; everything else unknown."""
+    grid = BayesianOccupancyGrid(-2.0, 2.0, -2.0, 2.0, 0.05)
+    lo = grid.grid_log_odds
+    lo[:] = 0.0
+    lo[10:71, 10:71] = 2.0
+    lo[11:70, 11:70] = -2.0
+    return grid
+
+
+def _explore_static(fa, x, y, max_decisions=50):
+    """Walk the robot to each target on a frozen map; return decisions until the agent returns no target."""
+    fa.on_pose(PoseMsg(timestamp=0.0, x=x, y=y, yaw=0.0))
+    for n in range(1, max_decisions + 1):
+        tgt = fa.select_frontier(current_time=n * 10.0)
+        if tgt is None:
+            return n
+        fa.on_pose(PoseMsg(timestamp=n, x=tgt.target_wx, y=tgt.target_wy, yaw=0.0))
+    return None
+
+
+def test_frontier_behind_wall_is_ignored():
+    """F1: depth rays leaking past a wall leave free cells outside it; their frontier cannot be observed from inside."""
+    print("Running test_frontier_behind_wall_is_ignored...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[35:46, 71] = -2.0  # leaked free strip just outside the east wall, unknown beyond
+    assert grid.detect_frontiers()
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    assert _explore_static(fa, 0.0, 0.0) == 1 and fa.state == "MISSION_COMPLETE"
+    print("PASSED")
+
+
+def test_unobservable_frontier_is_retired_not_revisited():
+    """F2: a frontier still unknown after the robot stood at its viewpoint is retired for good (baseline re-picked one
+    such spot 141 times in its last 90 s)."""
+    print("Running test_unobservable_frontier_is_retired_not_revisited...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[38:41, 50:53] = 0.0  # unknown pocket the frozen map never resolves
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    n = _explore_static(fa, -1.0, -1.0)
+    assert n is not None and n <= 4 and fa.state == "MISSION_COMPLETE"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -293,6 +337,8 @@ if __name__ == "__main__":
     test_locomotion_agent()
     test_frontier_boundary_room_association()
     test_semantic_entity_extraction()
+    test_frontier_behind_wall_is_ignored()
+    test_unobservable_frontier_is_retired_not_revisited()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 

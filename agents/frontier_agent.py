@@ -7,6 +7,10 @@ from typing import List, Tuple, Set, Optional
 from .base import BaseAgent
 from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEventMsg
 from core.robot import norm_angle
+from core.grid import bresenham_line
+
+MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
+RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 
 
 class FrontierAgent(BaseAgent):
@@ -22,7 +26,10 @@ class FrontierAgent(BaseAgent):
         self.active_room_id: int = -1
         self.explored_rooms: Set[int] = set()
         self.visited_doorways: Set[Tuple[float, float]] = set()
-        self.blacklist_frontiers: Set[Tuple[int, int]] = set()
+        self.blacklist_frontiers: Set[Tuple[int, int]] = set()  # retired frontiers; never cleared
+        self.strikes: dict = {}
+        self.committed_frontier: Optional[Tuple[int, int]] = None  # raw frontier cell behind committed_target (a nav cell)
+        self._raw_of: dict = {}
         self.visited_positions: List[Tuple[float, float]] = []
         self.state: str = "INTRA_ROOM_SWEEP"  # INTRA_ROOM_SWEEP | INTER_ROOM_TRANSIT | GLOBAL_EXPLORATION | MISSION_COMPLETE
 
@@ -42,8 +49,33 @@ class FrontierAgent(BaseAgent):
     def _is_doorway_visited(self, dw: Tuple[float, float]) -> bool:
         return any(math.hypot(dw[0] - vd[0], dw[1] - vd[1]) < 0.65 for vd in self.visited_doorways)
 
-    def _is_blacklisted(self, gx: int, gy: int, radius: float = 3.0) -> bool:
+    def _is_blacklisted(self, gx: int, gy: int, radius: float = RETIRE_RADIUS) -> bool:
         return any(math.hypot(gx - bgx, gy - bgy) <= radius for bgx, bgy in self.blacklist_frontiers)
+
+    def _strike(self, cell, limit: int) -> None:
+        """Count a failed attempt at a frontier; retire it permanently after `limit` failures."""
+        if cell is None:
+            return
+        k = (int(cell[0]) // 6, int(cell[1]) // 6)
+        self.strikes[k] = self.strikes.get(k, 0) + 1
+        if self.strikes[k] >= limit:
+            self.blacklist_frontiers.add((int(cell[0]), int(cell[1])))
+
+    def _retire_committed(self, limit: int) -> None:
+        self._strike(self.committed_target, limit)
+        self._strike(self.committed_frontier, limit)
+
+    def _visible_unknown(self, vx: int, vy: int, gx: int, gy: int, r: int = 3) -> int:
+        """Unknown cells around frontier (gx, gy) that a straight ray from viewpoint (vx, vy) reaches without crossing an
+        occupied cell. Zero for frontiers behind a wall (depth leaks) or inside objects: going there cannot reveal anything."""
+        lo, g = self.grid.grid_log_odds, self.grid
+        n = 0
+        for y in range(max(0, gy - r), min(g.height, gy + r + 1)):
+            for x in range(max(0, gx - r), min(g.width, gx + r + 1)):
+                if g.thresh_free < lo[y, x] < g.thresh_occ and \
+                        all(lo[cy, cx] < g.thresh_occ for cx, cy in list(bresenham_line(vx, vy, x, y))[:-1]):
+                    n += 1
+        return n
 
     def _compute_geodesic_field(self, start_gx: int, start_gy: int) -> Tuple[np.ndarray, np.ndarray]:
         """Compute 2D obstacle-inflated Geodesic (Wavefront) distance map in meters from (start_gx, start_gy).
@@ -123,15 +155,13 @@ class FrontierAgent(BaseAgent):
             tgx = event_msg.details.get("target_gx")
             tgy = event_msg.details.get("target_gy")
             if tgx is not None and tgy is not None:
-                self.blacklist_frontiers.add((tgx, tgy))
+                self._strike((tgx, tgy), limit=2)
             # Temporary back-off: clear committed doorway without marking it permanently visited
             self.committed_doorway = None
             if self.committed_target is not None:
-                self.blacklist_frontiers.add(self.committed_target)
+                self._retire_committed(limit=2)
                 self.committed_target = None
                 print("  [FRONTIER] Cleared stalled target from watchdog alert. Re-evaluating alternatives.")
-            if len(self.blacklist_frontiers) > 40:
-                self.blacklist_frontiers.clear()
         elif event_msg.event_type == "ROOM_COMPLETED":
             self.committed_target = None
             self.committed_doorway = None
@@ -183,7 +213,7 @@ class FrontierAgent(BaseAgent):
                     self.committed_doorway = None
                     print(f"  [FRONTIER] Successfully transited through doorway to ({cwx:.2f}, {cwy:.2f})")
                 else:
-                    self.blacklist_frontiers.add(self.committed_target)
+                    self._retire_committed(limit=1)  # stood at its viewpoint; whatever is still unknown there is unobservable
                 self.committed_target = None
 
         # Detect current room
@@ -275,9 +305,10 @@ class FrontierAgent(BaseAgent):
                             f_geo, f_nav = self._query_geodesic_dist(dist_map, fgx, fgy, search_radius=5)
                             if ang_err <= 0.65 and np.isfinite(f_geo) and f_geo >= 0.35:
                                 best_slide_d = d_shift
-                                best_slide = (f_nav[0], f_nav[1], fwx, fwy, farea)
+                                best_slide = (f_nav[0], f_nav[1], fwx, fwy, farea, (fgx, fgy))
                     if best_slide is not None:
                         self.committed_target = (best_slide[0], best_slide[1])
+                        self.committed_frontier = best_slide[5]
                         target_msg = FrontierTargetMsg(
                             timestamp=current_time,
                             target_gx=best_slide[0],
@@ -291,15 +322,18 @@ class FrontierAgent(BaseAgent):
                         self.bus.publish("frontier/target", target_msg)
                         return target_msg
 
-            # Target expired, cleared, or became unreachable
+            # Target expired (commitment window over), cleared, or became unreachable. Only a lost path counts as a
+            # failure; an expired window just re-opens the choice (the frontier stays a candidate).
             if self.committed_doorway is not None:
                 self.visited_doorways.add(self.committed_doorway)
                 self.committed_doorway = None
-            self.blacklist_frontiers.add(self.committed_target)
+            if not np.isfinite(geo_d):
+                self._retire_committed(limit=2)
             self.committed_target = None
 
-        # 1. Collect all REACHABLE non-blacklisted candidates using Geodesic Wavefront
+        # 1. Collect all REACHABLE, OBSERVABLE, non-retired candidates using Geodesic Wavefront
         candidates = []
+        self._raw_of = {}
         for f in all_frontiers:
             gx, gy, area = f
             if self._is_blacklisted(gx, gy):
@@ -307,15 +341,10 @@ class FrontierAgent(BaseAgent):
             geo_dist, nav_cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=6)
             if not np.isfinite(geo_dist):
                 continue  # Provably unreachable by A* right now -> skip!
+            if self._visible_unknown(nav_cell[0], nav_cell[1], gx, gy) < MIN_VISIBLE_UNKNOWN:
+                continue  # behind a wall or inside an object: nothing to see from where the robot can stand
+            self._raw_of[nav_cell] = (gx, gy)
             candidates.append(((nav_cell[0], nav_cell[1], area), geo_dist))
-
-        if not candidates and self.blacklist_frontiers:
-            self.blacklist_frontiers.clear()
-            for f in all_frontiers:
-                gx, gy, area = f
-                geo_dist, nav_cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=7)
-                if np.isfinite(geo_dist):
-                    candidates.append(((nav_cell[0], nav_cell[1], area), geo_dist))
 
         if not candidates and int(np.count_nonzero(np.isfinite(dist_map))) > 400:
             # Robot has room to move (>1 m^2 reachable) yet no frontier is reachable: exploration is done.
@@ -371,6 +400,7 @@ class FrontierAgent(BaseAgent):
             target_frontier = self._score_frontiers(room_frontiers, rx, ry, r_yaw)
             gx, gy, area = target_frontier
             self.committed_target = (gx, gy)
+            self.committed_frontier = self._raw_of.get((gx, gy), (gx, gy))
             self.commitment_time = current_time
             wx, wy = self.grid.grid_to_world(gx, gy)
             
@@ -420,6 +450,7 @@ class FrontierAgent(BaseAgent):
             target_wx, target_wy = self.grid.grid_to_world(dgx, dgy)
 
             self.committed_target = (dgx, dgy)
+            self.committed_frontier = None
             self.commitment_time = current_time
             print(f"  [FRONTIER] [INTER_ROOM_TRANSIT] Penetrating Doorway -> ({target_wx:.2f}, {target_wy:.2f})")
             target_msg = FrontierTargetMsg(
@@ -441,6 +472,7 @@ class FrontierAgent(BaseAgent):
             target_frontier = self._score_frontiers(other_frontiers, rx, ry, r_yaw)
             gx, gy, area = target_frontier
             self.committed_target = (gx, gy)
+            self.committed_frontier = self._raw_of.get((gx, gy), (gx, gy))
             self.commitment_time = current_time
             wx, wy = self.grid.grid_to_world(gx, gy)
             
