@@ -1,6 +1,6 @@
 # Fix register
 
-Every fix needed after the baseline (run `20261024_210638`, commit `6f9c01e`), with its evidence, planned change and
+Every fix needed after the baseline (run `20261024_210638`, git tag `baseline-code-run1`), with its evidence, planned change and
 how it will be verified. Nothing here has been applied yet except where status says so. Verify each fix by re-running
 `python main_agentic.py` and comparing `runs/<new>/REPORT.md` against the baseline; speed-ups must additionally leave
 the replay of the baseline recording unchanged.

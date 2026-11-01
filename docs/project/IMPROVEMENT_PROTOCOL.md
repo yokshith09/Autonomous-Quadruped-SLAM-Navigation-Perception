@@ -5,7 +5,7 @@ How to improve the system from the baseline without losing the ability to say wh
 ## Reference points (do not move or rewrite these)
 | What | Where |
 |---|---|
-| Baseline code that produced the run | git tag `baseline-code-run1` (commit `6f9c01e`) |
+| Baseline code that produced the run | git tag `baseline-code-run1` |
 | Baseline with its documents | git tag `baseline-v1` |
 | Baseline results | `runs/20261024_210638/` (metrics, trajectory, report), `docs/results/` (PDFs, Word) |
 | Baseline raw sensor recording | `runs/20261024_210638/recording.npz` (350 MB, **not in git**, SHA-256 starts `321fdb51f4d679ac`) |
@@ -13,7 +13,7 @@ How to improve the system from the baseline without losing the ability to say wh
 The recording exists only on one computer. Copy it somewhere safe (external drive or cloud) before changing anything: it is the only way to prove that a speed-up leaves the SLAM result unchanged.
 
 ## Rules
-1. **`main` stays at the baseline until a change is shown to help.** Work on a branch per topic (for example `improve/exploration`), merge to `main` only after the measurements below.
+1. **`main` stays at the baseline.** All work (fixes, runs, tests, comparisons) happens on a branch such as `improve/exploration`. A change is merged to `main` **only with the project owner's explicit approval**, after the measurements below show it helps; never automatically.
 2. **One fix per commit**, named by its ID in `FIXES.md` (for example `fix(F1): ...`). Never mix a behaviour change with a measurement change in one commit.
 3. **Do not change how a number is measured while improving the thing measured.** If a metric turns out to be wrong, fix it in its own commit and rebuild the baseline report.
 

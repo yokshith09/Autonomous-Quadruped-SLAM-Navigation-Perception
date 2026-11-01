@@ -10,8 +10,9 @@ Git tags `baseline-code-run1` (the exact code that produced the run) and `baseli
 the comparison: [`IMPROVEMENT_PROTOCOL.md`](IMPROVEMENT_PROTOCOL.md).
 
 ## Setup
-- Code: snapshot commit `6f9c01e` (the run recorded `1f231d2` plus uncommitted changes, which are exactly that commit).
-- One run, 1800 simulated seconds (a cap I set), 5666 s of wall time (0.32x real time). Ended by **timeout**, not completion:
+- Code: git tag `baseline-code-run1` (the run's manifest records `1f231d2` plus uncommitted changes; that is the commit ID from before the
+  2026-11-01 history rewrite that removed tool attribution lines, and the code is exactly the tagged commit)
+- One run, 1800 simulated seconds (the run's time limit), 5666 s of wall time (0.32x real time). Ended by **timeout**, not completion:
   6 of 8 rooms completed, 48 frontiers left.
 - The replay is faithful: the full-system replay matches the live trajectory to 0.01 cm; two identical replays are identical.
 
