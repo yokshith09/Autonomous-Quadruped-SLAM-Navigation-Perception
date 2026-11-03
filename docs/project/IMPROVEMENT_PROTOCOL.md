@@ -38,4 +38,4 @@ It compares the same rows as `docs/results/RESULTS.pdf`: task completed, time to
 1. F1 to F4: make exploration finish (without this no timing or coverage comparison is meaningful).
 2. Profile (F12): find where the 54% of wall time outside the agents goes.
 3. F7 to F9: accuracy. 4. F5, F13 to F15: speed. 5. F28, F29: perception and knowledge graph. 6. F25 to F27: external validation.
-Update the Status of each fix in `FIXES.md` as it is verified, and keep every run folder you compare against.
+Update the Status of each fix in `FIXES.md` as it is verified, record every step in `PROGRESS.md` (done / not done), and keep every run folder you compare against.
