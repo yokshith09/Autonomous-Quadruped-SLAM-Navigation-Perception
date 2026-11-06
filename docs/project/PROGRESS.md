@@ -21,9 +21,10 @@ is** with small error, and **detects the objects** in each room.
 | Runs in real time | Real-time factor | 0.32 | >= 1 | F12, F13, F14 |
 
 ## Plan (one step at a time: diagnose, fix, verify against the baseline, record here)
-1. Profile (F12) and live-verify F1, F2.
-2. F33 (map noise seals rooms), F3 (stable room labels): all 8 rooms reachable, each entered once.
-3. F16 then F7: why 73 % of scan matches are rejected; cut RPE. Then F8, F9: walls and ATE.
+1. Profile (F12) and live-verify F1, F2. Done; F3 part 1 added after the first live check.
+2. **Localization first** (run 2 showed pose drift, not frontier logic, now stops exploration): F16 then F7, F9:
+   which SLAM part adds the error, why 73 % of scan matches are rejected; cut ATE and RPE. Then F8 walls.
+3. F33 (map noise seals rooms), F3 part 2 (stable room labels): all 8 rooms reachable, each entered once.
 4. F13, F14, F5: stalls and speed.
 5. F28, F29: object detection from the colour image; real knowledge graph.
 
@@ -40,12 +41,14 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **F14 part 1**: ray-casting 1.33x faster, map bit-identical; HUD frontiers only on HUD frames | commits `3f38a34`, `638ea9b` |
 | 2026-11-07 | **First live check of F1, F2**: failed. Livelock from 660 s: active room alternated 4 / 6 twenty times, one target picked 19 times (stopped at 930 s) | run `20261107_004151`, `runs/live_f1f2.log` |
 | 2026-11-07 | **F3 part 1 implemented**: an unfinished room is never abandoned on a label change | new test fails on old code, passes on new |
+| 2026-11-07 | **Live run 2 (F1, F2, F3 part 1)**: exploration behaviour fixed (path after coverage plateau 46 % -> 8 %, each room entered once, no repeated targets, mission ends by itself at 1011 s; real-time factor 0.32 -> 0.51). **But** ATE 31 -> 73 cm on this route; the smeared map sealed the rest, so the completion is false (4 rooms cleared, 77 frontiers unreachable, map F1 77.7 % -> 59.7 %) | run `20261107_011529`, `compare_runs` against the baseline |
 
 ## Not done yet
 | Item | Status | Needs |
 |---|---|---|
 | F33 map noise seals 2 rooms | Diagnosed, not fixed | After F1/F2 live check (it is a map-accuracy fix, grouped with F7 to F9) |
-| F1, F2, F3 part 1 live verification | Running | Full run + `compare_runs` against the baseline |
+| **Localization drift (blocks all-rooms)** | Diagnosing: run 2 error grows in jumps at turns and in the south area, not smoothly along a corridor; replay ablation running to find which SLAM part adds the error | Recording `runs/20261107_011529/recording.npz` |
+| Room entries metric | Divides entries by rooms *found*, so 4 entries / 8 found = 0.50 looks "better"; should be entries per room entered | Measurement fix, own commit |
 | F3 part 2 room labels drift | Diagnosed, not fixed | After the live check |
 | F14 compiled ray-casting (numba) | Proposed | Owner decision on the new dependency |
 | Diagnose results 3, 4, 5, 6, 8, 9 (ATE, RPE, map accuracy, ICP acceptance, real time, detection) | Recorded in `FIXES.md`, detailed diagnosis not started | One at a time, in order |
