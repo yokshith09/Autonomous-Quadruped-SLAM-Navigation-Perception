@@ -317,9 +317,8 @@ def main():
             # C. Real-Time Diagnostics, Telemetry & Dashboard
             actuation_msg = bus.get_latest("control/actuation")
             active_room_str = f"Room {frontier_agent.active_room_id}" if frontier_agent.active_room_id > 0 else "Exploring"
-            all_frontiers = mapping_agent.grid.detect_frontiers()
-
             if step_count % 5 == 0:
+                all_frontiers = mapping_agent.grid.detect_frontiers()  # HUD only; was computed every step (F12 profile)
                 grid_msg = bus.get_latest("map/grid")
                 rgbd_msg = bus.get_latest("sensor/rgbd")
                 path_msg = bus.get_latest("plan/path")
