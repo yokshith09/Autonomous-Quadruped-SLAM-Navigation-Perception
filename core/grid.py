@@ -78,70 +78,70 @@ class BayesianOccupancyGrid:
         return True # out of bounds is implicitly occupied
 
     def update_from_depth_points(self, points_world, robot_pos, sample_rate=24):
+        # Hot loop (about 40 % of wall time in the profile): Bresenham and the cell state test are inlined and
+        # attributes bound to locals. The arithmetic and the order of updates are exactly those of the plain
+        # version (each ray sees the cells earlier rays in the same scan changed), so the map is bit-identical.
+        L = self.grid_log_odds
+        l_free, l_occ, l_min, l_max = self.l_free, self.l_occ, self.l_min, self.l_max
+        thresh_occ = self.thresh_occ
+        width, height = self.width, self.height
+        x_min, x_max, y_min, y_max, res = self.x_min, self.x_max, self.y_min, self.y_max, self.res
         changed_cells = set()
+        add = changed_cells.add
         cells_updated = 0
-        rgx, rgy = self.world_to_grid(*robot_pos[:2])
+        rx, ry = robot_pos[0], robot_pos[1]
+        rgx, rgy = self.world_to_grid(rx, ry)
 
         # Free space at robot base
-        if self.grid_log_odds[rgy, rgx] > self.thresh_free:
-            self.grid_log_odds[rgy, rgx] = max(self.l_min, self.grid_log_odds[rgy, rgx] + self.l_free)
-            changed_cells.add((rgx, rgy))
+        if L[rgy, rgx] > self.thresh_free:
+            L[rgy, rgx] = max(l_min, L[rgy, rgx] + l_free)
+            add((rgx, rgy))
             cells_updated += 1
 
         # Downsample points for performance
-        points_to_process = points_world[::sample_rate]
-
-        for pt in points_to_process:
+        for pt in points_world[::sample_rate]:
             px, py, pz = pt[0], pt[1], pt[2]
-            
-            # distance from robot
-            dist = math.hypot(px - robot_pos[0], py - robot_pos[1])
-            if dist < 0.22:
-                continue # Ignore robot's own body
-            if not (self.x_min <= px <= self.x_max and self.y_min <= py <= self.y_max):
-                continue
-            pgx, pgy = self.world_to_grid(px, py)
 
-            # Height filter:
-            # Ground points (< 4cm) are FREE space.
-            # Obstacle points (4cm to 60cm) are OCCUPIED space.
-            # Points above 60cm are ignored
+            if math.hypot(px - rx, py - ry) < 0.22:
+                continue  # Ignore robot's own body
+            if not (x_min <= px <= x_max and y_min <= py <= y_max):
+                continue
+            # Height filter: ground points (< 4 cm) are free, obstacle points (4 to 60 cm) occupied, higher ignored
             if pz > 0.6:
                 continue
-                
             is_obstacle = (pz >= 0.04)
+            pgx = max(0, min(int((px - x_min) / res), width - 1))
+            pgy = max(0, min(int((py - y_min) / res), height - 1))
 
-            # Raycast: Mark line between robot and point as FREE
-            # We do this FIRST to ensure we don't update endpoints that are 'behind' 2D walls
-            hit_wall = False
-            ray_cells = list(bresenham_line(rgx, rgy, pgx, pgy))
-            
-            for i, (cx, cy) in enumerate(ray_cells):
-                if not (0 <= cx < self.width and 0 <= cy < self.height):
-                    break
-                    
-                is_endpoint = (i == len(ray_cells) - 1)
-                
-                if not is_endpoint:
-                    # Stop if our 2D ray hits a known wall. This prevents the camera from 
-                    # "seeing over" low walls and mapping the outside floor as free space.
-                    if self.get_state(cx, cy) == self.OCCUPIED:
-                        hit_wall = True
-                        break
-                        
-                    # Clear free space along the ray
-                    self.grid_log_odds[cy, cx] = max(self.l_min, self.grid_log_odds[cy, cx] + self.l_free)
-                    changed_cells.add((cx, cy))
+            # Raycast robot -> point: cells before the endpoint become free; the ray stops at a known wall so the
+            # camera cannot "see over" low walls and map the outside floor as free; the endpoint is updated only
+            # if the ray reached it.
+            x, y = rgx, rgy
+            dx, dy = abs(pgx - rgx), abs(pgy - rgy)
+            sx = 1 if rgx < pgx else -1
+            sy = 1 if rgy < pgy else -1
+            err = dx - dy
+            while 0 <= x < width and 0 <= y < height:
+                if x == pgx and y == pgy:
+                    if is_obstacle:
+                        L[y, x] = min(l_max, L[y, x] + l_occ)
+                    else:
+                        L[y, x] = max(l_min, L[y, x] + l_free)
+                    add((x, y))
                     cells_updated += 1
-                else:
-                    # Process the endpoint ONLY if the 2D ray wasn't blocked by a wall
-                    if not hit_wall:
-                        if is_obstacle:
-                            self.grid_log_odds[cy, cx] = min(self.l_max, self.grid_log_odds[cy, cx] + self.l_occ)
-                        else:
-                            self.grid_log_odds[cy, cx] = max(self.l_min, self.grid_log_odds[cy, cx] + self.l_free)
-                        changed_cells.add((cx, cy))
-                        cells_updated += 1
+                    break
+                if L[y, x] >= thresh_occ:
+                    break
+                L[y, x] = max(l_min, L[y, x] + l_free)
+                add((x, y))
+                cells_updated += 1
+                e2 = 2 * err
+                if e2 > -dy:
+                    err -= dy
+                    x += sx
+                if e2 < dx:
+                    err += dx
+                    y += sy
 
         return cells_updated, list(changed_cells)
 
