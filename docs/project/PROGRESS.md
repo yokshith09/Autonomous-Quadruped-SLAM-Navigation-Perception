@@ -36,14 +36,18 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-01 | Tool attribution lines removed from all commit messages (history rewrite, force-pushed) | 0 trailers on every branch; GitHub API contributors = owner only; sidebar confirmed clean by the owner 2026-11-03 |
 | 2026-11-02 | Diagnosis of result 1 (mission never completes) and 2 (wasted exploration) | `FIXES.md` F1, F2, F33 |
 | 2026-11-02 | **F1, F2 implemented** (observable-frontier check; retirement by frontier cell, never cleared) | commit `1b37f3f`; offline: old code repeats one target 298/300 times, new code completes in 3 decisions; 2 new tests fail on old code, pass on new |
+| 2026-11-07 | **Profiling (F12)**: ray-casting about 40 % of loop time, simulator calls about 30 %, SLAM 10 %, headless HUD 9 % | run `20261107_003107`; `FIXES.md` F12 |
+| 2026-11-07 | **F14 part 1**: ray-casting 1.33x faster, map bit-identical; HUD frontiers only on HUD frames | commits `3f38a34`, `638ea9b` |
+| 2026-11-07 | **First live check of F1, F2**: failed. Livelock from 660 s: active room alternated 4 / 6 twenty times, one target picked 19 times (stopped at 930 s) | run `20261107_004151`, `runs/live_f1f2.log` |
+| 2026-11-07 | **F3 part 1 implemented**: an unfinished room is never abandoned on a label change | new test fails on old code, passes on new |
 
 ## Not done yet
 | Item | Status | Needs |
 |---|---|---|
-| F1, F2 live verification | Pending | CoppeliaSim open; full run + `compare_runs` against the baseline |
-| Profiling (F12) | Pending | CoppeliaSim open; short run under cProfile |
 | F33 map noise seals 2 rooms | Diagnosed, not fixed | After F1/F2 live check (it is a map-accuracy fix, grouped with F7 to F9) |
-| F3 room labels flip | Not started | Next after F1/F2 are verified |
+| F1, F2, F3 part 1 live verification | Running | Full run + `compare_runs` against the baseline |
+| F3 part 2 room labels drift | Diagnosed, not fixed | After the live check |
+| F14 compiled ray-casting (numba) | Proposed | Owner decision on the new dependency |
 | Diagnose results 3, 4, 5, 6, 8, 9 (ATE, RPE, map accuracy, ICP acceptance, real time, detection) | Recorded in `FIXES.md`, detailed diagnosis not started | One at a time, in order |
 | Doc fix `97096d2` to `main` | Waiting | Owner approval |
 | Back up `runs/20261024_210638/recording.npz` (350 MB, not in git) | Owner | External drive or cloud |
