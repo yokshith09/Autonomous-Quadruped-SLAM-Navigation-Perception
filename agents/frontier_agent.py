@@ -228,7 +228,12 @@ class FrontierAgent(BaseAgent):
                     event_type="ROOM_ENTERED",
                     details={"room_id": self.active_room_id}
                 ))
-            elif current_detected_room != self.active_room_id and current_detected_room not in self.explored_rooms:
+            # Switch only once the active room is finished. Room labels near a boundary change under a moving robot,
+            # and switching on every change made it alternate between two rooms without finishing either (F3).
+            # A room whose label vanishes has no frontiers left under its ID, so it is closed below and this
+            # cannot deadlock.
+            elif (current_detected_room != self.active_room_id and current_detected_room not in self.explored_rooms
+                  and self.active_room_id in self.explored_rooms):
                 if self.committed_doorway is not None:
                     self.visited_doorways.add(self.committed_doorway)
                     self.committed_doorway = None

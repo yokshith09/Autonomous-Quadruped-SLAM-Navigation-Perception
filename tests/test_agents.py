@@ -316,6 +316,28 @@ def test_unobservable_frontier_is_retired_not_revisited():
     print("PASSED")
 
 
+def test_unfinished_room_is_not_abandoned_on_label_change():
+    """F3: crossing into cells labelled as another room must not abandon a room that still has frontiers (live run
+    20261107: the active room flipped 4 <-> 6 twenty times and one room-4 target was re-picked 19 times)."""
+    print("Running test_unfinished_room_is_not_abandoned_on_label_change...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[38:41, 20:23] = 0.0  # unknown pocket in the west room (4)
+    grid.grid_log_odds[38:41, 58:61] = 0.0  # unknown pocket in the east room (6)
+    labels = np.zeros((grid.height, grid.width), dtype=np.int32)
+    labels[:, :40] = 4
+    labels[:, 40:] = 6
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=labels, doorways=[]))
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-0.3, y=0.0, yaw=0.0))
+    assert fa.select_frontier(current_time=1.0).room_id == 4
+    for k in range(6):  # the robot wobbles across the 4 / 6 label boundary on its way
+        fa.on_pose(PoseMsg(timestamp=k, x=0.05 if k % 2 == 0 else -0.05, y=0.0, yaw=0.0))
+        tgt = fa.select_frontier(current_time=2.0 + k)
+        assert fa.active_room_id == 4 and tgt.room_id == 4, f"abandoned room 4 for {fa.active_room_id}"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -339,6 +361,7 @@ if __name__ == "__main__":
     test_semantic_entity_extraction()
     test_frontier_behind_wall_is_ignored()
     test_unobservable_frontier_is_retired_not_revisited()
+    test_unfinished_room_is_not_abandoned_on_label_change()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 
