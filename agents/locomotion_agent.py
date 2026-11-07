@@ -6,6 +6,7 @@ from .base import BaseAgent
 from .bus import MessageBus, ActuationMsg, PathMsg, PoseMsg, ScanMsg, MissionEventMsg
 from core.robot import LizardRobot, gait_body_speed, norm_angle
 
+TURN_IN_PLACE_RAD = 0.45  # heading error above which the robot stops and turns before walking on
 
 class LocomotionAgent(BaseAgent):
     def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.18, update_rate_hz: float = 20.0):
@@ -153,11 +154,11 @@ class LocomotionAgent(BaseAgent):
                     if (current_time - getattr(self, 'last_avoid_log_time', 0.0)) > 2.5:
                         self.last_avoid_log_time = current_time
                         print(f"  [LOCOMOTION] Proximity safety envelope: Repelling from obstacle cluster (steer bias: {avoidance_yaw:+.2f} rad)")
-                elif abs_err > 0.95:
-                    self.speed = 0.35  # Fast turn-in-place
-                    self.state_str = "TURN"
-                elif abs_err > 0.45:
-                    self.speed = 0.75  # Continuous turn-while-walking
+                elif abs_err > TURN_IN_PLACE_RAD:
+                    # Turn in place, then walk straight: rotating while translating destabilises scan matching
+                    # (Zhang et al., "stepwise and consistent motions", arXiv 2503.17005). This used to walk at 0.35
+                    # above 0.95 rad and at 0.75 between 0.45 and 0.95 rad.
+                    self.speed = 0.0
                     self.state_str = "TURN"
                 else:
                     self.speed = 1.0   # Full forward walk along the path line
@@ -190,7 +191,10 @@ class LocomotionAgent(BaseAgent):
                     try:
                         orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
                         self.robot.steer_heading(orient, r_yaw, steer_target)
-                        self.robot.apply_gait(current_time, self.speed)
+                        if self.speed == 0.0:
+                            self.robot.stop_motors()  # a zero-speed gait still creeps sideways unmeasured
+                        else:
+                            self.robot.apply_gait(current_time, self.speed)
                         d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, self.speed)
                         d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                     except Exception as e:
