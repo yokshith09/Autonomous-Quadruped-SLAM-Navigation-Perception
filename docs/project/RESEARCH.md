@@ -1,6 +1,6 @@
 # Research notes: recent work relevant to this robot
 
-Searched 2026-11-07 with the Firecrawl paper index and web search, and Consensus (Semantic Scholar, OpenAlex, PubMed). The attached Perplexity connector exposes dashboard import tools only, no search.
+Searched 2026-11-07 with the Firecrawl paper index and web search, Consensus (Semantic Scholar, OpenAlex, PubMed) and fastwrite (Semantic Scholar abstracts and Exa scholarly web). Scholar Sidekick citation verification was not available (API not subscribed). The attached Perplexity connector exposes dashboard import tools only, no search.
 Each entry says what the paper found and what we do with it here. Status refers to `FIXES.md` IDs.
 
 ## Localization and mapping
@@ -16,6 +16,11 @@ Each entry says what the paper found and what we do with it here. Status refers 
 | Tang et al., *Optimization of 2D laser SLAM with visual feedback loop integration*, Industrial Robot 2026 (via Consensus) | Visual bag-of-words loop detection with SURF geometric checks removes false laser loop closures in look-alike corridors | Our RGB camera is unused by SLAM: verify a laser closure visually before accepting it (about half of accepted closures increased the error) | Candidate, high value |
 | Zhu et al., *Loop closure detection in hybrid scene LiDAR SLAM*, Eng. Res. Express 2026 (via Consensus) | Spatial-consistency constraints reject geometrically similar but spatially impossible loop candidates | Independent support for the drift-bounded closure gate | F36 done |
 | Zhang et al., *2DLIW-SLAM*, Meas. Sci. Technol. 2024, 21 citations (via Consensus) | Line-to-line constraints plus tightly coupled LiDAR, IMU and wheel odometry handle 2D degeneracy; lower error than Cartographer | Line features from our wall scans; tighter gyro-odometry fusion | Candidate |
+
+| Pei et al., *Loop Closure in 2D LIDAR and RGB-D SLAM*, 2022, doi 10.1145/3584376.3584531 (via fastwrite) | 2D laser grid map plus RGB-D loop closure: global image descriptors screen candidates, local descriptors pick the match, depth point-cloud matching sets the pose (coarse to fine) | Template for checking our laser closures with the Kinect RGB | Candidate, high value |
+| Tong et al., *SLAM closed-loop detection method of 2D laser fusion vision in a larger space*, 2021, doi 10.1088/1742-6596/1948/1/012036 (via fastwrite) | Visual loop candidates accepted only after geometric verification with enough common points; fixes the lack of robustness of laser-only closure detection | Same | Candidate |
+| Jiang et al., *TS-LCD: Two-Stage Loop-Closure Detection*, Sensors 2024, doi 10.3390/s24123702 (via fastwrite) | Laser closures fail in structurally similar places (corridors, repeated layouts); validating visual and laser loops together fixes it | Matches our measured false closures | Candidate |
+| Liu et al., *Lidar-Vision Depth Fusion for Robust Loop Closure Detection*, 2025 (via fastwrite) | LiDAR plus vision closure detection cuts ATE 11.2-16.4 % against LiDAR-only | Expected size of the gain | Candidate |
 
 ## Exploration efficiency (no revisits, finish sooner)
 
@@ -46,4 +51,5 @@ Each entry says what the paper found and what we do with it here. Status refers 
 | Paper | Finding | Use here | Status |
 |---|---|---|---|
 | Bellegarda et al., *AllGaits*, arXiv 2411.04787 | A CPG of coupled oscillators whose couplings select the gait; smooth transitions at any speed | Our gait is fixed sinusoids; measured body surge (18 % of samples moving backward within a stride) is a stance-phase problem a coupled-oscillator trot addresses | Candidate (gait redesign, then odometry recalibration) |
+| Liu et al., *An Improved Method Based on CPG to Achieve Trotting Gait of Quadrupedal Robot*, 2019 (via fastwrite) | Dropping the assumption that only the upper limb moves during stance (lower limb fixed) greatly reduces torso pitch and roll | First thing to check in our `apply_gait` for the measured forward-back surge | Candidate, high value |
 | Liu et al., *A Trainable CPG Framework for Quadruped Locomotion*, arXiv 2610.36537 (2026) | Symmetric 8-neuron CPG plus a learned joint mapping tracks velocity and yaw rate across gaits | Longer-term option; needs training | Later |
