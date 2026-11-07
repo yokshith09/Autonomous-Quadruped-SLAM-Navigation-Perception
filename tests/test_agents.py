@@ -339,6 +339,31 @@ def test_unfinished_room_is_not_abandoned_on_label_change():
     print("PASSED")
 
 
+def test_compiled_wavefront_matches_python():
+    """The numba geodesic wavefront and the Python loop give a bit-identical distance field."""
+    print("Running test_compiled_wavefront_matches_python...", end=" ")
+    import agents.frontier_agent as fam
+    if fam._wavefront_kernel is None:
+        print("SKIPPED (numba not installed)")
+        return
+    rng = np.random.default_rng(4)
+    grid = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+    lo = grid.grid_log_odds
+    lo[:] = -2.0
+    lo[rng.random(lo.shape) < 0.04] = 2.0          # scattered obstacles
+    lo[:, 60] = 2.0; lo[50:56, 60] = -2.0          # a wall with a doorway
+    fields = []
+    for kernel in (fam._wavefront_kernel, None):
+        saved, fam._wavefront_kernel = fam._wavefront_kernel, kernel
+        try:
+            fa = FrontierAgent(MessageBus(), grid_ref=grid)
+            fields.append(fa._compute_geodesic_field(30, 40)[0].tobytes())
+        finally:
+            fam._wavefront_kernel = saved
+    assert fields[0] == fields[1], "compiled wavefront diverged from the Python loop"
+    print("PASSED")
+
+
 def test_detour_is_progress_not_stuck():
     """Following a path around a wall moves away from the goal for a while; that is progress along the path, not a
     stall (16 of 17 'stuck' events in run 4 were this)."""
@@ -516,6 +541,7 @@ if __name__ == "__main__":
     test_frontier_behind_wall_is_ignored()
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
+    test_compiled_wavefront_matches_python()
     test_detour_is_progress_not_stuck()
     test_spatial_memory_matches_brute_force()
     test_supervisor_doorways_by_place_with_real_rooms()
