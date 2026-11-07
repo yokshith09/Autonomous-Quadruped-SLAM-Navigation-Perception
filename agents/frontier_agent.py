@@ -50,6 +50,8 @@ else:
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
+PATROL_STEP = 15             # cells (0.75 m) between candidate patrol points
+PATROL_SECONDS_PER_M = 20.0  # staleness worth one metre of walking (the robot walks about 12 s per metre)
 EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
 
@@ -71,6 +73,13 @@ class FrontierAgent(BaseAgent):
         # stays constant-time however many frontiers a long run retires (a full scan per candidate did not).
         self.retired = SpatialMemory(bucket=RETIRE_RADIUS)
         self.explored_floor = None  # free cells of finished rooms (bool grid), kept by place across re-labelling
+        # Post-exploration patrol (the mission runs to its time limit): where and when the robot has been, in metres
+        self.patrol = True
+        self.visits = SpatialMemory(bucket=1.0)
+        self.patrol_failed = SpatialMemory(bucket=1.0)
+        self.patrol_target: Optional[Tuple[int, int]] = None
+        self._patrol_best = (float("inf"), 0.0)
+        self._complete_log_t = -1e9
         self.strikes: dict = {}
         self.committed_frontier: Optional[Tuple[int, int]] = None  # raw frontier cell behind committed_target (a nav cell)
         self._raw_of: dict = {}
@@ -126,6 +135,7 @@ class FrontierAgent(BaseAgent):
 
     def _start_commitment(self, current_time: float) -> None:
         self._commit_best_d, self._commit_best_t = float("inf"), current_time
+        self.patrol_target = None  # a reachable frontier came back: exploration takes over from patrolling
 
     def _visible_unknown(self, vx: int, vy: int, gx: int, gy: int, r: int = 3) -> int:
         """Unknown cells around frontier (gx, gy) that a straight ray from viewpoint (vx, vy) reaches without crossing an
@@ -217,6 +227,12 @@ class FrontierAgent(BaseAgent):
         return best_d, best_cell
 
     def on_mission_event(self, event_msg: MissionEventMsg):
+        if event_msg.event_type in ["PATH_UNREACHABLE", "ROBOT_STUCK"] and self.patrol_target is not None:
+            # A patrol point is not a frontier: mark it failed, never strike a frontier for it
+            wx, wy = self.grid.grid_to_world(*self.patrol_target)
+            self.patrol_failed.add("fail", wx, wy, t=event_msg.timestamp)
+            self.patrol_target = None
+            return
         if event_msg.event_type in ["PATH_UNREACHABLE", "ROBOT_STUCK"]:
             tgx = event_msg.details.get("target_gx")
             tgy = event_msg.details.get("target_gy")
@@ -255,6 +271,59 @@ class FrontierAgent(BaseAgent):
         self.latest_pose = pose_msg
         if not self.visited_positions or math.hypot(pose_msg.x - self.visited_positions[-1][0], pose_msg.y - self.visited_positions[-1][1]) > 0.35:
             self.visited_positions.append((pose_msg.x, pose_msg.y))
+            self.visits.add("visit", pose_msg.x, pose_msg.y, t=pose_msg.timestamp)
+
+    def _finish(self, current_time, rx, ry, dist_map, inflated, reason: str) -> Optional[FrontierTargetMsg]:
+        """Nothing reachable is left to explore. The mission keeps running (owner's rule: no early finish), so instead
+        of standing idle the robot patrols: it walks to the reachable place it has not seen for longest, which
+        re-checks the map for new frontiers (exploration resumes on its own when one appears) and retraces the route
+        for loop closures (Zhang et al., arXiv 2503.17005). Returns None only when patrolling is off."""
+        if self.state != "MISSION_COMPLETE" or current_time - self._complete_log_t > 30.0:
+            print(f"  [FRONTIER] {reason} MISSION_COMPLETE{' -> patrolling stale areas' if self.patrol else ''}.")
+            self._complete_log_t = current_time
+        self.state = "MISSION_COMPLETE"
+        self.committed_target = None
+        if not self.patrol:
+            return None
+        if self.patrol_target is not None:
+            gx, gy = self.patrol_target
+            wx, wy = self.grid.grid_to_world(gx, gy)
+            geo_d = float(dist_map[gy, gx])
+            if math.hypot(wx - rx, wy - ry) < 0.40:
+                self.patrol_target = None                     # reached
+            elif not np.isfinite(geo_d) or current_time - self._patrol_best[1] > COMMIT_STALL_S:
+                self.patrol_failed.add("fail", wx, wy, t=current_time)
+                self.patrol_target = None                     # unreachable now, or no progress
+            elif geo_d < self._patrol_best[0] - COMMIT_PROGRESS_M:
+                self._patrol_best = (geo_d, current_time)
+        if self.patrol_target is None:
+            self.patrol_target = self._pick_patrol_target(current_time, rx, ry, dist_map, inflated)
+            if self.patrol_target is None:
+                return None
+            self._patrol_best = (float("inf"), current_time)
+            wx, wy = self.grid.grid_to_world(*self.patrol_target)
+            print(f"  [FRONTIER] [PATROL] Target: ({wx:.2f}, {wy:.2f}) | GeoDist: {dist_map[self.patrol_target[1], self.patrol_target[0]]:.2f}m")
+        gx, gy = self.patrol_target
+        wx, wy = self.grid.grid_to_world(gx, gy)
+        msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx, target_wy=wy,
+                                room_id=-1, area=0, is_doorway=False)
+        self.bus.publish("frontier/target", msg)
+        return msg
+
+    def _pick_patrol_target(self, current_time, rx, ry, dist_map, inflated) -> Optional[Tuple[int, int]]:
+        """Reachable lattice point maximising (seconds since last seen nearby) - PATROL_SECONDS_PER_M * walk."""
+        reach = np.isfinite(dist_map) & (inflated == 0)
+        ys, xs = np.nonzero(reach[::PATROL_STEP, ::PATROL_STEP])
+        best, best_score = None, -float("inf")
+        for gy, gx in zip(ys * PATROL_STEP, xs * PATROL_STEP):
+            wx, wy = self.grid.grid_to_world(int(gx), int(gy))
+            if math.hypot(wx - rx, wy - ry) < 1.0 or self.patrol_failed.any_near("fail", wx, wy, 0.6):
+                continue
+            last = max((it["t"] for it in self.visits.near("visit", wx, wy, 1.0)), default=-1e9)
+            score = min(current_time - last, current_time) - PATROL_SECONDS_PER_M * float(dist_map[gy, gx])
+            if score > best_score:
+                best, best_score = (int(gx), int(gy)), score
+        return best
 
     def on_grid(self, grid_msg: GridMapMsg):
         self.latest_grid_msg = grid_msg
@@ -323,9 +392,7 @@ class FrontierAgent(BaseAgent):
 
         all_frontiers = self.grid.detect_frontiers()
         if not all_frontiers:
-            self.state = "MISSION_COMPLETE"
-            print("  [FRONTIER] All frontiers cleared across entire map! MISSION_COMPLETE.")
-            return None
+            return self._finish(current_time, rx, ry, dist_map, inflated_mask, "All frontiers cleared across entire map!")
 
         # Maintain or Dynamically Slide Committed Target in Forward Viewing Cone
         if self.committed_target is not None:
@@ -431,9 +498,8 @@ class FrontierAgent(BaseAgent):
 
         if not candidates and int(np.count_nonzero(np.isfinite(dist_map))) > 400:
             # Robot has room to move (>1 m^2 reachable) yet no frontier is reachable: exploration is done.
-            self.state = "MISSION_COMPLETE"
-            print(f"  [FRONTIER] {len(all_frontiers)} frontier(s) left, none reachable. MISSION_COMPLETE.")
-            return None
+            return self._finish(current_time, rx, ry, dist_map, inflated_mask,
+                                f"{len(all_frontiers)} frontier(s) left, none reachable.")
 
         if not candidates:
             # Fallback if robot is temporarily boxed in: pick closest raw frontier
@@ -442,9 +508,7 @@ class FrontierAgent(BaseAgent):
                 candidates.append((f, math.hypot(wx - rx, wy - ry)))
 
         if not candidates:
-            self.state = "MISSION_COMPLETE"
-            print("  [FRONTIER] All rooms and frontiers explored. MISSION_COMPLETE.")
-            return None
+            return self._finish(current_time, rx, ry, dist_map, inflated_mask, "All rooms and frontiers explored.")
 
         # Filter by min_dist (prefer frontiers >= min_dist, fall back if only close ones remain)
         dist_candidates = [c for c in candidates if c[1] >= self.min_dist]
@@ -578,8 +642,7 @@ class FrontierAgent(BaseAgent):
             self.bus.publish("frontier/target", target_msg)
             return target_msg
 
-        self.state = "MISSION_COMPLETE"
-        return None
+        return self._finish(current_time, rx, ry, dist_map, inflated_mask, "No candidate left.")
 
     def _score_frontiers(self, frontier_list, rx, ry, r_yaw: float = 0.0):
         """Score reachable frontiers using Geodesic Cost-to-Go, Volumetric Gain, and Hemisphere-First Monotonic Sweep."""

@@ -285,6 +285,7 @@ def _walled_room():
 
 def _explore_static(fa, x, y, max_decisions=50):
     """Walk the robot to each target on a frozen map; return decisions until the agent returns no target."""
+    fa.patrol = False  # these tests measure exploration finishing; patrolling afterwards is tested separately
     fa.on_pose(PoseMsg(timestamp=0.0, x=x, y=y, yaw=0.0))
     for n in range(1, max_decisions + 1):
         tgt = fa.select_frontier(current_time=n * 10.0)
@@ -336,6 +337,30 @@ def test_unfinished_room_is_not_abandoned_on_label_change():
         fa.on_pose(PoseMsg(timestamp=k, x=0.05 if k % 2 == 0 else -0.05, y=0.0, yaw=0.0))
         tgt = fa.select_frontier(current_time=2.0 + k)
         assert fa.active_room_id == 4 and tgt.room_id == 4, f"abandoned room 4 for {fa.active_room_id}"
+    print("PASSED")
+
+
+def test_patrol_after_exploration_instead_of_idle():
+    """Live run 7 stood idle from 1736 s to the 3000 s mission end: every completion exit returned no target. Now the
+    robot patrols to the reachable place it has not seen for longest, keeps that target until reached, then moves on;
+    exploration resumes by itself when a reachable frontier appears."""
+    print("Running test_patrol_after_exploration_instead_of_idle...", end=" ")
+    grid = _walled_room()  # fully explored, no frontier
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    for k, (x, y) in enumerate([(-1.2, -1.2), (-0.8, -1.2), (-1.2, -0.8)]):  # only the south-west was visited
+        fa.on_pose(PoseMsg(timestamp=float(k), x=x, y=y, yaw=0.0))
+        fa.visits.add("visit", x, y, t=float(k))
+    first = fa.select_frontier(current_time=100.0)
+    assert first is not None and fa.state == "MISSION_COMPLETE", "robot idles after exploration"
+    assert first.target_wx > 0.0 or first.target_wy > 0.0, f"patrol chose a recently seen spot ({first.target_wx:.2f}, {first.target_wy:.2f})"
+    again = fa.select_frontier(current_time=101.0)
+    assert (again.target_gx, again.target_gy) == (first.target_gx, first.target_gy), "patrol target switched mid-route"
+    fa.on_pose(PoseMsg(timestamp=102.0, x=first.target_wx, y=first.target_wy, yaw=0.0))
+    nxt = fa.select_frontier(current_time=102.0)
+    assert nxt is not None and (nxt.target_gx, nxt.target_gy) != (first.target_gx, first.target_gy), "no next patrol point"
+    grid.grid_log_odds[38:41, 20:23] = 0.0  # a new unknown pocket appears: exploration must take over
+    resumed = fa.select_frontier(current_time=103.0)
+    assert fa.state != "MISSION_COMPLETE" and fa.patrol_target is None, f"exploration did not resume ({fa.state})"
     print("PASSED")
 
 
@@ -562,6 +587,7 @@ if __name__ == "__main__":
     test_frontier_behind_wall_is_ignored()
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
+    test_patrol_after_exploration_instead_of_idle()
     test_compiled_wavefront_matches_python()
     test_detour_is_progress_not_stuck()
     test_spatial_memory_matches_brute_force()
