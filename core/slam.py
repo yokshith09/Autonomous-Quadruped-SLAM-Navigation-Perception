@@ -122,6 +122,10 @@ def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Op
         valid = distances <= max_correspondence_distance
         match_count = int(np.count_nonzero(valid))
         if match_count < min_correspondences:
+            if fixed_rotation:
+                # The SVD fallback below solves rotation freely; a caller that holds rotation would silently get a
+                # rotated solution and use its translation as if rotation had been held. Report no match instead.
+                return np.eye(3, dtype=np.float64), float("inf"), match_count
             # Fall back to SVD point-to-point if too few valid correspondences
             return icp_match(source, target, initial_guess=initial_guess,
                              max_correspondence_distance=max_correspondence_distance,
@@ -296,6 +300,10 @@ class KeyframeLoopManager:
         self.max_loop_correction_cap = max_loop_correction_cap
         self.max_loop_yaw = math.radians(max_loop_yaw_deg)
         self.travel = 0.0  # metres walked so far (estimated)
+        # Closures correct position only; heading stays with the gyro and the Manhattan prior (mean error under
+        # 1 deg). Live run 3: eleven same-sign closure yaw corrections of 1.4 to 4.7 deg in 115 s added 31 deg,
+        # each one rotating the submap the next scan locks onto.
+        self.loop_fix_yaw = True
         self.loop_max_rmse = loop_max_rmse
         self.loop_min_overlap = loop_min_overlap
         self.keyframe_dist = keyframe_dist
@@ -360,7 +368,8 @@ class KeyframeLoopManager:
             current_scan, best_kf.scan_points, best_kf.normals,
             initial_guess=guess_T,
             max_correspondence_distance=0.40,
-            min_correspondences=25
+            min_correspondences=25,
+            fixed_rotation=self.loop_fix_yaw
         )
 
         # Narrow FOV in repetitive rooms makes false matches cheap: demand a tight fit over most of the scan.

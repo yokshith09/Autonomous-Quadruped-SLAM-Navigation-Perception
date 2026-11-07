@@ -74,6 +74,7 @@ def test_loop_closure_manager():
     klm.add_keyframe(timestamp=10.0, x=3.5, y=1.0, yaw=0.5, scan=wall_scan)
     klm.add_keyframe(timestamp=15.0, x=4.0, y=3.0, yaw=1.0, scan=wall_scan)
     klm.travel = 6.0  # metres walked around the loop since keyframe 1: drift up to 0.28 m is plausible
+    klm.loop_fix_yaw = False  # the estimate here is 1.1 deg off; detection with heading held is checked elsewhere
 
     closure = klm.detect_loop_closure(
         current_time=25.0,
@@ -116,6 +117,7 @@ def test_loop_closure_rotated_keyframe():
     klm.add_keyframe(5.0, 6.0, 1.0, 0.0, l_scan)
     klm.add_keyframe(9.0, 9.0, 4.0, 0.0, l_scan)
     klm.travel = 10.0  # metres walked out to keyframe 3 and back since keyframe 1
+    klm.loop_fix_yaw = False  # exercise the 3-DoF closure (the default holds heading; see the check below)
 
     # Robot is physically back at keyframe 1 (same scan) but its estimate has drifted.
     closure = klm.detect_loop_closure(20.0, 2.2, 0.9, 0.85, l_scan)
@@ -123,6 +125,13 @@ def test_loop_closure_rotated_keyframe():
     _, err_dx, err_dy, err_dyaw = closure
     assert abs(err_dx + 0.2) < 0.02 and abs(err_dy - 0.1) < 0.02, f"Bad correction ({err_dx:.3f}, {err_dy:.3f})"
     assert abs(err_dyaw + 0.05) < math.radians(0.5), f"Bad yaw correction {err_dyaw:.4f}"
+    klm.loop_fix_yaw = True  # default: closures move position only, heading stays with gyro + Manhattan prior
+    klm.add_keyframe(10.0, 9.0, 4.0, 0.0, l_scan)
+    klm.travel = 20.0
+    closure = klm.detect_loop_closure(30.0, 2.2, 0.9, 0.8, l_scan)  # heading right, position 0.22 m off
+    assert closure is not None, "default closure not detected"
+    assert abs(closure[1] + 0.2) < 0.02 and abs(closure[2] - 0.1) < 0.02, f"Bad correction ({closure[1]:.3f}, {closure[2]:.3f})"
+    assert abs(closure[3]) < 1e-9, f"default closure must not change heading ({closure[3]:.4f})"
     print("PASSED")
 
 
