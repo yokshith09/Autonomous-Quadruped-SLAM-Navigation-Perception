@@ -8,6 +8,7 @@ Provides:
 - ICPPoseEstimator: high-precision incremental base pose tracking
 """
 
+from collections import deque
 from dataclasses import dataclass
 import math
 import numpy as np
@@ -457,6 +458,8 @@ class ICPPoseEstimator:
         # Several views give a 60 deg camera the wall structure one view lacks, and error stops compounding scan
         # by scan while the robot is inside the submap. 0 = scan-to-scan.
         self.submap_keyframes = 8
+        self.adaptive_gate = False                   # KISS-ICP-style adaptive odometry gate (replay A/B pending)
+        self._dev_hist = deque(maxlen=200)           # recent |ICP - odometry| translation deviations, accepted steps
 
     def _submap_in_frame(self, x: float, y: float, yaw: float):
         """Recent keyframe scans (and their normals) expressed in the robot frame at pose (x, y, yaw)."""
@@ -545,6 +548,10 @@ class ICPPoseEstimator:
                     scan, target, target_normals, initial_guess=guess, fixed_rotation=True)
                 tx, ty = t_fixed[0, 2], t_fixed[1, 2]
                 gate = self.max_trans_disagreement + self.trans_disagreement_ratio * math.hypot(dx_local, dy_local)
+                if self.adaptive_gate and len(self._dev_hist) >= 20:
+                    # KISS-ICP (Vizzo et al., RA-L 2023): size the gate from how far odometry has actually been off
+                    # recently (3 sigma of accepted corrections), never below the fixed gate.
+                    gate = max(gate, 3.0 * math.sqrt(sum(d * d for d in self._dev_hist) / len(self._dev_hist)))
                 if (corr_fixed >= 20 and np.isfinite(rmse_fixed) and rmse_fixed <= self.max_rmse
                         and math.hypot(tx - dx_local, ty - dy_local) <= gate):
                     aligned = (t_fixed[:2, :2] @ scan.T).T + t_fixed[:2, 2]
@@ -553,6 +560,7 @@ class ICPPoseEstimator:
                         kept = project_out_degenerate(kept, aligned, target, target_normals)
                     dx, dy = dx_local + kept[0], dy_local + kept[1]
                     rmse, correspondences, valid = rmse_fixed, corr_fixed, True
+                    self._dev_hist.append(float(math.hypot(tx - dx_local, ty - dy_local)))
 
         self.loop_manager.travel += math.hypot(dx, dy) if valid else math.hypot(odom_dx, odom_dy)
         if valid:
