@@ -45,7 +45,7 @@ try:
 except Exception:
     pass
 
-MAX_TIME = 3600.0  # safety cap on simulated seconds; a run is meant to end on MISSION_COMPLETE
+MAX_TIME = 1800.0  # owner's mission limit (30 min simulated); a run ends earlier on MISSION_COMPLETE (nothing left to visit)
 MAP_X_MIN, MAP_X_MAX = -5.5, 5.5
 MAP_Y_MIN, MAP_Y_MAX = -5.5, 5.5
 GRID_RES = 0.05
@@ -141,6 +141,9 @@ def main():
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum simulation steps")
     parser.add_argument("--max-time", type=float, default=MAX_TIME, help="Maximum mission time in seconds")
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
+    parser.add_argument("--show-estimate", action="store_true",
+                        help="Draw the SLAM-estimated pose (magenta cross) in the scene; its offset from the robot is the "
+                             "live localization error")
     parser.add_argument("--closed-loop-slam", action="store_true", default=True, help="Navigate strictly using closed-loop SLAM pose (default)")
     parser.add_argument("--ground-truth-nav", action="store_true", help="Bypass SLAM drift with ground-truth navigation (for ablation only)")
     parser.add_argument("--record", default=None, help="SLAM input recording path (.npz); default runs/<run_id>/recording.npz")
@@ -318,7 +321,7 @@ def main():
             if step_count % 5 == 0:
                 tel.step(planning_agent, t)
                 latest_path = bus.get_latest("plan/path")
-                est = bus.get_latest("pose/state")
+                est = bus.get_latest("pose/state") if args.show_estimate else None
                 draw_planned_path_in_sim(sim, latest_path.waypoints if latest_path else None,
                                          (est.x, est.y, est.yaw) if est else None)
 
