@@ -1,0 +1,45 @@
+# Research notes: recent work relevant to this robot
+
+Searched 2026-11-07 (Firecrawl paper index and web search; no Perplexity connector was available in this session).
+Each entry says what the paper found and what we do with it here. Status refers to `FIXES.md` IDs.
+
+## Localization and mapping
+
+| Paper | Finding | Use here | Status |
+|---|---|---|---|
+| Vizzo et al., *KISS-ICP: In Defense of Point-to-Point ICP*, RA-L 2023, arXiv 2209.15397 | Correspondence distance threshold adapted from the recent deviation of the motion model, plus a robust kernel, gives accurate odometry with almost no tuning | Our dominant scan-match rejection (67 % of updates, F16) is a fixed 1 cm + 100 % of step gate against odometry. Replace it with an adaptive gate from the running deviation statistics | Next, replay A/B on 4 recordings |
+| Cao et al., *DPCR-SLAM*, Sensors 2025 | Point-to-line ICP scan -> submap -> regional map; -10.9 % localization error, -55.8 % processing vs Cartographer | Confirms scan-to-submap (F36); a regional-map tier is the next step up | F36 done |
+| Tran et al., *HP2-SLAM: Adaptive Hybrid ICP*, arXiv 2608.14996 (2026) | Per-correspondence choice between point-to-plane and point-to-point by local planarity; stable in planar and repetitive scenes | Our corridors and flat walls: try hybrid residuals in `icp_point_to_line` | Candidate |
+| Gupta et al., *MapClosures*, IJRR 2026, arXiv 2501.07399 | Loop closure from density-map descriptors with self-similarity pruning against perceptual aliasing | Matches our measured false-closure problem (about half of accepted closures hurt); add a self-similarity check before accepting a closure | Candidate (F36/F37 reduced the damage) |
+| Zhang et al., *Autonomous Exploration-Based Precise Mapping through Stepwise and Consistent Motions*, arXiv 2503.17005 (2026) | Drive straight, rotate in place, one goal at a time; waypoint retracing triggers loop closures | Turn in place (F39), single committed goal (F34). Retracing for closures: candidate | F34, F39 done |
+
+## Exploration efficiency (no revisits, finish sooner)
+
+| Paper | Finding | Use here | Status |
+|---|---|---|---|
+| Zhou et al., *OTO Planner: Only Travelling Once*, arXiv 2406.07294 | Enclosed sub-region detection avoids repeated paths; -10-20 % time and distance | Our room memory (F38) plus doorway skip (F41) are the same idea at room level | F38, F41 done |
+| Song et al., *P2 Explore*, arXiv 2409.10878; Gao et al., *Task-oriented environment partitioning*, arXiv 2309.11107 | Room segmentation plus an optimized room visiting order (TSP) shortens paths 2-35 % | Order rooms through the doorway graph instead of nearest-first | Candidate |
+| Yin et al., *PUL-SLAM*, arXiv 2511.04180 | Map-update stagnation detection cuts redundant exploration | We measure the coverage plateau; use it to rank remaining targets | Candidate |
+| Wang et al., *DART*, arXiv 2503.12782 | Prioritize incompletely explored convex regions to avoid backtracking | Same principle as finishing a room before leaving (F3) | F3 done |
+
+## Agent memory (knowledge bases)
+
+| Paper | Finding | Use here | Status |
+|---|---|---|---|
+| Rasheed and Kabtoul, *eMEM: hybrid spatio-temporal memory for embodied agents*, arXiv 2606.03374 (2026) | Embodied memory must be searchable by space, time and meaning; multi-index, in-process | `agents/spatial_memory.py`: hashed by position, timestamped, typed; constant-time lookups (16x faster than the old scan at 1500 items) | F38 done |
+| Lei et al., *RoboMemory*, arXiv 2508.01415; Tan et al., *RoboOS-NeXT*, arXiv 2510.26536 | Unified spatial, temporal, episodic memory with a dynamic spatial knowledge graph | Supervisor keeps the knowledge graph and timeline; doorways now by place with real rooms | F38 done |
+
+## Perception (object detection, F28)
+
+| Paper | Finding | Use here | Status |
+|---|---|---|---|
+| Liu et al., *YOLO-UniOW*, arXiv 2412.20645 | Open-world detection, 34.6 AP on LVIS at 69.6 FPS (GPU), "unknown" objects handled | Candidate detector for the RGB camera; check CPU speed and licence first | Candidate |
+| He et al., *DOSOD*, arXiv 2412.14680 | Lighter YOLO-World variant, +57 % FPS at similar accuracy, edge deployable | Same | Candidate |
+| Basit and Shafique, *Energy-aware open-vocabulary detection scheduling*, arXiv 2611.07663 (2026) | Run the detector only when odometry or map change makes a frame informative; -34 % detector calls at equal success | Run detection on new viewpoints only, keeping the loop real time on CPU | Candidate |
+
+## Locomotion (smooth, faster gait)
+
+| Paper | Finding | Use here | Status |
+|---|---|---|---|
+| Bellegarda et al., *AllGaits*, arXiv 2411.04787 | A CPG of coupled oscillators whose couplings select the gait; smooth transitions at any speed | Our gait is fixed sinusoids; measured body surge (18 % of samples moving backward within a stride) is a stance-phase problem a coupled-oscillator trot addresses | Candidate (gait redesign, then odometry recalibration) |
+| Liu et al., *A Trainable CPG Framework for Quadruped Locomotion*, arXiv 2610.36537 (2026) | Symmetric 8-neuron CPG plus a learned joint mapping tracks velocity and yaw rate across gaits | Longer-term option; needs training | Later |
