@@ -50,7 +50,8 @@ else:
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
-PATROL_STEP = 15             # cells (0.75 m) between candidate patrol points
+DOOR_TURN_COST_M = 1.5       # a doorway straight behind the robot counts this much further than one ahead
+PATROL_STEP = 15            # cells (0.75 m) between candidate patrol points
 PATROL_SECONDS_PER_M = 20.0  # staleness worth one metre of walking (the robot walks about 12 s per metre)
 EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
@@ -582,7 +583,14 @@ class FrontierAgent(BaseAgent):
         # Case B: Current room is CLEARED! Transition to next room via Doorway Penetration Vector
         if valid_doorways:
             self.state = "INTER_ROOM_TRANSIT"
-            valid_doorways.sort(key=lambda item: item[1])
+            # Walking distance plus a turning cost: a doorway straight behind counts DOOR_TURN_COST_M further. By
+            # distance alone the robot turned round for a doorway behind it that was only slightly nearer (run 7:
+            # 2 of 13 doorway choices were more than 135 deg from the direction of travel).
+            def door_cost(item):
+                (dwx, dwy), geo, _ = item
+                turn = abs(norm_angle(math.atan2(dwy - ry, dwx - rx) - r_yaw))
+                return geo + DOOR_TURN_COST_M * turn / math.pi
+            valid_doorways.sort(key=door_cost)
             dw_target, dw_geo, dw_nav = valid_doorways[0]
             self.committed_doorway = dw_target
 

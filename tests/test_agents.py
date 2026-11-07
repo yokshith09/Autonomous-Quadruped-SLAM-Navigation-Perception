@@ -340,6 +340,28 @@ def test_unfinished_room_is_not_abandoned_on_label_change():
     print("PASSED")
 
 
+def test_doorway_ahead_preferred_over_slightly_nearer_one_behind():
+    """While travelling, a doorway ahead beats one behind that is only slightly nearer (the robot used to turn round
+    for it); with no doorway ahead it still turns back, so it never gets stuck."""
+    print("Running test_doorway_ahead_preferred_over_slightly_nearer_one_behind...", end=" ")
+    grid = _walled_room()
+    labels = np.full((grid.height, grid.width), 4, dtype=np.int32)
+    for doors, expect_ahead in (([(1.2, 0.0), (-0.9, 0.0)], True), ([(-0.9, 0.0)], False)):
+        fa = FrontierAgent(MessageBus(), grid_ref=grid)
+        fa.explored_rooms = {4}
+        fa.active_room_id = 4
+        fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                              explored_pct=0.0, room_labels=labels, doorways=doors,
+                              doorway_rooms=[(4, 8 + i) for i in range(len(doors))]))
+        fa.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=0.0))  # travelling +x
+        grid.grid_log_odds[38:41, 20:23] = 0.0  # keep a frontier so the agent does not report completion
+        tgt = fa.select_frontier(current_time=1.0)
+        grid.grid_log_odds[38:41, 20:23] = -2.0
+        assert tgt is not None and tgt.is_doorway and (tgt.target_wx > 0) == expect_ahead, \
+            f"doorways {doors}: chose ({tgt.target_wx:.2f}, {tgt.target_wy:.2f})"
+    print("PASSED")
+
+
 def test_patrol_after_exploration_instead_of_idle():
     """Live run 7 stood idle from 1736 s to the 3000 s mission end: every completion exit returned no target. Now the
     robot patrols to the reachable place it has not seen for longest, keeps that target until reached, then moves on;
@@ -588,6 +610,7 @@ if __name__ == "__main__":
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
     test_patrol_after_exploration_instead_of_idle()
+    test_doorway_ahead_preferred_over_slightly_nearer_one_behind()
     test_compiled_wavefront_matches_python()
     test_detour_is_progress_not_stuck()
     test_spatial_memory_matches_brute_force()
