@@ -56,7 +56,9 @@ class BayesianOccupancyGrid:
         return max(0, min(gx, self.width - 1)), max(0, min(gy, self.height - 1))
 
     def grid_to_world(self, gx, gy):
-        return self.x_min + gx * self.res, self.y_min + gy * self.res
+        # Cell centre. The corner (x_min + gx * res) floored back into the neighbour cell for about 22 % of cells
+        # (float error), so waypoints and targets next to a wall landed in the wall's inflation.
+        return self.x_min + (gx + 0.5) * self.res, self.y_min + (gy + 0.5) * self.res
 
     def get_state(self, gx, gy):
         val = self.grid_log_odds[gy, gx]

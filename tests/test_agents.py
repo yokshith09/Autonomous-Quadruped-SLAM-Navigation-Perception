@@ -377,6 +377,14 @@ def test_target_without_progress_is_dropped():
     print("PASSED")
 
 
+def test_grid_world_round_trip():
+    """Every cell maps to a world point that maps back to the same cell (the corner convention lost 22 % of cells)."""
+    print("Running test_grid_world_round_trip...", end=" ")
+    g = BayesianOccupancyGrid(-5.5, 5.5, -5.5, 5.5, 0.05)
+    assert all(g.world_to_grid(*g.grid_to_world(x, y)) == (x, y) for x in range(g.width) for y in range(g.height))
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -403,6 +411,7 @@ if __name__ == "__main__":
     test_unfinished_room_is_not_abandoned_on_label_change()
     test_target_is_kept_until_reached_while_progressing()
     test_target_without_progress_is_dropped()
+    test_grid_world_round_trip()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 
