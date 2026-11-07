@@ -246,7 +246,11 @@ class RunTelemetry:
         ev = dict(self.events)
         overall = {
             "end_reason": ctx["end_reason"],
-            "task_success": ctx["end_reason"] == "all reachable frontiers explored",
+            # Success = every reachable frontier was explored at some point. Runs now continue for the full mission
+            # time after that, so the end reason alone no longer says it.
+            "task_success": (ctx.get("explored_complete_at_s") is not None
+                             or ctx["end_reason"] == "all reachable frontiers explored"),
+            "explored_complete_at_s": ctx.get("explored_complete_at_s"),
             "sim_time_s": sim_t,
             "wall_time_s": wall,
             "real_time_factor": sim_t / wall if wall > 0 else None,
