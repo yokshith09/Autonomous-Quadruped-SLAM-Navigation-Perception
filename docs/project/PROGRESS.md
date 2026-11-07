@@ -54,6 +54,7 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **Real room count**: 7 enclosed regions from the scene walls (`evaluation/room_coverage.py`); the robot's own labels reached 13 IDs. Correction: the baseline also saw 87-100 % of every real room; its '6 of 8 rooms' was a label count | `runs/*/room_coverage.json` |
 | 2026-11-07 | **Live run 5 (adds F38-F40, compiled wavefront)**: completed by itself at 2186 s; all 7 real rooms explored (88-100 % of floor). vs baseline: **ATE 31.0 -> 15.3 cm**, largest error 63 -> 38 cm, final drift 0.24 -> 0.02 %, **map accuracy 10.6 -> 5.5 cm, map F1 77.7 -> 90.0 %**, precision 73.9 -> 89.5 %, frontier selection 155 -> 39 ms, real-time factor 0.32 -> 0.53; 23 metrics better, 6 worse. Still open: 47 % of walking after the coverage plateau (doorway tour, F41 fixes) | run `20261107_150823`, `docs/results/comparison_run5.md` |
 | 2026-11-07 | Rejected after replay: soft-pull SLAM correction (worse on 3 of 4 routes) | not committed |
+| 2026-11-07 | **Live run 6 (adds F41 doorway skip)**: all 7 real rooms 99-100 % seen, everything explored at **1604 s** (run 5: 2186 s). vs baseline: walking after coverage plateau 46 -> 29 %, ATE 31.0 -> 16.1 cm, largest error 63 -> 33 cm, map accuracy 10.6 -> 5.5 cm, precision 73.9 -> 91.6 %, real-time factor 0.32 -> 0.64, peak memory -13 %; **29 better, 3 worse** | run `20261107_161737`, `docs/results/comparison_run6.md` |
 
 ## Not done yet
 | Item | Status | Needs |
