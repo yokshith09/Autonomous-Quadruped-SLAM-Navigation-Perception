@@ -45,7 +45,7 @@ try:
 except Exception:
     pass
 
-MAX_TIME = 1800.0  # owner's mission limit (30 min simulated); a run ends earlier on MISSION_COMPLETE (nothing left to visit)
+MAX_TIME = 3000.0  # owner's mission length (50 min simulated); the robot keeps exploring for all of it
 MAP_X_MIN, MAP_X_MAX = -5.5, 5.5
 MAP_Y_MIN, MAP_Y_MAX = -5.5, 5.5
 GRID_RES = 0.05
@@ -141,6 +141,8 @@ def main():
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum simulation steps")
     parser.add_argument("--max-time", type=float, default=MAX_TIME, help="Maximum mission time in seconds")
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
+    parser.add_argument("--stop-on-complete", action="store_true",
+                        help="End the run as soon as no reachable frontier is left (default: run the full --max-time)")
     parser.add_argument("--show-estimate", action="store_true",
                         help="Draw the SLAM-estimated pose (magenta cross) in the scene; its offset from the robot is the "
                              "live localization error")
@@ -244,6 +246,7 @@ def main():
     end_reason = "interrupted"
     t = 0.0
     complete_streak = 0  # frontier evaluations in a row reporting MISSION_COMPLETE
+    complete_at = None   # simulated time when no reachable frontier was left (the run continues to --max-time)
     rec = {"t": [], "gt": [], "scans": [], "act": []}
 
     print("  [OK] Multi-Agent System operational. Commencing systematic exploration.\n")
@@ -263,7 +266,9 @@ def main():
             t = sim.getSimulationTime() - t0
             if t > args.max_time:
                 print(f"  [TIMEOUT] Reached max mission duration ({args.max_time}s).")
-                end_reason = f"timeout ({args.max_time:.0f}s) before all frontiers were cleared"
+                end_reason = (f"mission time {args.max_time:.0f}s reached; all reachable frontiers explored at "
+                              f"{complete_at:.0f}s" if complete_at is not None else
+                              f"timeout ({args.max_time:.0f}s) before all frontiers were cleared")
                 break
 
             loop_t0 = time.perf_counter()
@@ -312,10 +317,15 @@ def main():
             if step_count % 10 == 0:
                 tel.step(frontier_agent, t)
                 complete_streak = complete_streak + 1 if frontier_agent.state == "MISSION_COMPLETE" else 0
-                if complete_streak >= 3:
+                if complete_streak >= 3 and args.stop_on_complete:
                     print(f"  [COMPLETED] No reachable frontiers left at t={t:.1f}s. All rooms explored.")
                     end_reason = "all reachable frontiers explored"
                     break
+                if complete_streak >= 3 and complete_at is None:
+                    # Owner's rule: keep exploring for the full mission time (new frontiers can still appear); only
+                    # record when everything reachable had been seen.
+                    complete_at = t
+                    print(f"  [EXPLORED] No reachable frontiers left at t={t:.1f}s; continuing until {args.max_time:.0f}s.")
 
             # Step 4: Planning Agent (A* search towards room frontier / doorway)
             if step_count % 5 == 0:
@@ -556,6 +566,7 @@ def main():
             grid_metrics=grid_metrics,
             ctx={
                 "end_reason": end_reason, "closed_loop_slam": not bool(args.ground_truth_nav),
+                "explored_complete_at_s": complete_at,
                 "rooms_discovered": n_rooms, "doorways_detected": len(supervisor_agent.knowledge_graph.doorways), "rooms_completed": len(frontier_agent.explored_rooms),
                 "free_area_m2": float(free_cells) * GRID_RES ** 2, "explored_pct": float(explored_pct),
                 "frontiers_remaining": len(mapping_agent.grid.detect_frontiers()),

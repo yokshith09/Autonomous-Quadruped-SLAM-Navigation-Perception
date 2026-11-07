@@ -163,7 +163,7 @@ Each run folder contains `REPORT.md`, `metrics.json`, `trajectory.csv`, `manifes
 
 | Task | Command |
 |---|---|
-| Run options | `python main_agentic.py --headless` (no HUD window), `--max-time S` (mission limit in simulated seconds, default 1800 = 30 min; the run ends earlier when nothing is left to explore), `--show-estimate` (draw the estimated pose as a magenta cross) |
+| Run options | `python main_agentic.py --headless` (no HUD window), `--max-time S` (mission length in simulated seconds, default 3000 = 50 min; the robot keeps exploring for all of it, `--stop-on-complete` ends it when nothing reachable is left), `--show-estimate` (draw the estimated pose as a magenta cross) |
 | Score a run against the real scene | `python -m evaluation.truth_eval runs/<run_id>` (also runs automatically after a run) |
 | Read the scene's wall and object geometry | `python -m evaluation.scene_truth` (simulator open, not running) |
 | Compare new runs with the baseline | `python -m evaluation.compare_runs runs/20261024_210638 runs/<new_run>` (several new runs give mean and spread) |
