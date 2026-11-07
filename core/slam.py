@@ -113,9 +113,12 @@ def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Op
         total_transform = np.eye(3, dtype=np.float64)
 
     match_count = 0
+    # The target is fixed for the whole call: build its search tree once, not once per iteration.
+    tree = cKDTree(target) if cKDTree is not None else None
+    nearest = (lambda pts: tree.query(pts)) if tree is not None else (lambda pts: _nearest_neighbours(pts, target))
 
     for _ in range(max_iterations):
-        distances, indices = _nearest_neighbours(aligned, target)
+        distances, indices = nearest(aligned)
         valid = distances <= max_correspondence_distance
         match_count = int(np.count_nonzero(valid))
         if match_count < min_correspondences:
@@ -160,7 +163,7 @@ def icp_point_to_line(source: np.ndarray, target: np.ndarray, target_normals: Op
         if np.linalg.norm(delta) < tolerance:
             break
 
-    distances, indices = _nearest_neighbours(aligned, target)
+    distances, indices = nearest(aligned)
     valid = distances <= max_correspondence_distance
     match_count = int(np.count_nonzero(valid))
     if match_count:
@@ -273,6 +276,7 @@ class Keyframe:
     yaw: float
     scan_points: np.ndarray
     normals: np.ndarray
+    travel: float = 0.0  # metres walked from the start of the run when this keyframe was taken
 
 
 class KeyframeLoopManager:
@@ -280,8 +284,18 @@ class KeyframeLoopManager:
 
     def __init__(self, keyframe_dist: float = 0.5, keyframe_rot_deg: float = 25.0,
                  loop_search_radius: float = 2.5, min_loop_time_diff: float = 12.0,
-                 max_loop_correction: float = 0.3, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6):
+                 max_loop_correction: float = 0.10, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6,
+                 loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 1.5, max_loop_yaw_deg: float = 5.0):
+        # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
+        # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
+        # A fixed gate both rejects the closures that would repair a large drift and accepts impossible ones (a
+        # 0.8 m jump against a keyframe 12 s old). Defaults chosen by replaying two recorded runs (FIXES.md F36);
+        # the heading limit matches the gyro-led heading error (under 1 deg) instead of 20 deg.
         self.max_loop_correction = max_loop_correction
+        self.loop_gate_per_m = loop_gate_per_m
+        self.max_loop_correction_cap = max_loop_correction_cap
+        self.max_loop_yaw = math.radians(max_loop_yaw_deg)
+        self.travel = 0.0  # metres walked so far (estimated)
         self.loop_max_rmse = loop_max_rmse
         self.loop_min_overlap = loop_min_overlap
         self.keyframe_dist = keyframe_dist
@@ -306,7 +320,8 @@ class KeyframeLoopManager:
             timestamp=timestamp,
             x=x, y=y, yaw=yaw,
             scan_points=scan.copy(),
-            normals=normals
+            normals=normals,
+            travel=self.travel
         )
         self.keyframes.append(kf)
         self.last_kf_pose = (x, y, yaw)
@@ -357,7 +372,9 @@ class KeyframeLoopManager:
             err_dx = corrected_x - current_x
             err_dy = corrected_y - current_y
             err_dyaw = wrap_angle(corrected_yaw - current_yaw)
-            if math.hypot(err_dx, err_dy) > self.max_loop_correction or abs(err_dyaw) > math.radians(20.0):
+            gate = min(self.max_loop_correction_cap,
+                       self.max_loop_correction + self.loop_gate_per_m * (self.travel - best_kf.travel))
+            if math.hypot(err_dx, err_dy) > gate or abs(err_dyaw) > self.max_loop_yaw:
                 return None
 
             closure_info = {
@@ -427,12 +444,30 @@ class ICPPoseEstimator:
         self.max_manhattan_error = math.radians(15.0)
         self.use_point_to_line = use_point_to_line
         self.loop_manager = KeyframeLoopManager()
+        # Scan-to-submap: match against the last N keyframes placed in the map instead of only the previous scan.
+        # Several views give a 60 deg camera the wall structure one view lacks, and error stops compounding scan
+        # by scan while the robot is inside the submap. 0 = scan-to-scan.
+        self.submap_keyframes = 8
+
+    def _submap_in_frame(self, x: float, y: float, yaw: float):
+        """Recent keyframe scans (and their normals) expressed in the robot frame at pose (x, y, yaw)."""
+        c, s = math.cos(yaw), math.sin(yaw)
+        pts, nrm = [], []
+        for kf in self.loop_manager.keyframes[-self.submap_keyframes:]:
+            r = kf.yaw - yaw
+            R = np.array([[math.cos(r), -math.sin(r)], [math.sin(r), math.cos(r)]])
+            ox, oy = kf.x - x, kf.y - y
+            off = np.array([c * ox + s * oy, -s * ox + c * oy])
+            pts.append(kf.scan_points @ R.T + off)
+            nrm.append(kf.normals @ R.T)
+        return np.vstack(pts), np.vstack(nrm)
 
     def update(self, local_scan: np.ndarray, odom_dx: float = 0.0, odom_dy: float = 0.0,
                odom_dyaw: float = 0.0, timestamp: float = 0.0) -> PoseEstimate:
         """Incorporate one base-frame scan and return the current pose estimate."""
         scan = downsample_scan(local_scan)
         if len(scan) < 20:
+            self.loop_manager.travel += math.hypot(odom_dx, odom_dy)
             self.pose.x += odom_dx
             self.pose.y += odom_dy
             self.pose.yaw = wrap_angle(self.pose.yaw + odom_dyaw)
@@ -458,13 +493,17 @@ class ICPPoseEstimator:
         initial_guess[0, 2] = dx_local
         initial_guess[1, 2] = dy_local
 
+        target, target_normals = self.previous_scan, self.previous_normals
+        if self.submap_keyframes > 0 and len(self.loop_manager.keyframes) >= 2:
+            target, target_normals = self._submap_in_frame(self.pose.x, self.pose.y, self.pose.yaw)
+
         if self.use_point_to_line:
             transform, rmse, correspondences = icp_point_to_line(
-                scan, self.previous_scan, self.previous_normals, initial_guess=initial_guess
+                scan, target, target_normals, initial_guess=initial_guess
             )
         else:
             transform, rmse, correspondences = icp_match(
-                scan, self.previous_scan, initial_guess=initial_guess, mode="point_to_point"
+                scan, target, initial_guess=initial_guess, mode="point_to_point"
             )
 
         dx, dy = transform[:2, 2]
@@ -494,7 +533,7 @@ class ICPPoseEstimator:
                                   [math.sin(dyaw), math.cos(dyaw), dy_local],
                                   [0.0, 0.0, 1.0]])
                 t_fixed, rmse_fixed, corr_fixed = icp_point_to_line(
-                    scan, self.previous_scan, self.previous_normals, initial_guess=guess, fixed_rotation=True)
+                    scan, target, target_normals, initial_guess=guess, fixed_rotation=True)
                 tx, ty = t_fixed[0, 2], t_fixed[1, 2]
                 gate = self.max_trans_disagreement + self.trans_disagreement_ratio * math.hypot(dx_local, dy_local)
                 if (corr_fixed >= 20 and np.isfinite(rmse_fixed) and rmse_fixed <= self.max_rmse
@@ -502,10 +541,11 @@ class ICPPoseEstimator:
                     aligned = (t_fixed[:2, :2] @ scan.T).T + t_fixed[:2, 2]
                     kept = np.array([tx - dx_local, ty - dy_local])
                     if self.degeneracy_filter:
-                        kept = project_out_degenerate(kept, aligned, self.previous_scan, self.previous_normals)
+                        kept = project_out_degenerate(kept, aligned, target, target_normals)
                     dx, dy = dx_local + kept[0], dy_local + kept[1]
                     rmse, correspondences, valid = rmse_fixed, corr_fixed, True
 
+        self.loop_manager.travel += math.hypot(dx, dy) if valid else math.hypot(odom_dx, odom_dy)
         if valid:
             self.pose.x += dx * math.cos(self.pose.yaw) - dy * math.sin(self.pose.yaw)
             self.pose.y += dx * math.sin(self.pose.yaw) + dy * math.cos(self.pose.yaw)
@@ -545,6 +585,10 @@ class ICPPoseEstimator:
             self.pose.yaw = wrap_angle(self.pose.yaw + odom_dyaw)
             self.previous_scan = scan
             self.previous_normals = estimate_normals_2d(scan)
+            if self.submap_keyframes > 0 and self.loop_manager.should_add_keyframe(self.pose.x, self.pose.y, self.pose.yaw):
+                # The submap must follow the robot through rejected steps too, or it freezes behind it and no
+                # later scan can match it.
+                self.loop_manager.add_keyframe(timestamp, self.pose.x, self.pose.y, self.pose.yaw, scan)
             self.pose.rmse = float("inf")
             self.pose.correspondences = correspondences
             self.pose.accepted = False

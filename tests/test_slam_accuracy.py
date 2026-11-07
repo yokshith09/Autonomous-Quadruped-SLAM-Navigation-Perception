@@ -73,6 +73,7 @@ def test_loop_closure_manager():
     klm.add_keyframe(timestamp=5.0, x=2.0, y=0.0, yaw=0.2, scan=wall_scan)
     klm.add_keyframe(timestamp=10.0, x=3.5, y=1.0, yaw=0.5, scan=wall_scan)
     klm.add_keyframe(timestamp=15.0, x=4.0, y=3.0, yaw=1.0, scan=wall_scan)
+    klm.travel = 6.0  # metres walked around the loop since keyframe 1: drift up to 0.28 m is plausible
 
     closure = klm.detect_loop_closure(
         current_time=25.0,
@@ -89,6 +90,22 @@ def test_loop_closure_manager():
     print("PASSED")
 
 
+def test_loop_closure_rejects_impossible_correction():
+    """F36: a correction larger than the drift that can build up on the path walked since the keyframe is a false
+    match (baseline: 0.8 m jumps against keyframes 12 s old) and is rejected."""
+    print("Running test_loop_closure_rejects_impossible_correction...", end=" ")
+    wall_scan = generate_simulated_wall_scan()
+    for travel, expect in ((1.0, False), (8.0, True)):
+        klm = KeyframeLoopManager(keyframe_dist=1.0, min_loop_time_diff=5.0, loop_search_radius=1.5)
+        for k, (x, y) in enumerate([(0.0, 0.0), (2.0, 0.0), (3.5, 1.0), (4.0, 3.0)]):
+            klm.add_keyframe(timestamp=1.0 + 5 * k, x=x, y=y, yaw=0.0, scan=wall_scan)
+        klm.travel = travel
+        # true pose is the keyframe-1 pose; the estimate is 0.25 m off across the wall (the direction it constrains)
+        closure = klm.detect_loop_closure(25.0, 0.0, 0.25, 0.0, wall_scan)
+        assert (closure is not None) == expect, f"travel {travel} m: closure {'accepted' if closure else 'rejected'}"
+    print("PASSED")
+
+
 def test_loop_closure_rotated_keyframe():
     print("Running test_loop_closure_rotated_keyframe...", end=" ")
     wall_a = np.column_stack([np.linspace(0.5, 3.0, 60), np.full(60, -1.0)])
@@ -98,6 +115,7 @@ def test_loop_closure_rotated_keyframe():
     klm.add_keyframe(1.0, 2.0, 1.0, 0.8, l_scan)
     klm.add_keyframe(5.0, 6.0, 1.0, 0.0, l_scan)
     klm.add_keyframe(9.0, 9.0, 4.0, 0.0, l_scan)
+    klm.travel = 10.0  # metres walked out to keyframe 3 and back since keyframe 1
 
     # Robot is physically back at keyframe 1 (same scan) but its estimate has drifted.
     closure = klm.detect_loop_closure(20.0, 2.2, 0.9, 0.85, l_scan)
@@ -242,6 +260,7 @@ if __name__ == "__main__":
     test_normal_estimation()
     test_point_to_line_icp_convergence()
     test_loop_closure_manager()
+    test_loop_closure_rejects_impossible_correction()
     test_loop_closure_rotated_keyframe()
     test_degenerate_direction_removed()
     test_dominant_wall_angle()
