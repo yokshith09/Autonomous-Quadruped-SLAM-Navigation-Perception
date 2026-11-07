@@ -52,6 +52,8 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **F37**: closures correct position only; ICP fallback bug fixed. Replay ATE 24.8 / 22.0 / 17.8 cm on three routes, heading <= 0.8 deg | commit `bb46462` |
 | 2026-11-07 | **Live run 4 (F1-F3, F34-F37): mission completed by itself at 1872 s; all 7 real rooms explored (98-100 % of each room's floor seen, true path entered every room)**. vs baseline: ATE 31.0 -> 26.9 cm, RPE 7.4 -> 4.6 %, final drift 0.24 -> 0.09 %, map F1 77.7 -> 82.8 %, map accuracy 10.6 -> 7.4 cm, real-time factor 0.32 -> 0.47; 20 metrics better, 8 worse | run `20261107_125826`, `docs/results/comparison_run4.md` |
 | 2026-11-07 | **Real room count**: 7 enclosed regions from the scene walls (`evaluation/room_coverage.py`); the robot's own labels reached 13 IDs. Correction: the baseline also saw 87-100 % of every real room; its '6 of 8 rooms' was a label count | `runs/*/room_coverage.json` |
+| 2026-11-07 | **Live run 5 (adds F38-F40, compiled wavefront)**: completed by itself at 2186 s; all 7 real rooms explored (88-100 % of floor). vs baseline: **ATE 31.0 -> 15.3 cm**, largest error 63 -> 38 cm, final drift 0.24 -> 0.02 %, **map accuracy 10.6 -> 5.5 cm, map F1 77.7 -> 90.0 %**, precision 73.9 -> 89.5 %, frontier selection 155 -> 39 ms, real-time factor 0.32 -> 0.53; 23 metrics better, 6 worse. Still open: 47 % of walking after the coverage plateau (doorway tour, F41 fixes) | run `20261107_150823`, `docs/results/comparison_run5.md` |
+| 2026-11-07 | Rejected after replay: soft-pull SLAM correction (worse on 3 of 4 routes) | not committed |
 
 ## Not done yet
 | Item | Status | Needs |
