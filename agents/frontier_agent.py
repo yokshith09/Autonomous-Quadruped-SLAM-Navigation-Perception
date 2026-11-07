@@ -464,10 +464,13 @@ class FrontierAgent(BaseAgent):
 
         # Collect valid forward doorways (unvisited and navigable on Geodesic map)
         doorways = self.latest_grid_msg.doorways if self.latest_grid_msg else []
+        door_rooms = self.latest_grid_msg.doorway_rooms if self.latest_grid_msg else []
         valid_doorways = []
-        for d in doorways:
+        for i, d in enumerate(doorways):
             if self._is_doorway_visited(d):
                 continue
+            if i < len(door_rooms) and all(r in self.explored_rooms for r in door_rooms[i]):
+                continue  # joins two finished rooms: nothing new behind it (run 5 toured such doorways for 600 s)
             dgx, dgy = self.grid.world_to_grid(d[0], d[1])
             if self._is_blacklisted(dgx, dgy, radius=3.5):
                 continue

@@ -421,6 +421,27 @@ def test_supervisor_doorways_by_place_with_real_rooms():
     print("PASSED")
 
 
+def test_doorway_between_finished_rooms_is_skipped():
+    """A doorway joining two explored rooms leads nowhere new; the robot does not walk through it (run 5 spent 600 s
+    touring such doorways after coverage had stopped growing)."""
+    print("Running test_doorway_between_finished_rooms_is_skipped...", end=" ")
+    grid = _walled_room()
+    labels = np.zeros((grid.height, grid.width), dtype=np.int32)
+    labels[:, :40], labels[:, 40:] = 4, 6
+    for rooms, expect_door in (((4, 6), False), ((4, 8), True)):
+        fa = FrontierAgent(MessageBus(), grid_ref=grid)
+        fa.explored_rooms = {4, 6}
+        fa.active_room_id = 4
+        fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                              explored_pct=0.0, room_labels=labels, doorways=[(0.6, 0.0)], doorway_rooms=[rooms]))
+        fa.on_pose(PoseMsg(timestamp=0.0, x=-0.8, y=0.0, yaw=0.0))
+        grid.grid_log_odds[38:41, 20:23] = 0.0  # keep one frontier so the agent does not report completion
+        tgt = fa.select_frontier(current_time=1.0)
+        grid.grid_log_odds[38:41, 20:23] = -2.0
+        assert bool(tgt is not None and tgt.is_doorway) == expect_door, f"doorway {rooms}: {tgt}"
+    print("PASSED")
+
+
 def test_relabelled_explored_floor_is_not_swept_again():
     """F3 part 2: after room 4 is finished, re-segmentation may give the same floor a new label (run 4 used 11 labels for
     7 real rooms); the robot remembers the floor by place and closes the new label without sweeping it."""
@@ -546,6 +567,7 @@ if __name__ == "__main__":
     test_spatial_memory_matches_brute_force()
     test_supervisor_doorways_by_place_with_real_rooms()
     test_relabelled_explored_floor_is_not_swept_again()
+    test_doorway_between_finished_rooms_is_skipped()
     test_target_is_kept_until_reached_while_progressing()
     test_target_without_progress_is_dropped()
     test_grid_world_round_trip()
