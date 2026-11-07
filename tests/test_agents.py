@@ -385,6 +385,32 @@ def test_grid_world_round_trip():
     print("PASSED")
 
 
+def test_compiled_raycast_matches_python():
+    """The numba ray-casting kernel and the Python loop produce a bit-identical map over evolving scans."""
+    print("Running test_compiled_raycast_matches_python...", end=" ")
+    import core.grid as cg
+    if cg._raycast_kernel is None:
+        print("SKIPPED (numba not installed)")
+        return
+    grids = []
+    for kernel in (cg._raycast_kernel, None):
+        saved, cg._raycast_kernel = cg._raycast_kernel, kernel
+        try:
+            g = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+            r = np.random.default_rng(5)
+            for k in range(40):
+                x, y = r.uniform(-1, 1), r.uniform(-1, 1)
+                ang = r.uniform(0, 2 * np.pi, 2000)
+                d = r.uniform(0.1, 3.5, 2000)
+                pts = np.column_stack([x + d * np.cos(ang), y + d * np.sin(ang), r.uniform(0.0, 0.7, 2000)])
+                g.update_from_depth_points(pts, (x, y), sample_rate=3)
+            grids.append(g.grid_log_odds.tobytes())
+        finally:
+            cg._raycast_kernel = saved
+    assert grids[0] == grids[1], "compiled kernel diverged from the Python loop"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -412,6 +438,7 @@ if __name__ == "__main__":
     test_target_is_kept_until_reached_while_progressing()
     test_target_without_progress_is_dropped()
     test_grid_world_round_trip()
+    test_compiled_raycast_matches_python()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 

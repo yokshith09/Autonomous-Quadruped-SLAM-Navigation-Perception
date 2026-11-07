@@ -3,8 +3,61 @@ import numpy as np
 import cv2
 from collections import deque
 
+try:
+    from numba import njit
+except ImportError:  # optional: without numba the pure-Python loop gives the same map, much slower
+    njit = None
+
 GRID_RES = 0.05
 ROBOT_RADIUS = 0.25
+
+if njit is not None:
+    @njit(cache=True)
+    def _raycast_kernel(L, pts, rx, ry, rgx, rgy, x_min, x_max, y_min, y_max, res,
+                        l_free, l_occ, l_min, l_max, thresh_occ):
+        """Compiled twin of the Python loop in update_from_depth_points: same order, same float32 arithmetic."""
+        height, width = L.shape
+        n_upd = 0
+        for i in range(pts.shape[0]):
+            px, py, pz = pts[i, 0], pts[i, 1], pts[i, 2]
+            if math.hypot(px - rx, py - ry) < 0.22:
+                continue
+            if not (x_min <= px <= x_max and y_min <= py <= y_max):
+                continue
+            if pz > 0.6:
+                continue
+            is_obstacle = pz >= 0.04
+            pgx = max(0, min(int((px - x_min) / res), width - 1))
+            pgy = max(0, min(int((py - y_min) / res), height - 1))
+            x, y = rgx, rgy
+            dx, dy = abs(pgx - rgx), abs(pgy - rgy)
+            sx = 1 if rgx < pgx else -1
+            sy = 1 if rgy < pgy else -1
+            err = dx - dy
+            while 0 <= x < width and 0 <= y < height:
+                at_end = x == pgx and y == pgy
+                if at_end:
+                    if is_obstacle:
+                        L[y, x] = min(l_max, L[y, x] + l_occ)
+                    else:
+                        L[y, x] = max(l_min, L[y, x] + l_free)
+                elif L[y, x] >= thresh_occ:
+                    break
+                else:
+                    L[y, x] = max(l_min, L[y, x] + l_free)
+                n_upd += 1
+                if at_end:
+                    break
+                e2 = 2 * err
+                if e2 > -dy:
+                    err -= dy
+                    x += sx
+                if e2 < dx:
+                    err += dx
+                    y += sy
+        return n_upd
+else:
+    _raycast_kernel = None
 
 def bresenham_line(x1, y1, x2, y2):
     dx = abs(x2 - x1)
@@ -80,16 +133,15 @@ class BayesianOccupancyGrid:
         return True # out of bounds is implicitly occupied
 
     def update_from_depth_points(self, points_world, robot_pos, sample_rate=24):
-        # Hot loop (about 40 % of wall time in the profile): Bresenham and the cell state test are inlined and
-        # attributes bound to locals. The arithmetic and the order of updates are exactly those of the plain
-        # version (each ray sees the cells earlier rays in the same scan changed), so the map is bit-identical.
+        # Hot loop (about 40 % of wall time in the profile). Runs in the compiled numba kernel when available,
+        # otherwise in the inlined Python loop below. Both keep the arithmetic and update order of the original
+        # (each ray sees the cells earlier rays in the same scan changed), so the map is bit-identical either way.
+        # Returns the number of cell updates.
         L = self.grid_log_odds
         l_free, l_occ, l_min, l_max = self.l_free, self.l_occ, self.l_min, self.l_max
         thresh_occ = self.thresh_occ
         width, height = self.width, self.height
         x_min, x_max, y_min, y_max, res = self.x_min, self.x_max, self.y_min, self.y_max, self.res
-        changed_cells = set()
-        add = changed_cells.add
         cells_updated = 0
         rx, ry = robot_pos[0], robot_pos[1]
         rgx, rgy = self.world_to_grid(rx, ry)
@@ -97,11 +149,17 @@ class BayesianOccupancyGrid:
         # Free space at robot base
         if L[rgy, rgx] > self.thresh_free:
             L[rgy, rgx] = max(l_min, L[rgy, rgx] + l_free)
-            add((rgx, rgy))
             cells_updated += 1
 
+        pts = points_world[::sample_rate]
+        if _raycast_kernel is not None and L.dtype == np.float32 and getattr(pts, "dtype", None) == np.float64:
+            f32 = np.float32
+            return cells_updated + _raycast_kernel(L, np.ascontiguousarray(pts), float(rx), float(ry), rgx, rgy,
+                                                   x_min, x_max, y_min, y_max, res, f32(l_free), f32(l_occ),
+                                                   f32(l_min), f32(l_max), thresh_occ)
+
         # Downsample points for performance
-        for pt in points_world[::sample_rate]:
+        for pt in pts:
             px, py, pz = pt[0], pt[1], pt[2]
 
             if math.hypot(px - rx, py - ry) < 0.22:
@@ -129,13 +187,11 @@ class BayesianOccupancyGrid:
                         L[y, x] = min(l_max, L[y, x] + l_occ)
                     else:
                         L[y, x] = max(l_min, L[y, x] + l_free)
-                    add((x, y))
                     cells_updated += 1
                     break
                 if L[y, x] >= thresh_occ:
                     break
                 L[y, x] = max(l_min, L[y, x] + l_free)
-                add((x, y))
                 cells_updated += 1
                 e2 = 2 * err
                 if e2 > -dy:
@@ -145,7 +201,7 @@ class BayesianOccupancyGrid:
                     err += dx
                     y += sy
 
-        return cells_updated, list(changed_cells)
+        return cells_updated
 
     def is_occupied_inflated(self, gx, gy, radius_cells=4):
         """Check if cell (gx, gy) or any cell within radius_cells is OCCUPIED."""
