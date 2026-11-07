@@ -44,6 +44,13 @@ class LocomotionAgent(BaseAgent):
         self.waypoints = path_msg.waypoints
         self.wp_idx = 0
 
+    def _remaining_path(self, rx: float, ry: float) -> float:
+        wps = self.waypoints[self.wp_idx:]
+        if not wps:
+            return 0.0
+        d = math.hypot(wps[0][0] - rx, wps[0][1] - ry)
+        return d + sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(wps, wps[1:]))
+
     def on_pose(self, pose_msg: PoseMsg):
         self.latest_pose = pose_msg
 
@@ -85,7 +92,9 @@ class LocomotionAgent(BaseAgent):
 
         # 2. Waypoint tracking & navigation (tight adherence to the planned blue line)
         if self.waypoints and self.wp_idx < len(self.waypoints):
-            goal_dist = math.hypot(self.waypoints[-1][0] - rx, self.waypoints[-1][1] - ry)
+            # Progress = remaining path length, not straight-line distance: a path around a wall moves away from the
+            # goal for a while, and the straight-line test called that "no progress" (16 of 17 stuck events, run 4).
+            goal_dist = self._remaining_path(rx, ry)
             if self._goal_best_time is None or goal_dist < self._goal_best_dist - 0.2:
                 self._goal_best_dist, self._goal_best_time = goal_dist, current_time
             elif current_time - self._goal_best_time > self.progress_timeout_s:

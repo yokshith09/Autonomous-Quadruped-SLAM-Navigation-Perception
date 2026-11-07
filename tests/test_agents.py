@@ -339,6 +339,27 @@ def test_unfinished_room_is_not_abandoned_on_label_change():
     print("PASSED")
 
 
+def test_detour_is_progress_not_stuck():
+    """Following a path around a wall moves away from the goal for a while; that is progress along the path, not a
+    stall (16 of 17 'stuck' events in run 4 were this)."""
+    print("Running test_detour_is_progress_not_stuck...", end=" ")
+    from agents import LocomotionAgent
+    bus = MessageBus()
+    events = []
+    bus.subscribe("mission/event", lambda e: events.append(e.event_type))
+    loco = LocomotionAgent(bus)
+    loco.initialize()
+    # U-shaped detour: go 1 m away from the goal, across, then back; goal is 0.6 m from the start in a straight line
+    path = [(0.0, 0.0), (0.0, -1.0), (0.6, -1.0), (0.6, 0.0)]
+    loco.on_path(PathMsg(timestamp=0.0, waypoints=path, active_idx=0, replan_count=1))
+    dense = [(x0 + (x1 - x0) * s / 20, y0 + (y1 - y0) * s / 20) for (x0, y0), (x1, y1) in zip(path, path[1:]) for s in range(20)]
+    for k, (x, y) in enumerate(dense[:50]):  # 25 s at 2 Hz along the first ~1.5 m of the detour
+        loco.on_pose(PoseMsg(timestamp=k * 0.5, x=x, y=y, yaw=0.0))
+        loco.step(k * 0.5)
+    assert "ROBOT_STUCK" not in events, "detour along the path was reported as a stall"
+    print("PASSED")
+
+
 def test_spatial_memory_matches_brute_force():
     """Hashed lookups return exactly the items a full scan finds, for any radius and bucket size."""
     print("Running test_spatial_memory_matches_brute_force...", end=" ")
@@ -495,6 +516,7 @@ if __name__ == "__main__":
     test_frontier_behind_wall_is_ignored()
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
+    test_detour_is_progress_not_stuck()
     test_spatial_memory_matches_brute_force()
     test_supervisor_doorways_by_place_with_real_rooms()
     test_relabelled_explored_floor_is_not_swept_again()
