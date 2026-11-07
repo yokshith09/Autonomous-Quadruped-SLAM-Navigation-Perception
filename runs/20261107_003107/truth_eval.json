@@ -1,0 +1,83 @@
+{
+ "scene": "evaluation/data/scene_truth.json",
+ "objects_in_band": [
+  "Bill[0]",
+  "Bill[1]",
+  "ConcretBlock",
+  "Cylinder3",
+  "beacon_10",
+  "beacon_8",
+  "beacon_9",
+  "cupboard",
+  "customizableTable",
+  "diningChair",
+  "indoorPlant",
+  "laptop",
+  "obstacle_3"
+ ],
+ "match_radius_m": 0.5,
+ "map_vs_scene": {
+  "f1_score": 0.4395307807309341,
+  "precision": 0.9653304442036836,
+  "recall": 0.28454421355983617,
+  "obstacle_iou": 0.07694512107751827,
+  "tolerant_iou": 0.1982375698524144,
+  "free_space_iou": 0.2558485069191551,
+  "overall_grid_accuracy": 0.36127433918224444,
+  "accuracy_meters": 0.037038212686499025,
+  "completion_meters": 1.2457761152026021,
+  "completion_ratio_5cm": 0.13590171393902625,
+  "chamfer_distance_meters": 0.6414071639445506,
+  "hausdorff_95_meters": 3.3477601956769343,
+  "total_true_obstacle_cells": 6593,
+  "total_slam_obstacle_cells": 923,
+  "total_free_cells": 9188,
+  "total_unknown_cells": 38730,
+  "tolerance_margin_meters": 0.15
+ },
+ "reference_vs_scene": {
+  "f1_score": 0.4601111698161471,
+  "precision": 0.9982300884955753,
+  "recall": 0.2989534354618535,
+  "obstacle_iou": 0.08487420430433465,
+  "tolerant_iou": 0.19210366777811458,
+  "free_space_iou": 0.2563990565213593,
+  "overall_grid_accuracy": 0.3622775946438443,
+  "accuracy_meters": 0.0007964601769911476,
+  "completion_meters": 1.4402579034956717,
+  "completion_ratio_5cm": 0.15395116032155315,
+  "chamfer_distance_meters": 0.7205271818363315,
+  "hausdorff_95_meters": 4.180236203261218,
+  "total_true_obstacle_cells": 6593,
+  "total_slam_obstacle_cells": 565,
+  "total_free_cells": 9227,
+  "total_unknown_cells": 39049,
+  "tolerance_margin_meters": 0.15
+ },
+ "true_floor_area_m2": 84.79750000000001,
+ "floor_mapped_as_free_pct": 25.891093487425927,
+ "arena_observed_pct": 25.415773900622387,
+ "free_mapped_outside_arena_m2": 0.025000000000000005,
+ "detection": {
+  "real_objects": 13,
+  "objects_found": 2,
+  "objects_found_names": [
+   "Cylinder3",
+   "beacon_9"
+  ],
+  "object_recall_pct": 15.384615384615385,
+  "detections": 21,
+  "detections_on_a_real_object": 2,
+  "detection_precision_pct": 9.523809523809524,
+  "labelled_chair": 21,
+  "real_chairs": 1,
+  "chair_labels_on_the_real_chair": 0,
+  "wall_entities": 9
+ },
+ "knowledge_graph": {
+  "rooms": 3,
+  "doorways": 2,
+  "rooms_with_centroid_set": 0,
+  "doorways_connecting_rooms_other_than_1_2": 0
+ }
+}
