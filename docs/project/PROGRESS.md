@@ -50,12 +50,18 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **F36 localization**: scan-to-submap + drift-bounded loop gate. Replay ATE run 2 72.9 -> 21.8 cm, baseline route 31.0 -> 23.3 cm | commit `d939b26`, 2 recordings |
 | 2026-11-07 | **Live run 3 (F1-F3, F34-F36)**: 11 room labels cleared by 1260 s, ATE 32 cm at 1200 s; then heading collapse (22 deg), stopped at 1500 s | run `20261107_112958` |
 | 2026-11-07 | **F37**: closures correct position only; ICP fallback bug fixed. Replay ATE 24.8 / 22.0 / 17.8 cm on three routes, heading <= 0.8 deg | commit `bb46462` |
+| 2026-11-07 | **Live run 4 (F1-F3, F34-F37): mission completed by itself at 1872 s; all 7 real rooms explored (98-100 % of each room's floor seen, true path entered every room)**. vs baseline: ATE 31.0 -> 26.9 cm, RPE 7.4 -> 4.6 %, final drift 0.24 -> 0.09 %, map F1 77.7 -> 82.8 %, map accuracy 10.6 -> 7.4 cm, real-time factor 0.32 -> 0.47; 20 metrics better, 8 worse | run `20261107_125826`, `docs/results/comparison_run4.md` |
+| 2026-11-07 | **Real room count**: 7 enclosed regions from the scene walls (`evaluation/room_coverage.py`); the robot's own labels reached 13 IDs. Correction: the baseline also saw 87-100 % of every real room; its '6 of 8 rooms' was a label count | `runs/*/room_coverage.json` |
 
 ## Not done yet
 | Item | Status | Needs |
 |---|---|---|
 | F33 map noise seals 2 rooms | Diagnosed, not fixed | After F1/F2 live check (it is a map-accuracy fix, grouped with F7 to F9) |
-| Live run 4 (with F37) | Running | Compare with the baseline only if it explores all 8 rooms |
+| Wasted walking after coverage plateau 35 % (target < 10 %); stuck events 17 vs 4 | Open | Diagnose from run 4 |
+| Localization ATE 27 cm (target <= 15 cm); scan-match acceptance 25 % | Open | F16, F7 |
+| Path line drawn in SLAM frame, looks off the robot | Open | Draw the estimated pose too |
+| Gait speed 0.09 m/s, not smooth | Open | F5, F23 |
+| Frontier selection 215 ms median, memory peak 3.3 GB | Open | numba geodesic field (F14), stream recording (F15) |
 | F3 part 2: room labels drift (run 3 used IDs up to 13 for 8 rooms) | Open | Freeze labels of explored rooms |
 | F14 frontier geodesic field and A* still in Python | Open | numba next if they show up in the profile |
 | F7 RPE, F16 scan-match rejection reasons, ATE <= 15 cm | Open | ATE now about 22 cm on replay |
