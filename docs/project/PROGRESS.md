@@ -48,12 +48,15 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **A* audit**: optimal (matches Dijkstra on the run-2 map); skips stale entries, 1.4x faster. Blue line off the robot = path drawn in SLAM coordinates, offset by the pose error | commit `c3c1dcf` |
 | 2026-11-07 | **numba** ray-casting kernel: 0.17 vs 49.8 ms per update, bit-identical | commit `654650c`, test |
 | 2026-11-07 | **F36 localization**: scan-to-submap + drift-bounded loop gate. Replay ATE run 2 72.9 -> 21.8 cm, baseline route 31.0 -> 23.3 cm | commit `d939b26`, 2 recordings |
+| 2026-11-07 | **Live run 3 (F1-F3, F34-F36)**: 11 room labels cleared by 1260 s, ATE 32 cm at 1200 s; then heading collapse (22 deg), stopped at 1500 s | run `20261107_112958` |
+| 2026-11-07 | **F37**: closures correct position only; ICP fallback bug fixed. Replay ATE 24.8 / 22.0 / 17.8 cm on three routes, heading <= 0.8 deg | commit `bb46462` |
 
 ## Not done yet
 | Item | Status | Needs |
 |---|---|---|
 | F33 map noise seals 2 rooms | Diagnosed, not fixed | After F1/F2 live check (it is a map-accuracy fix, grouped with F7 to F9) |
-| Live run 3 (all fixes) | Running | Compare with the baseline only if it explores all 8 rooms |
+| Live run 4 (with F37) | Running | Compare with the baseline only if it explores all 8 rooms |
+| F3 part 2: room labels drift (run 3 used IDs up to 13 for 8 rooms) | Open | Freeze labels of explored rooms |
 | F14 frontier geodesic field and A* still in Python | Open | numba next if they show up in the profile |
 | F7 RPE, F16 scan-match rejection reasons, ATE <= 15 cm | Open | ATE now about 22 cm on replay |
 | Room entries metric | Divides entries by rooms *found*, so 4 entries / 8 found = 0.50 looks "better"; should be entries per room entered | Measurement fix, own commit |
