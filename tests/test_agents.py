@@ -1,4 +1,5 @@
 """Runnable verification tests for the Multi-Agent Robotics Stack."""
+import math
 import numpy as np
 import sys
 import os
@@ -338,6 +339,44 @@ def test_unfinished_room_is_not_abandoned_on_label_change():
     print("PASSED")
 
 
+def test_target_is_kept_until_reached_while_progressing():
+    """A chosen frontier is kept while the robot gets closer, even past the old 9 s window and while it faces another
+    frontier (the old window was about 0.8 m of walking at 0.09 m/s, so targets were swapped mid-route)."""
+    print("Running test_target_is_kept_until_reached_while_progressing...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[66:69, 66:69] = 0.0  # far pocket, north-east corner
+    grid.grid_log_odds[13:16, 13:16] = 0.0  # pocket in the south-west corner
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=math.radians(45)))
+    first = fa.select_frontier(current_time=0.0)
+    start = (0.0, 0.0)
+    for k in range(1, 30):  # 0.09 m/s toward the target, facing away from it (as when skirting an obstacle)
+        a = k / 30.0
+        x, y = start[0] + a * 0.7 * (first.target_wx - start[0]), start[1] + a * 0.7 * (first.target_wy - start[1])
+        fa.on_pose(PoseMsg(timestamp=float(k), x=x, y=y, yaw=math.atan2(first.target_wy - y, first.target_wx - x) + math.pi))
+        tgt = fa.select_frontier(current_time=float(k))
+        assert (tgt.target_gx, tgt.target_gy) == (first.target_gx, first.target_gy), f"switched target at {k} s"
+    print("PASSED")
+
+
+def test_target_without_progress_is_dropped():
+    """A target the robot does not get closer to (blocked, mis-mapped) is dropped after the stall time; two stalls
+    retire it, so a different target follows."""
+    print("Running test_target_without_progress_is_dropped...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[66:69, 66:69] = 0.0
+    grid.grid_log_odds[13:16, 13:16] = 0.0
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=0.0))
+    first = fa.select_frontier(current_time=0.0)
+    for k in range(1, 60):  # the robot never moves
+        tgt = fa.select_frontier(current_time=float(k))
+        if (tgt.target_gx, tgt.target_gy) != (first.target_gx, first.target_gy):
+            break
+    assert 35 <= k <= 50, f"stalled target replaced after {k} s"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -362,6 +401,8 @@ if __name__ == "__main__":
     test_frontier_behind_wall_is_ignored()
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
+    test_target_is_kept_until_reached_while_progressing()
+    test_target_without_progress_is_dropped()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 

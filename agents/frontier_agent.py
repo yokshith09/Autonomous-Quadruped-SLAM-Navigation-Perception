@@ -11,6 +11,8 @@ from core.grid import bresenham_line
 
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
+COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
+COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
 
 
 class FrontierAgent(BaseAgent):
@@ -36,7 +38,8 @@ class FrontierAgent(BaseAgent):
         # Goal Commitment, Dynamic Cone Tracking & Monotonic Angular Sweep State
         self.committed_target: Optional[Tuple[int, int]] = None
         self.committed_doorway: Optional[Tuple[float, float]] = None
-        self.commitment_time: float = 0.0
+        self._commit_best_d: float = float("inf")  # shortest walking distance to the committed target so far
+        self._commit_best_t: float = 0.0           # when it last shrank by COMMIT_PROGRESS_M
         self.sweep_direction: int = 1  # +1 CCW, -1 CW monotonic room sweep
 
     def initialize(self) -> bool:
@@ -64,6 +67,9 @@ class FrontierAgent(BaseAgent):
     def _retire_committed(self, limit: int) -> None:
         self._strike(self.committed_target, limit)
         self._strike(self.committed_frontier, limit)
+
+    def _start_commitment(self, current_time: float) -> None:
+        self._commit_best_d, self._commit_best_t = float("inf"), current_time
 
     def _visible_unknown(self, vx: int, vy: int, gx: int, gy: int, r: int = 3) -> int:
         """Unknown cells around frontier (gx, gy) that a straight ray from viewpoint (vx, vy) reaches without crossing an
@@ -261,7 +267,13 @@ class FrontierAgent(BaseAgent):
             dist_to_comm = math.hypot(cwx - rx, cwy - ry)
             geo_d, nav_cell = self._query_geodesic_dist(dist_map, self.committed_target[0], self.committed_target[1], search_radius=4)
 
-            if (current_time - self.commitment_time) <= 9.0 and dist_to_comm >= 0.38 and np.isfinite(geo_d):
+            # Keep the target until it is reached, its frontier is gone, or it stops getting closer. (A fixed 9 s
+            # window here expired after about 0.8 m of walking, and re-scoring by the current heading then
+            # swapped targets mid-route.)
+            if np.isfinite(geo_d) and geo_d < self._commit_best_d - COMMIT_PROGRESS_M:
+                self._commit_best_d, self._commit_best_t = geo_d, current_time
+            stalled = current_time - self._commit_best_t > COMMIT_STALL_S
+            if not stalled and dist_to_comm >= 0.38 and np.isfinite(geo_d):
                 if self.state == "INTER_ROOM_TRANSIT":
                     target_msg = FrontierTargetMsg(
                         timestamp=current_time,
@@ -314,6 +326,7 @@ class FrontierAgent(BaseAgent):
                     if best_slide is not None:
                         self.committed_target = (best_slide[0], best_slide[1])
                         self.committed_frontier = best_slide[5]
+                        self._start_commitment(current_time)
                         target_msg = FrontierTargetMsg(
                             timestamp=current_time,
                             target_gx=best_slide[0],
@@ -327,12 +340,11 @@ class FrontierAgent(BaseAgent):
                         self.bus.publish("frontier/target", target_msg)
                         return target_msg
 
-            # Target expired (commitment window over), cleared, or became unreachable. Only a lost path counts as a
-            # failure; an expired window just re-opens the choice (the frontier stays a candidate).
+            # Target cleared (its frontier was seen from afar: done), unreachable or stalled (failed attempts).
             if self.committed_doorway is not None:
                 self.visited_doorways.add(self.committed_doorway)
                 self.committed_doorway = None
-            if not np.isfinite(geo_d):
+            if not np.isfinite(geo_d) or stalled:
                 self._retire_committed(limit=2)
             self.committed_target = None
 
@@ -406,7 +418,7 @@ class FrontierAgent(BaseAgent):
             gx, gy, area = target_frontier
             self.committed_target = (gx, gy)
             self.committed_frontier = self._raw_of.get((gx, gy), (gx, gy))
-            self.commitment_time = current_time
+            self._start_commitment(current_time)
             wx, wy = self.grid.grid_to_world(gx, gy)
             
             target_msg = FrontierTargetMsg(
@@ -456,7 +468,7 @@ class FrontierAgent(BaseAgent):
 
             self.committed_target = (dgx, dgy)
             self.committed_frontier = None
-            self.commitment_time = current_time
+            self._start_commitment(current_time)
             print(f"  [FRONTIER] [INTER_ROOM_TRANSIT] Penetrating Doorway -> ({target_wx:.2f}, {target_wy:.2f})")
             target_msg = FrontierTargetMsg(
                 timestamp=current_time,
@@ -478,7 +490,7 @@ class FrontierAgent(BaseAgent):
             gx, gy, area = target_frontier
             self.committed_target = (gx, gy)
             self.committed_frontier = self._raw_of.get((gx, gy), (gx, gy))
-            self.commitment_time = current_time
+            self._start_commitment(current_time)
             wx, wy = self.grid.grid_to_world(gx, gy)
             
             f_room = self._get_room_at(gx, gy, room_labels)
@@ -555,12 +567,6 @@ class FrontierAgent(BaseAgent):
             # Monotonic angular sweep bonus (consistent rotational clearing direction)
             if (signed_err >= 0 and self.sweep_direction >= 0) or (signed_err < 0 and self.sweep_direction < 0):
                 score += 4.5
-
-            # 6. Goal commitment & hysteresis bonus
-            if self.committed_target is not None:
-                d_to_committed = math.hypot(gx - self.committed_target[0], gy - self.committed_target[1])
-                if d_to_committed <= 7.0:
-                    score += 18.0
 
             if score > best_score:
                 best_score = score
