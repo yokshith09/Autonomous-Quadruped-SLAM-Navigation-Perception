@@ -7,6 +7,7 @@ from .bus import MessageBus, ActuationMsg, PathMsg, PoseMsg, ScanMsg, MissionEve
 from core.robot import LizardRobot, gait_body_speed, norm_angle
 
 TURN_IN_PLACE_RAD = 0.45  # heading error above which the robot stops and turns before walking on
+LOOKAHEAD_M = 0.40        # pure-pursuit lookahead along the path
 
 class LocomotionAgent(BaseAgent):
     def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.18, update_rate_hz: float = 20.0):
@@ -137,6 +138,19 @@ class LocomotionAgent(BaseAgent):
                     target_wx, target_wy = self.waypoints[self.wp_idx]
 
             if self.waypoints and self.wp_idx < len(self.waypoints):
+                # Pure-pursuit: steer at the first waypoint at least LOOKAHEAD_M away, not at the next one 0.2 m
+                # ahead; small pose noise and waypoint switches then barely move the commanded heading (run 5:
+                # 12.7 turn-direction reversals per minute, 10 deg/s yaw wobble while walking straight).
+                # Never look past a corner (path turn > 30 deg): the chord would cut it, and doorframes are tight.
+                for j in range(self.wp_idx, len(self.waypoints)):
+                    target_wx, target_wy = self.waypoints[j]
+                    if math.hypot(target_wx - rx, target_wy - ry) >= LOOKAHEAD_M:
+                        break
+                    if 0 < j < len(self.waypoints) - 1:
+                        (ax, ay), (bx, by) = self.waypoints[j - 1], self.waypoints[j + 1]
+                        turn = norm_angle(math.atan2(by - target_wy, bx - target_wx) - math.atan2(target_wy - ay, target_wx - ax))
+                        if abs(turn) > math.radians(30):
+                            break
                 target_heading = math.atan2(target_wy - ry, target_wx - rx)
 
                 # Close-range frontal bumper safety envelope (narrowed so lateral doorposts don't trigger false swerving)
