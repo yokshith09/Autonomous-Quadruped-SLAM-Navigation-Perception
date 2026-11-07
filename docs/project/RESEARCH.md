@@ -1,6 +1,6 @@
 # Research notes: recent work relevant to this robot
 
-Searched 2026-11-07 (Firecrawl paper index and web search; no Perplexity connector was available in this session).
+Searched 2026-11-07 with the Firecrawl paper index and web search, and Consensus (Semantic Scholar, OpenAlex, PubMed). The attached Perplexity connector exposes dashboard import tools only, no search.
 Each entry says what the paper found and what we do with it here. Status refers to `FIXES.md` IDs.
 
 ## Localization and mapping
@@ -12,6 +12,10 @@ Each entry says what the paper found and what we do with it here. Status refers 
 | Tran et al., *HP2-SLAM: Adaptive Hybrid ICP*, arXiv 2608.14996 (2026) | Per-correspondence choice between point-to-plane and point-to-point by local planarity; stable in planar and repetitive scenes | Our corridors and flat walls: try hybrid residuals in `icp_point_to_line` | Candidate |
 | Gupta et al., *MapClosures*, IJRR 2026, arXiv 2501.07399 | Loop closure from density-map descriptors with self-similarity pruning against perceptual aliasing | Matches our measured false-closure problem (about half of accepted closures hurt); add a self-similarity check before accepting a closure | Candidate (F36/F37 reduced the damage) |
 | Zhang et al., *Autonomous Exploration-Based Precise Mapping through Stepwise and Consistent Motions*, arXiv 2503.17005 (2026) | Drive straight, rotate in place, one goal at a time; waypoint retracing triggers loop closures | Turn in place (F39), single committed goal (F34). Retracing for closures: candidate | F34, F39 done |
+
+| Tang et al., *Optimization of 2D laser SLAM with visual feedback loop integration*, Industrial Robot 2026 (via Consensus) | Visual bag-of-words loop detection with SURF geometric checks removes false laser loop closures in look-alike corridors | Our RGB camera is unused by SLAM: verify a laser closure visually before accepting it (about half of accepted closures increased the error) | Candidate, high value |
+| Zhu et al., *Loop closure detection in hybrid scene LiDAR SLAM*, Eng. Res. Express 2026 (via Consensus) | Spatial-consistency constraints reject geometrically similar but spatially impossible loop candidates | Independent support for the drift-bounded closure gate | F36 done |
+| Zhang et al., *2DLIW-SLAM*, Meas. Sci. Technol. 2024, 21 citations (via Consensus) | Line-to-line constraints plus tightly coupled LiDAR, IMU and wheel odometry handle 2D degeneracy; lower error than Cartographer | Line features from our wall scans; tighter gyro-odometry fusion | Candidate |
 
 ## Exploration efficiency (no revisits, finish sooner)
 
