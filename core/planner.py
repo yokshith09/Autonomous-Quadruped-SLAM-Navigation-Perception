@@ -110,8 +110,12 @@ def a_star_search(grid, start, goal, smooth=False):
     came_from = {}
     g_score = {start: 0}
 
+    closed = set()
     while open_set:
         _, current = heapq.heappop(open_set)
+        if current in closed:
+            continue  # stale queue entry: this cell was already expanded at a lower cost
+        closed.add(current)
 
         if current == goal:
             path = []
