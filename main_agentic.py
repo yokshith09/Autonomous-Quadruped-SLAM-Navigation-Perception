@@ -51,6 +51,7 @@ MAP_Y_MIN, MAP_Y_MAX = -5.5, 5.5
 GRID_RES = 0.05
 
 path_drawing_handle = -1
+pose_drawing_handle = -1
 
 
 def cpu_name():
@@ -89,6 +90,8 @@ def cleanup_sim_drawings(sim):
         except Exception:
             pass
     path_drawing_handle = -1
+    global pose_drawing_handle
+    pose_drawing_handle = -1
 
 
 def init_sim_drawings(sim):
@@ -105,7 +108,11 @@ def init_sim_drawings(sim):
         print(f"  [WARN] Failed to create path drawing object: {e}")
 
 
-def draw_planned_path_in_sim(sim, waypoints):
+def draw_planned_path_in_sim(sim, waypoints, est_pose=None):
+    """Planned path (cyan) and the robot's estimated pose (magenta cross + heading tick), both in the SLAM frame.
+    The path is planned from the estimate, so it starts at the cross; the gap between the cross and the robot body is
+    the live localization error."""
+    global pose_drawing_handle
     if path_drawing_handle != -1:
         try:
             sim.addDrawingObjectItem(path_drawing_handle, None)  # Clear previous
@@ -113,6 +120,18 @@ def draw_planned_path_in_sim(sim, waypoints):
                 for i in range(len(waypoints) - 1):
                     p1, p2 = waypoints[i], waypoints[i + 1]
                     sim.addDrawingObjectItem(path_drawing_handle, [p1[0], p1[1], 0.08, p2[0], p2[1], 0.08])
+        except Exception:
+            pass
+    if est_pose is not None:
+        try:
+            if pose_drawing_handle == -1:
+                pose_drawing_handle = sim.addDrawingObject(sim.drawing_lines, 4, 0, -1, 8, [1.0, 0.0, 1.0])
+            sim.addDrawingObjectItem(pose_drawing_handle, None)
+            x, y, yaw = est_pose
+            s, z = 0.12, 0.09
+            for seg in ([x - s, y, z, x + s, y, z], [x, y - s, z, x, y + s, z],
+                        [x, y, z, x + 0.25 * math.cos(yaw), y + 0.25 * math.sin(yaw), z]):
+                sim.addDrawingObjectItem(pose_drawing_handle, seg)
         except Exception:
             pass
 
@@ -299,8 +318,9 @@ def main():
             if step_count % 5 == 0:
                 tel.step(planning_agent, t)
                 latest_path = bus.get_latest("plan/path")
-                if latest_path and latest_path.waypoints:
-                    draw_planned_path_in_sim(sim, latest_path.waypoints)
+                est = bus.get_latest("pose/state")
+                draw_planned_path_in_sim(sim, latest_path.waypoints if latest_path else None,
+                                         (est.x, est.y, est.yaw) if est else None)
 
             # Step 5: Locomotion Agent (Gait cycle & heading steering)
             tel.step(locomotion_agent, t)
