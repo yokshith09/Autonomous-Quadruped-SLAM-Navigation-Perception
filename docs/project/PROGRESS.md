@@ -43,14 +43,21 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **F3 part 1 implemented**: an unfinished room is never abandoned on a label change | new test fails on old code, passes on new |
 | 2026-11-07 | **Live run 2 (F1, F2, F3 part 1)**: exploration behaviour fixed (path after coverage plateau 46 % -> 8 %, each room entered once, no repeated targets, mission ends by itself at 1011 s; real-time factor 0.32 -> 0.51). **But** ATE 31 -> 73 cm on this route; the smeared map sealed the rest, so the completion is false (4 rooms cleared, 77 frontiers unreachable, map F1 77.7 % -> 59.7 %) | run `20261107_011529`, `compare_runs` against the baseline |
 
+| 2026-11-07 | **F34**: target kept until reached / cleared / unreachable / stalled (was swapped every 9 s, about 0.8 m) | commit `626bd35`, 2 tests |
+| 2026-11-07 | **F35**: `grid_to_world` returns cell centre (22 % of cells landed one cell off) | commit `504d636`, test |
+| 2026-11-07 | **A* audit**: optimal (matches Dijkstra on the run-2 map); skips stale entries, 1.4x faster. Blue line off the robot = path drawn in SLAM coordinates, offset by the pose error | commit `c3c1dcf` |
+| 2026-11-07 | **numba** ray-casting kernel: 0.17 vs 49.8 ms per update, bit-identical | commit `654650c`, test |
+| 2026-11-07 | **F36 localization**: scan-to-submap + drift-bounded loop gate. Replay ATE run 2 72.9 -> 21.8 cm, baseline route 31.0 -> 23.3 cm | commit `d939b26`, 2 recordings |
+
 ## Not done yet
 | Item | Status | Needs |
 |---|---|---|
 | F33 map noise seals 2 rooms | Diagnosed, not fixed | After F1/F2 live check (it is a map-accuracy fix, grouped with F7 to F9) |
-| **Localization drift (blocks all-rooms)** | Diagnosing: run 2 error grows in jumps at turns and in the south area, not smoothly along a corridor; replay ablation running to find which SLAM part adds the error | Recording `runs/20261107_011529/recording.npz` |
+| Live run 3 (all fixes) | Running | Compare with the baseline only if it explores all 8 rooms |
+| F14 frontier geodesic field and A* still in Python | Open | numba next if they show up in the profile |
+| F7 RPE, F16 scan-match rejection reasons, ATE <= 15 cm | Open | ATE now about 22 cm on replay |
 | Room entries metric | Divides entries by rooms *found*, so 4 entries / 8 found = 0.50 looks "better"; should be entries per room entered | Measurement fix, own commit |
 | F3 part 2 room labels drift | Diagnosed, not fixed | After the live check |
-| F14 compiled ray-casting (numba) | Proposed | Owner decision on the new dependency |
 | Diagnose results 3, 4, 5, 6, 8, 9 (ATE, RPE, map accuracy, ICP acceptance, real time, detection) | Recorded in `FIXES.md`, detailed diagnosis not started | One at a time, in order |
 | Doc fix `97096d2` to `main` | Waiting | Owner approval |
 | Back up `runs/20261024_210638/recording.npz` (350 MB, not in git) | Owner | External drive or cloud |
