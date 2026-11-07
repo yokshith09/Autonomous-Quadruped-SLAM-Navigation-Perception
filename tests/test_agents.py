@@ -339,6 +339,66 @@ def test_unfinished_room_is_not_abandoned_on_label_change():
     print("PASSED")
 
 
+def test_spatial_memory_matches_brute_force():
+    """Hashed lookups return exactly the items a full scan finds, for any radius and bucket size."""
+    print("Running test_spatial_memory_matches_brute_force...", end=" ")
+    from agents.spatial_memory import SpatialMemory
+    rng = np.random.default_rng(2)
+    pts = rng.uniform(-5, 5, (400, 2))
+    for bucket in (0.3, 1.0, 4.0):
+        mem = SpatialMemory(bucket=bucket)
+        for i, (x, y) in enumerate(pts):
+            mem.add("a" if i % 2 else "b", x, y, idx=i)
+        for qx, qy, r in rng.uniform(-6, 6, (50, 3)):
+            r = abs(r) / 2
+            got = sorted(it["idx"] for it in mem.near("a", qx, qy, r))
+            want = sorted(i for i, (x, y) in enumerate(pts) if i % 2 and (x - qx) ** 2 + (y - qy) ** 2 <= r * r)
+            assert got == want
+    print("PASSED")
+
+
+def test_supervisor_doorways_by_place_with_real_rooms():
+    """F29: the same doorways reported in a different order are not duplicated, and each records the rooms it joins
+    (previously keyed by list index and always recorded as joining rooms 1 and 2)."""
+    print("Running test_supervisor_doorways_by_place_with_real_rooms...", end=" ")
+    sup = SupervisorAgent(MessageBus())
+    sup.initialize()
+    g = lambda dws, rooms: GridMapMsg(timestamp=0.0, log_odds=np.zeros((2, 2)), free_cells=0, occupied_cells=0,
+                                      unknown_cells=0, explored_pct=0.0, doorways=dws, doorway_rooms=rooms)
+    sup.on_grid(g([(1.0, 0.0), (-2.0, 3.0)], [(3, 4), (4, 7)]))
+    sup.step(1.0)
+    sup.on_grid(g([(-2.05, 3.02), (1.02, 0.01)], [(4, 7), (3, 4)]))  # same doorways, re-ordered, small jitter
+    sup.step(2.0)
+    kg = sup.knowledge_graph.doorways
+    assert len(kg) == 2, f"{len(kg)} doorways for 2"
+    assert sorted(d.connects_rooms for d in kg.values()) == [(3, 4), (4, 7)]
+    print("PASSED")
+
+
+def test_relabelled_explored_floor_is_not_swept_again():
+    """F3 part 2: after room 4 is finished, re-segmentation may give the same floor a new label (run 4 used 11 labels for
+    7 real rooms); the robot remembers the floor by place and closes the new label without sweeping it."""
+    print("Running test_relabelled_explored_floor_is_not_swept_again...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[38:41, 58:61] = 0.0  # frontier left in the east room (6); the west room (4) is fully seen
+    labels = np.zeros((grid.height, grid.width), dtype=np.int32)
+    labels[:, :40] = 4
+    labels[:, 40:] = 6
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    msg = lambda lab: GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0,
+                                 unknown_cells=0, explored_pct=0.0, room_labels=lab, doorways=[])
+    fa.on_grid(msg(labels))
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-0.6, y=0.0, yaw=0.0))
+    fa.select_frontier(current_time=1.0)
+    assert 4 in fa.explored_rooms, "room 4 has no frontier and should be finished"
+    relabelled = labels.copy()
+    relabelled[:, :40] = 9  # same west floor, new label
+    fa.on_grid(msg(relabelled))
+    fa.select_frontier(current_time=2.0)
+    assert 9 in fa.explored_rooms and fa.active_room_id == 4, "re-labelled explored floor was entered as a new room"
+    print("PASSED")
+
+
 def test_target_is_kept_until_reached_while_progressing():
     """A chosen frontier is kept while the robot gets closer, even past the old 9 s window and while it faces another
     frontier (the old window was about 0.8 m of walking at 0.09 m/s, so targets were swapped mid-route)."""
@@ -435,6 +495,9 @@ if __name__ == "__main__":
     test_frontier_behind_wall_is_ignored()
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
+    test_spatial_memory_matches_brute_force()
+    test_supervisor_doorways_by_place_with_real_rooms()
+    test_relabelled_explored_floor_is_not_swept_again()
     test_target_is_kept_until_reached_while_progressing()
     test_target_without_progress_is_dropped()
     test_grid_world_round_trip()

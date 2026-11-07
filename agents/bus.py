@@ -41,6 +41,7 @@ class GridMapMsg:
     explored_pct: float
     room_labels: Optional[np.ndarray] = None  # 2D array of room IDs
     doorways: List[Tuple[float, float]] = field(default_factory=list)
+    doorway_rooms: List[Tuple[int, int]] = field(default_factory=list)  # the two room labels each doorway joins
 
 
 @dataclass

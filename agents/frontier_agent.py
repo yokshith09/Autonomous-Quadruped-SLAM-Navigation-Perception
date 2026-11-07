@@ -6,12 +6,14 @@ import numpy as np
 from typing import List, Tuple, Set, Optional
 from .base import BaseAgent
 from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEventMsg
+from .spatial_memory import SpatialMemory
 from core.robot import norm_angle
 from core.grid import bresenham_line
 
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
+EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
 
 
@@ -28,7 +30,10 @@ class FrontierAgent(BaseAgent):
         self.active_room_id: int = -1
         self.explored_rooms: Set[int] = set()
         self.visited_doorways: Set[Tuple[float, float]] = set()
-        self.blacklist_frontiers: Set[Tuple[int, int]] = set()  # retired frontiers; never cleared
+        # Retired frontiers, in grid cells; never cleared. Spatially hashed: a lookup reads only nearby buckets, so it
+        # stays constant-time however many frontiers a long run retires (a full scan per candidate did not).
+        self.retired = SpatialMemory(bucket=RETIRE_RADIUS)
+        self.explored_floor = None  # free cells of finished rooms (bool grid), kept by place across re-labelling
         self.strikes: dict = {}
         self.committed_frontier: Optional[Tuple[int, int]] = None  # raw frontier cell behind committed_target (a nav cell)
         self._raw_of: dict = {}
@@ -53,7 +58,7 @@ class FrontierAgent(BaseAgent):
         return any(math.hypot(dw[0] - vd[0], dw[1] - vd[1]) < 0.65 for vd in self.visited_doorways)
 
     def _is_blacklisted(self, gx: int, gy: int, radius: float = RETIRE_RADIUS) -> bool:
-        return any(math.hypot(gx - bgx, gy - bgy) <= radius for bgx, bgy in self.blacklist_frontiers)
+        return self.retired.any_near("frontier", gx, gy, radius)
 
     def _strike(self, cell, limit: int) -> None:
         """Count a failed attempt at a frontier; retire it permanently after `limit` failures."""
@@ -62,11 +67,25 @@ class FrontierAgent(BaseAgent):
         k = (int(cell[0]) // 6, int(cell[1]) // 6)
         self.strikes[k] = self.strikes.get(k, 0) + 1
         if self.strikes[k] >= limit:
-            self.blacklist_frontiers.add((int(cell[0]), int(cell[1])))
+            self.retired.add("frontier", int(cell[0]), int(cell[1]))
 
     def _retire_committed(self, limit: int) -> None:
         self._strike(self.committed_target, limit)
         self._strike(self.committed_frontier, limit)
+
+    def _remember_explored(self, room_id: int, room_labels) -> None:
+        """Keep the floor of a finished room by place, not by label: labels change when the map is re-segmented."""
+        if room_labels is None:
+            return
+        floor = (room_labels == room_id) & (self.grid.grid_log_odds <= self.grid.thresh_free)
+        self.explored_floor = floor if self.explored_floor is None else (self.explored_floor | floor)
+
+    def _already_covered(self, room_id: int, room_labels) -> bool:
+        if room_labels is None or self.explored_floor is None:
+            return False
+        floor = (room_labels == room_id) & (self.grid.grid_log_odds <= self.grid.thresh_free)
+        n = int(np.count_nonzero(floor))
+        return n > 0 and np.count_nonzero(floor & self.explored_floor) >= EXPLORED_OVERLAP * n
 
     def _start_commitment(self, current_time: float) -> None:
         self._commit_best_d, self._commit_best_t = float("inf"), current_time
@@ -238,6 +257,12 @@ class FrontierAgent(BaseAgent):
             # and switching on every change made it alternate between two rooms without finishing either (F3).
             # A room whose label vanishes has no frontiers left under its ID, so it is closed below and this
             # cannot deadlock.
+            elif (current_detected_room != self.active_room_id and current_detected_room not in self.explored_rooms
+                  and self.active_room_id in self.explored_rooms
+                  and self._already_covered(current_detected_room, room_labels)):
+                # Re-segmentation gave an area the robot has already swept a new label: close it, do not sweep again
+                self.explored_rooms.add(current_detected_room)
+                print(f"  [FRONTIER] Room {current_detected_room} lies in already explored floor -> closed without a sweep")
             elif (current_detected_room != self.active_room_id and current_detected_room not in self.explored_rooms
                   and self.active_room_id in self.explored_rooms):
                 if self.committed_doorway is not None:
@@ -438,6 +463,7 @@ class FrontierAgent(BaseAgent):
         # Mark active room explored ONLY now that room_frontiers is genuinely empty
         if self.active_room_id > 0 and self.active_room_id not in self.explored_rooms:
             self.explored_rooms.add(self.active_room_id)
+            self._remember_explored(self.active_room_id, room_labels)
             print(f"  [FRONTIER] ★ Room {self.active_room_id} 100% EXPLORED! Marked closed.")
             self.bus.publish("mission/event", MissionEventMsg(
                 timestamp=current_time,

@@ -19,6 +19,7 @@ class MappingAgent(BaseAgent):
         self.latest_pose: Optional[PoseMsg] = None
         self.room_labels: Optional[np.ndarray] = None
         self.doorways: List[Tuple[float, float]] = []
+        self.doorway_rooms: List[Tuple[int, int]] = []
         self.segmentation_interval = 20  # Re-segment rooms periodically
         self.step_counter = 0
 
@@ -83,6 +84,7 @@ class MappingAgent(BaseAgent):
             voronoi_map = np.ones_like(free_mask, dtype=np.int32)
             self.room_labels = voronoi_map
             self.doorways = []
+            self.doorway_rooms = []
             if num_rooms == 1:
                 self.room_centroids[1] = valid_components[0][1]
             return voronoi_map, []
@@ -138,16 +140,22 @@ class MappingAgent(BaseAgent):
         door_mask &= (dist_transform >= min_door_dist).astype(np.uint8)
 
         num_d, d_labels, d_stats, d_cents = cv2.connectedComponentsWithStats(door_mask)
-        doorway_points = []
+        doorway_points, doorway_rooms = [], []
         for i in range(1, num_d):
             if d_stats[i, cv2.CC_STAT_AREA] >= 3:
                 dgx, dgy = int(round(d_cents[i][0])), int(round(d_cents[i][1]))
                 if self.grid.is_free(dgx, dgy):
                     wx, wy = self.grid.grid_to_world(dgx, dgy)
                     doorway_points.append((wx, wy))
+                    # The two labels that meet here, by how many free cells of each touch the doorway
+                    win = free_room_map[max(0, dgy - 3):dgy + 4, max(0, dgx - 3):dgx + 4]
+                    ids, counts = np.unique(win[win > 0], return_counts=True)
+                    top = [int(v) for v in ids[np.argsort(-counts)][:2]]
+                    doorway_rooms.append(tuple(top) if len(top) == 2 else (top[0], top[0]) if top else (0, 0))
 
         self.room_labels = voronoi_map
         self.doorways = doorway_points
+        self.doorway_rooms = doorway_rooms
         return voronoi_map, doorway_points
 
     def extract_semantic_entities(self, current_time: float = 0.0) -> List[Dict[str, object]]:
@@ -240,7 +248,8 @@ class MappingAgent(BaseAgent):
                 unknown_cells=int(unk),
                 explored_pct=float(explored_pct),
                 room_labels=self.room_labels,
-                doorways=self.doorways
+                doorways=self.doorways,
+                doorway_rooms=self.doorway_rooms
             ))
 
             if (current_time - getattr(self, 'last_log_time', 0.0)) > 3.0:

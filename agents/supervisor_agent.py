@@ -4,13 +4,16 @@ from .base import BaseAgent
 from .bus import MessageBus, MissionEventMsg, PoseMsg, GridMapMsg
 from .knowledge_graph import SpatialKnowledgeGraph
 from .episodic_memory import EpisodicMemory
+from .spatial_memory import SpatialMemory
 
+DOORWAY_MATCH_M = 0.6  # a doorway reported within this distance of a known one is the same doorway
 
 class SupervisorAgent(BaseAgent):
     def __init__(self, bus: MessageBus, update_rate_hz: float = 2.0):
         super().__init__("SupervisorAgent", bus, update_rate_hz)
         self.knowledge_graph = SpatialKnowledgeGraph()
         self.episodic_memory = EpisodicMemory()
+        self.places = SpatialMemory(bucket=1.0)  # doorways (and later objects) by position, metres
         self.latest_pose: Optional[PoseMsg] = None
         self.latest_grid: Optional[GridMapMsg] = None
         self.mission_status: str = "ACTIVE"
@@ -63,11 +66,17 @@ class SupervisorAgent(BaseAgent):
 
     def step(self, current_time: float) -> None:
         if self.latest_grid:
-            # Register newly discovered doorways in Knowledge Graph
+            # Register newly discovered doorways, identified by place: the mapper's doorway list is re-ordered every
+            # segmentation, so the list index named different doorways over time (17 entries for 10 doorways).
+            rooms = self.latest_grid.doorway_rooms
             for idx, dw in enumerate(self.latest_grid.doorways):
-                d_id = f"doorway_{idx+1}"
+                if self.places.any_near("doorway", dw[0], dw[1], DOORWAY_MATCH_M):
+                    continue
+                d_id = f"doorway_{len(self.knowledge_graph.doorways) + 1}"
+                room_a, room_b = rooms[idx] if idx < len(rooms) else (0, 0)
+                self.places.add("doorway", dw[0], dw[1], t=current_time, door_id=d_id)
                 if d_id not in self.knowledge_graph.doorways:
-                    self.knowledge_graph.add_doorway(d_id, dw, 1, 2)
+                    self.knowledge_graph.add_doorway(d_id, dw, room_a, room_b)
                     self.episodic_memory.record_event(
                         timestamp=current_time,
                         event_type="DOORWAY_DETECTED",
