@@ -55,6 +55,8 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **Live run 5 (adds F38-F40, compiled wavefront)**: completed by itself at 2186 s; all 7 real rooms explored (88-100 % of floor). vs baseline: **ATE 31.0 -> 15.3 cm**, largest error 63 -> 38 cm, final drift 0.24 -> 0.02 %, **map accuracy 10.6 -> 5.5 cm, map F1 77.7 -> 90.0 %**, precision 73.9 -> 89.5 %, frontier selection 155 -> 39 ms, real-time factor 0.32 -> 0.53; 23 metrics better, 6 worse. Still open: 47 % of walking after the coverage plateau (doorway tour, F41 fixes) | run `20261107_150823`, `docs/results/comparison_run5.md` |
 | 2026-11-07 | Rejected after replay: soft-pull SLAM correction (worse on 3 of 4 routes) | not committed |
 | 2026-11-07 | **Live run 6 (adds F41 doorway skip)**: all 7 real rooms 99-100 % seen, everything explored at **1604 s** (run 5: 2186 s). vs baseline: walking after coverage plateau 46 -> 29 %, ATE 31.0 -> 16.1 cm, largest error 63 -> 33 cm, map accuracy 10.6 -> 5.5 cm, precision 73.9 -> 91.6 %, real-time factor 0.32 -> 0.64, peak memory -13 %; **29 better, 3 worse** | run `20261107_161737`, `docs/results/comparison_run6.md` |
+| 2026-11-07 | **Live run 7 (50 min mission, adds F42 pure-pursuit steering)**: all 7 real rooms; everything explored at 1736 s, then **idle** (found the F43 bug; stopped at 2100 s). vs baseline: **ATE 14.6 cm (target <= 15 met)**, **map accuracy 4.1 cm (target <= 5 met)**, map F1 91.7 %, real-time factor 0.59; steering turn reversals 12.7 -> 6.9 /min, yaw wobble 10.0 -> 7.9 deg/s; 28 better, 3 worse (largest error 69 cm) | run `20261107_170841`, `docs/results/comparison_run7.md` |
+| 2026-11-07 | **F43 patrol after exploration** instead of idling | commit `2a9988b` |
 
 ## Not done yet
 | Item | Status | Needs |
