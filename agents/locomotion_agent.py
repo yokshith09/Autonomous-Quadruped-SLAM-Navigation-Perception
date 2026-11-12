@@ -19,6 +19,10 @@ WALK_CMD = 0.75
 STALL_WINDOW = 12         # control steps averaged (0.6 s at 20 Hz)
 STALL_LOAD_RATIO = 0.015  # mean load / command above this: the legs are pushing on something
 STALL_MIN_CMD = 0.3       # below this command the load is too small to judge
+# Steps already blocked before the window mean crosses the threshold: with the measured loads (free 0.0083, blocked
+# about 0.027 normalised) it crosses on the 5th blocked step, so the 4 steps before it reported motion that did not
+# happen and are taken back.
+STALL_DELAY_STEPS = 4
 
 class LocomotionAgent(BaseAgent):
     def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.18, update_rate_hz: float = 20.0):
@@ -42,6 +46,7 @@ class LocomotionAgent(BaseAgent):
         self._goal_best_dist = float("inf")
         self._goal_best_time = None
         self._load_hist = deque(maxlen=STALL_WINDOW)  # hip load / gait command, one sample per walking step
+        self._odom_hist = deque(maxlen=STALL_WINDOW)  # forward odometry reported over the same steps
 
     def initialize(self) -> bool:
         self.bus.subscribe("plan/path", self.on_path)
@@ -61,6 +66,7 @@ class LocomotionAgent(BaseAgent):
         """True when the legs have been loaded well above free walking for the whole window."""
         if self.robot is None or self.speed < STALL_MIN_CMD or self.recovery_countdown > 0:
             self._load_hist.clear()
+            self._odom_hist.clear()
             return False
         try:
             self._load_hist.append(self.robot.leg_load() / self.speed)
@@ -232,8 +238,10 @@ class LocomotionAgent(BaseAgent):
                     self.last_stuck_check_time = current_time
 
                 blocked = self._leg_blocked()
+                phantom = sum(list(self._odom_hist)[-STALL_DELAY_STEPS:])  # reported while already blocked
                 if blocked:
                     self._enter_recovery(current_time, rx, ry, "Legs loaded (blocked by an obstacle)")
+                    self._odom_hist.clear()
                 elif self.stuck_ticks >= 2:  # pose not moving for ~2 seconds
                     self._enter_recovery(current_time, rx, ry, "Watchdog detected obstacle stall")
 
@@ -251,7 +259,11 @@ class LocomotionAgent(BaseAgent):
                     except Exception as e:
                         self.handle_error(e)
                 if blocked:
-                    d_fwd, d_lat = 0.0, 0.0  # the body is not moving: do not report distance the legs did not make
+                    # The body was not moving for the detection window either: take back what was reported then (live
+                    # run 11: about 5 cm per contact, 1 m over 20 contacts).
+                    d_fwd, d_lat = -phantom, 0.0
+                elif self._load_hist:
+                    self._odom_hist.append(d_fwd)
 
                 self.bus.publish("control/actuation", ActuationMsg(
                     timestamp=current_time,
