@@ -1,5 +1,6 @@
 """Locomotion Agent: Biomimetic sinusoidal quadruped gait generation and heading control."""
 import math
+from collections import deque
 import numpy as np
 from typing import List, Tuple, Optional
 from .base import BaseAgent
@@ -11,6 +12,13 @@ LOOKAHEAD_M = 0.40        # pure-pursuit lookahead along the path
 # Gait command for walking. 0.75 beats 1.0 on every measure (gait_bench, 20 s straight walks): 0.0824 vs 0.0782 m/s,
 # 0 % vs 6 % of samples sliding backward, 12.7 vs 18.4 deg/s yaw wobble; at 1.0 the legs overdrive and slip.
 WALK_CMD = 0.75
+# Contact detection from the front hip load (core.robot.LizardRobot.leg_load), normalised by the gait command:
+# free walking <= 0.0097, blocked >= 0.0222 at every command from 0.35 to 1.0 (stall_probe). The depth camera is blind
+# inside about 0.22 m and odometry is dead-reckoned from the leg commands, so without this a robot pushing a wall
+# reports 8 cm/s of motion it does not make (live run 10: 16 s against a wall, position error 11 -> 122 cm).
+STALL_WINDOW = 12         # control steps averaged (0.6 s at 20 Hz)
+STALL_LOAD_RATIO = 0.015  # mean load / command above this: the legs are pushing on something
+STALL_MIN_CMD = 0.3       # below this command the load is too small to judge
 
 class LocomotionAgent(BaseAgent):
     def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.18, update_rate_hz: float = 20.0):
@@ -33,6 +41,7 @@ class LocomotionAgent(BaseAgent):
         self.progress_timeout_s: float = 15.0
         self._goal_best_dist = float("inf")
         self._goal_best_time = None
+        self._load_hist = deque(maxlen=STALL_WINDOW)  # hip load / gait command, one sample per walking step
 
     def initialize(self) -> bool:
         self.bus.subscribe("plan/path", self.on_path)
@@ -47,6 +56,28 @@ class LocomotionAgent(BaseAgent):
             self._goal_best_dist, self._goal_best_time = float("inf"), None
         self.waypoints = path_msg.waypoints
         self.wp_idx = 0
+
+    def _leg_blocked(self) -> bool:
+        """True when the legs have been loaded well above free walking for the whole window."""
+        if self.robot is None or self.speed < STALL_MIN_CMD or self.recovery_countdown > 0:
+            self._load_hist.clear()
+            return False
+        try:
+            self._load_hist.append(self.robot.leg_load() / self.speed)
+        except Exception as e:
+            self.handle_error(e)
+            return False
+        return len(self._load_hist) == STALL_WINDOW and sum(self._load_hist) / STALL_WINDOW > STALL_LOAD_RATIO
+
+    def _enter_recovery(self, current_time: float, rx: float, ry: float, why: str) -> None:
+        print(f"  [LOCOMOTION] {why} at ({rx:.2f}, {ry:.2f}) -> Executing reverse recovery step")
+        self.recovery_countdown = 14
+        self.stuck_ticks = 0
+        self._load_hist.clear()
+        self.waypoints = []
+        self.wp_idx = 0
+        self.bus.publish("mission/event", MissionEventMsg(
+            timestamp=current_time, event_type="ROBOT_STUCK", details={"x": rx, "y": ry}))
 
     def _remaining_path(self, rx: float, ry: float) -> float:
         wps = self.waypoints[self.wp_idx:]
@@ -200,17 +231,11 @@ class LocomotionAgent(BaseAgent):
                     self.last_stuck_pos = (rx, ry)
                     self.last_stuck_check_time = current_time
 
-                if self.stuck_ticks >= 2:  # Stuck for ~2 seconds
-                    print(f"  [LOCOMOTION] Watchdog detected obstacle stall at ({rx:.2f}, {ry:.2f}) -> Executing reverse recovery step")
-                    self.recovery_countdown = 14
-                    self.stuck_ticks = 0
-                    self.waypoints = []
-                    self.wp_idx = 0
-                    self.bus.publish("mission/event", MissionEventMsg(
-                        timestamp=current_time,
-                        event_type="ROBOT_STUCK",
-                        details={"x": rx, "y": ry}
-                    ))
+                blocked = self._leg_blocked()
+                if blocked:
+                    self._enter_recovery(current_time, rx, ry, "Legs loaded (blocked by an obstacle)")
+                elif self.stuck_ticks >= 2:  # pose not moving for ~2 seconds
+                    self._enter_recovery(current_time, rx, ry, "Watchdog detected obstacle stall")
 
                 d_fwd, d_lat, dyaw_gyro = gait_body_speed(self.speed) * dt_step, 0.0, 0.0
                 if self.robot is not None:
@@ -225,6 +250,8 @@ class LocomotionAgent(BaseAgent):
                         d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                     except Exception as e:
                         self.handle_error(e)
+                if blocked:
+                    d_fwd, d_lat = 0.0, 0.0  # the body is not moving: do not report distance the legs did not make
 
                 self.bus.publish("control/actuation", ActuationMsg(
                     timestamp=current_time,

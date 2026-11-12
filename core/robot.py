@@ -145,6 +145,12 @@ class LizardRobot:
             print(f"  [ERROR] apply_gait failed: {e}")
 
 
+    def leg_load(self):
+        """|torque| on the front hip joint: the motor-current equivalent of a legged robot's proprioception.
+        Measured with evaluation/stall_probe.py: normalised by the gait command it is at most 0.0097 while walking
+        freely and at least 0.0222 while the body is blocked by a wall, at every command from 0.35 to 1.0."""
+        return abs(self.sim.getJointForce(self.fh))
+
     def stop_motors(self):
         for jh in [self.fh, self.bh, self.fl, self.fr, self.bl, self.br]:
             try:

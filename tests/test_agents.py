@@ -340,6 +340,65 @@ def test_unfinished_room_is_not_abandoned_on_label_change():
     print("PASSED")
 
 
+class _FakeSim:
+    handle_world = 0
+
+    def getObjectOrientation(self, *a):
+        return [0.0, 0.0, 0.0]
+
+
+class _FakeRobot:
+    """Stands in for LizardRobot. leg_load returns what the real robot shows at gait command 0.75 (stall_probe):
+    0.0062 walking freely, 0.020 pushing on a wall."""
+    sim, base, last_odom_lateral = _FakeSim(), 1, 0.0
+
+    def __init__(self):
+        self.blocked = False
+
+    def steer_heading(self, *a, **k):
+        return 0.0
+
+    def apply_gait(self, *a):
+        pass
+
+    def stop_motors(self):
+        pass
+
+    def get_odometry_imu_delta(self, dt, speed):
+        from core.robot import gait_body_speed
+        return gait_body_speed(speed) * dt, 0.0
+
+    def leg_load(self):
+        return 0.020 if self.blocked else 0.0062
+
+
+def test_blocked_legs_are_felt_and_phantom_odometry_stops():
+    """Live run 10: 16 s pushing a wall while odometry reported 7.9 cm/s took the position error from 11 to 122 cm; the
+    stall watchdog could not see it because it measures motion with that same dead-reckoned pose. The legs' load can."""
+    print("Running test_blocked_legs_are_felt_and_phantom_odometry_stops...", end=" ")
+    from agents import LocomotionAgent
+    bus = MessageBus()
+    events, acts = [], []
+    bus.subscribe("mission/event", lambda e: events.append((e.timestamp, e.event_type)))
+    bus.subscribe("control/actuation", lambda a: acts.append(a))
+    robot = _FakeRobot()
+    loco = LocomotionAgent(bus, robot_driver=robot)
+    loco.initialize()
+    loco.on_path(PathMsg(timestamp=0.0, waypoints=[(0.1 * i, 0.0) for i in range(1, 200)]))
+    for k in range(120):  # 6 s; the estimated pose keeps advancing 8 cm/s, as dead reckoning does
+        t = k * 0.05
+        robot.blocked = t >= 2.0
+        loco.on_pose(PoseMsg(timestamp=t, x=0.08 * t, y=0.0, yaw=0.0))
+        loco.step(t)
+        if k == 38:
+            assert not events and acts[-1].odom_forward > 0.0, "free walking reported stuck or no odometry"
+    stuck = [t for t, e in events if e == "ROBOT_STUCK"]
+    assert stuck and 2.0 < stuck[0] <= 2.8, f"blocked legs not felt within 0.8 s (stuck events at {stuck})"
+    at = [a for a in acts if abs(a.timestamp - stuck[0]) < 1e-9][0]
+    assert at.odom_forward == 0.0, "the step that detected the block still reported distance"
+    print("PASSED")
+
+
 def test_doorway_ahead_preferred_over_slightly_nearer_one_behind():
     """While travelling, a doorway ahead beats one behind that is only slightly nearer (the robot used to turn round
     for it); with no doorway ahead it still turns back, so it never gets stuck."""
@@ -610,6 +669,7 @@ if __name__ == "__main__":
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
     test_patrol_after_exploration_instead_of_idle()
+    test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_ahead_preferred_over_slightly_nearer_one_behind()
     test_compiled_wavefront_matches_python()
     test_detour_is_progress_not_stuck()
