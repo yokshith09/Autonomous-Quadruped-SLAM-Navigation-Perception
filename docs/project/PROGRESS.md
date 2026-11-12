@@ -59,6 +59,9 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-07 | **F43 patrol after exploration** instead of idling | commit `2a9988b` |
 | 2026-11-07 | **Live run 8: first full 50 min mission (adds F43 patrol)**: all 7 real rooms (98.6-100 % floor), everything explored at 1736 s, then 62 patrol targets with no idle time; patrol re-opened frontiers and exploration resumed by itself. vs baseline: **ATE 14.7 cm, map accuracy 4.4 cm, map precision 95.4 %, F1 93.4 %**, stuck events 4 -> 2, real-time factor 0.55; 25 better, 4 worse. Worse by design of the 50 min rule: path after coverage plateau 61 % (patrol walking counts as waste; metric needs redefining); peak memory 4.4 GB (recording buffer over 50 min, F15) | run `20261107_180907`, `docs/results/comparison_run8.md` |
 | 2026-11-07 | **F44 doorway turning cost** (no turning round for a slightly nearer doorway behind) | commit `ff74539`, live check in next run |
+| 2026-11-12 | Measurement: wasted walking counted only while exploring (run 8: 61 -> 33 %); recording streamed to disk (F15); replay uses recorded odometry; robot parts no longer scored as wall | commits `3532a2f`, `7181ecb`, `f02ea6a`, `b3e2f7e` |
+| 2026-11-12 | Live runs 9-11 with the new gait: run 9 odometry calibration error (fixed), run 10 wall contact with 122 cm phantom drift, run 11 wedged at Cylinder3 and seen upside down. Diagnosed from recordings and simulator re-enactment; fixed by F45-F50 | runs `20261112_101356`, `20261112_103326`, `20261112_105216` |
+| 2026-11-12 | Rejected after replay: loop-closure temporal-consistency check (inconsistent across routes) | `RESEARCH.md` |
 
 ## Not done yet
 | Item | Status | Needs |
