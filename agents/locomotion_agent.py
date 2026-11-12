@@ -17,7 +17,7 @@ WALK_CMD = 1.0   # run 8's walking command (F54); F45's 0.75 with lift 0.05 felt
 # inside about 0.22 m and odometry is dead-reckoned from the leg commands, so without this a robot pushing a wall
 # reports 8 cm/s of motion it does not make (live run 10: 16 s against a wall, position error 11 -> 122 cm).
 STALL_WINDOW = 12         # control steps averaged (0.6 s at 20 Hz)
-STALL_LOAD_RATIO = 0.017  # mean load / command above this: the legs are pushing on something (command 1.0, stall_probe: free max 0.0118, blocked min 0.0242)
+STALL_LOAD_RATIO = 0.015  # mean load / command above this: the legs are pushing on something (command 1.0, stall_probe: free max 0.0118, blocked min 0.0242)
 STALL_MIN_CMD = 0.3       # below this command the load is too small to judge
 # Steps already blocked before the window mean crosses the threshold: with the measured loads (free 0.0083, blocked
 # about 0.027 normalised) it crosses on the 5th blocked step, so the 4 steps before it reported motion that did not

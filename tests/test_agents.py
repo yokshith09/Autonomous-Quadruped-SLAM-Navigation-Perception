@@ -348,8 +348,8 @@ class _FakeSim:
 
 
 class _FakeRobot:
-    """Stands in for LizardRobot. leg_load returns what the real robot shows at gait command 0.75 (stall_probe):
-    0.0062 walking freely, 0.020 pushing on a wall."""
+    """Stands in for LizardRobot. leg_load returns what the real robot shows at gait command 1.0 (stall_probe):
+    about 0.0085 walking freely (max 0.0118), 0.025 pushing on a wall (min 0.0242)."""
     sim, base, last_odom_lateral = _FakeSim(), 1, 0.0
 
     def __init__(self):
@@ -369,7 +369,7 @@ class _FakeRobot:
         return gait_body_speed(speed) * dt, 0.0
 
     def leg_load(self):
-        return 0.020 if self.blocked else 0.0062
+        return 0.025 if self.blocked else 0.0085
 
     up = 1.0
 
