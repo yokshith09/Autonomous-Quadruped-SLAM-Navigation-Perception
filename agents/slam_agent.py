@@ -18,6 +18,7 @@ class SLAMAgent(BaseAgent):
         self.accum_odom_dyaw = 0.0
         self.track_times_ms = []
         self.odom_distance_m = 0.0
+        self.tipped = False  # set from the locomotion state: robot tipped over
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
@@ -34,6 +35,7 @@ class SLAMAgent(BaseAgent):
         self.latest_gt_pose = (pose_msg.x, pose_msg.y, pose_msg.yaw)
 
     def on_actuation(self, act_msg: ActuationMsg):
+        self.tipped = getattr(act_msg, "state_str", "") == "TIPPED"
         gyro_dyaw = act_msg.gyro_dyaw
         mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * gyro_dyaw)
         odom_lat = getattr(act_msg, "odom_lateral", 0.0)
@@ -43,8 +45,8 @@ class SLAMAgent(BaseAgent):
         self.accum_odom_dyaw = wrap_angle(self.accum_odom_dyaw + gyro_dyaw)
 
     def step(self, current_time: float) -> None:
-        if self.latest_scan is None or len(self.latest_scan.points_2d) == 0:
-            return
+        if self.latest_scan is None or len(self.latest_scan.points_2d) == 0 or self.tipped:
+            return  # tipped: the camera faces the floor or ceiling, its scan is not a wall outline
 
         try:
             import time as _time

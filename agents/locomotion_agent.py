@@ -23,6 +23,7 @@ STALL_MIN_CMD = 0.3       # below this command the load is too small to judge
 # about 0.027 normalised) it crosses on the 5th blocked step, so the 4 steps before it reported motion that did not
 # happen and are taken back.
 STALL_DELAY_STEPS = 4
+TIPPED_UP_Z = 0.7071      # body tilted more than 45 deg from upright
 
 class LocomotionAgent(BaseAgent):
     def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.18, update_rate_hz: float = 20.0):
@@ -105,6 +106,30 @@ class LocomotionAgent(BaseAgent):
         rx, ry, r_yaw = self.latest_pose.x, self.latest_pose.y, self.latest_pose.yaw
         dt_step = max(0.01, current_time - getattr(self, "_prev_cmd_time", current_time - 0.05))
         self._prev_cmd_time = current_time
+
+        # 0. Tipped over (body more than TIPPED_UP_Z from upright): stop the legs and report. SLAM and mapping read the
+        # TIPPED state and ignore the camera, which then faces the floor or ceiling and would corrupt the map.
+        if self.robot is not None:
+            try:
+                tipped = self.robot.body_up() < TIPPED_UP_Z
+            except Exception as e:
+                self.handle_error(e)
+                tipped = False
+            if tipped:
+                if self.state_str != "TIPPED":
+                    print(f"  [LOCOMOTION] Robot tipped over at ({rx:.2f}, {ry:.2f}) -> legs stopped")
+                    self.bus.publish("mission/event", MissionEventMsg(
+                        timestamp=current_time, event_type="ROBOT_TIPPED", details={"x": rx, "y": ry}))
+                self.speed, self.state_str = 0.0, "TIPPED"
+                self.waypoints, self.wp_idx = [], 0
+                try:
+                    self.robot.stop_motors()
+                except Exception:
+                    pass
+                self.bus.publish("control/actuation", ActuationMsg(
+                    timestamp=current_time, joint_targets={}, heading_error=0.0, speed=0.0, state_str="TIPPED",
+                    odom_forward=0.0, odom_lateral=0.0, gyro_dyaw=0.0))
+                return
 
         # 1. Anti-stuck active recovery maneuver (reverse step)
         if self.recovery_countdown > 0:

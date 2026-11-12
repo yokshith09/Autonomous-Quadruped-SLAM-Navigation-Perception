@@ -154,6 +154,11 @@ class LizardRobot:
         freely and at least 0.0222 while the body is blocked by a wall, at every command from 0.35 to 1.0."""
         return abs(self.sim.getJointForce(self.fh))
 
+    def body_up(self):
+        """z component of the body's up vector: 1 upright, 0 on its side, -1 upside down. The attitude an IMU gives from
+        gravity on a real robot (no position involved)."""
+        return self.sim.getObjectMatrix(self.base, self.sim.handle_world)[10]
+
     def stop_motors(self):
         for jh in [self.fh, self.bh, self.fl, self.fr, self.bl, self.br]:
             try:

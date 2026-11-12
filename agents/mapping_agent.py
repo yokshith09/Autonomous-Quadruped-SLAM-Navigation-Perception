@@ -16,6 +16,7 @@ class MappingAgent(BaseAgent):
         super().__init__("MappingAgent", bus, update_rate_hz)
         self.grid = BayesianOccupancyGrid(x_min, x_max, y_min, y_max, resolution)
         self.latest_scan: Optional[ScanMsg] = None
+        self.tipped = False
         self.latest_pose: Optional[PoseMsg] = None
         self.room_labels: Optional[np.ndarray] = None
         self.doorways: List[Tuple[float, float]] = []
@@ -31,11 +32,16 @@ class MappingAgent(BaseAgent):
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
         self.bus.subscribe("pose/state", self.on_pose)
+        self.bus.subscribe("control/actuation", self.on_actuation)
         self.is_running = True
         return True
 
     def on_scan(self, scan_msg: ScanMsg):
         self.latest_scan = scan_msg
+
+    def on_actuation(self, act_msg):
+        # Tipped over: the camera faces the floor or ceiling, so its points are not obstacles at the robot's height
+        self.tipped = getattr(act_msg, "state_str", "") == "TIPPED"
 
     def on_pose(self, pose_msg: PoseMsg):
         self.latest_pose = pose_msg
@@ -216,7 +222,7 @@ class MappingAgent(BaseAgent):
             if pts_b is None:
                 pts_b = self.latest_scan.world_points_3d
 
-            if pts_b is not None and len(pts_b) > 0:
+            if pts_b is not None and len(pts_b) > 0 and not self.tipped:
                 # Transform body-frame points to estimated world frame using SLAM pose (x_hat, y_hat, theta_hat)
                 cos_y = math.cos(ryaw)
                 sin_y = math.sin(ryaw)

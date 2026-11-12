@@ -371,6 +371,11 @@ class _FakeRobot:
     def leg_load(self):
         return 0.020 if self.blocked else 0.0062
 
+    up = 1.0
+
+    def body_up(self):
+        return self.up
+
 
 def test_blocked_legs_are_felt_and_phantom_odometry_stops():
     """Live run 10: 16 s pushing a wall while odometry reported 7.9 cm/s took the position error from 11 to 122 cm; the
@@ -396,6 +401,37 @@ def test_blocked_legs_are_felt_and_phantom_odometry_stops():
     assert stuck and 2.0 < stuck[0] <= 2.8, f"blocked legs not felt within 0.8 s (stuck events at {stuck})"
     net = sum(a.odom_forward for a in acts if 2.0 - 1e-9 <= a.timestamp <= stuck[0] + 1e-9)
     assert abs(net) < 1e-9, f"odometry reported while blocked was not taken back (net {net * 100:.2f} cm)"
+    print("PASSED")
+
+
+def test_tipped_robot_stops_and_map_ignores_camera():
+    """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
+    stops using its camera, which then faces the floor or ceiling."""
+    print("Running test_tipped_robot_stops_and_map_ignores_camera...", end=" ")
+    from agents import LocomotionAgent
+    bus = MessageBus()
+    events = []
+    bus.subscribe("mission/event", lambda e: events.append(e.event_type))
+    robot = _FakeRobot()
+    loco = LocomotionAgent(bus, robot_driver=robot)
+    mapper = MappingAgent(bus, -2.0, 2.0, -2.0, 2.0, 0.05)
+    loco.initialize()
+    mapper.initialize()
+    loco.on_path(PathMsg(timestamp=0.0, waypoints=[(0.1 * i, 0.0) for i in range(1, 40)]))
+    loco.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=0.0))
+    loco.step(0.0)
+    assert loco.state_str == "WALK"
+    robot.up = -0.9  # upside down
+    for k in range(1, 6):
+        loco.step(0.05 * k)
+    assert loco.state_str == "TIPPED" and loco.speed == 0.0 and events.count("ROBOT_TIPPED") == 1
+    assert bus.get_latest("control/actuation").odom_forward == 0.0
+    before = mapper.grid.grid_log_odds.copy()
+    pts = np.column_stack([np.linspace(0.5, 1.5, 200), np.zeros(200), np.full(200, 0.2)])
+    mapper.on_pose(PoseMsg(timestamp=1.0, x=0.0, y=0.0, yaw=0.0))
+    mapper.on_scan(ScanMsg(timestamp=1.0, points_2d=pts[:, :2], base_points_3d=pts))
+    mapper.step(1.0)
+    assert np.array_equal(before, mapper.grid.grid_log_odds), "map was updated from a tipped robot's camera"
     print("PASSED")
 
 
@@ -694,6 +730,7 @@ if __name__ == "__main__":
     test_patrol_after_exploration_instead_of_idle()
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
+    test_tipped_robot_stops_and_map_ignores_camera()
     test_doorway_ahead_preferred_over_slightly_nearer_one_behind()
     test_compiled_wavefront_matches_python()
     test_detour_is_progress_not_stuck()
