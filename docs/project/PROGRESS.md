@@ -139,3 +139,12 @@ Live run 17 (config of runs 12-16): a single closure at 896.6 s applied 87 cm ag
 Replay ATE (cm), cap 1.5 -> 0.70: run 7 14.6 -> 14.6, run 8 14.7 -> 14.7, run 12 34.6 -> 22.8, run 13 35.5 -> 35.5 (its jump is 0.70 m, just under), run 17 28.3 -> 25.5 (max error 42 cm). Never worse. Adopted.
 Series note: runs 17 and 18 ran with cap 1.5; run 19 runs with 0.70.
 Run 17: failed at 897 s (98 cm), stopped at 910 s. Run 18: 300 s 10 cm, 600 s 9 cm average, F1 99 %.
+
+### Series runs 17-19 (final-code check, 2026-11-12/13)
+| Run | Cap | Outcome |
+|---|---|---|
+| 17 (20261112_222428) | 1.5 m | Failed at 897 s: wrong 87 cm closure (keyframe 33 m old), error 40 -> 98 cm. Stopped at 910 s. |
+| 18 (20261112_225001) | 1.5 m | Failed at 726 s: wrong 59 cm closure (keyframe 18 m old), error 12 -> 51 cm. Stopped at 920 s. |
+| 19 (20261112_232106) | 0.70 m (F53) | **Full 3000 s mission, no tip-over.** ATE 16.5 cm, map accuracy 4.7 cm, F1 92.0 %, 7/7 rooms (floor seen 88-100 %), 92.8 % floor mapped, everything reachable explored at 1371 s, 32 % wasted walking while exploring, RTF 0.69, peak memory 1339 MB, 252 closures, 4 stuck events. vs baseline: 26 better, 1 worse, 5 same (docs/results/comparison_run19.md). |
+Gate slope test (3.0 / 1.5 / 1.0 cm per metre, cap 0.70): helps runs 13 and 18 (35.5 -> 24.4, 27.2 -> 9.5) but costs runs 7 and 8 about 11 cm each (14.6 -> 25.5, 14.7 -> 26.3), so the slope stays 3.0.
+vs run 8 (14.7 cm, 4.4 cm, F1 93.4 %): run 19 is slightly behind on accuracy (16.5 cm, 4.7 cm, 92.0 %) and 365 s faster to explore everything. Only one run uses the final code; runs 20 and 21 follow.
