@@ -92,3 +92,19 @@ is** with small error, and **detects the objects** in each room.
 - Runs 20261112_101356 / _103326 / _105216 (before F48, 11:07) show it: turn commands up to 0.18 rad/step (206 deg/s), 200+ direction changes in 20 s, under 5 cm moved. F48 (rate cap 0.06) fixed it.
 - Run 12 (after F48): no dithering. Only 4 back-to-back opposite pivots in 2107 s. What remains are 180 deg turn-arounds when a room closes and the next target lies behind (14 during exploration; all pivots 87 s of 1072 s). Expected at dead-end rooms; not changed.
 - Fixed: the frontier "room explored" print used a star glyph that crashes a non-UTF-8 console inside target selection (test_agents failed under cp1252). Now ASCII. All 4 test suites pass.
+
+## 2026-11-12: T1, best configuration frozen (tag best-sim-v1)
+Rejected: loop gate measured from the last accepted closure instead of from the keyframe. Replay ATE: baseline 22.0 -> 40.9 cm, run 7 14.6 -> 34.9 cm (a small accepted closure resets the gate and blocks the later genuine large ones). Reverted.
+
+Best results so far:
+| Measure | Run 8 (20261107_180907) | Run 12 (20261112_111339, current code) |
+|---|---|---|
+| Real rooms explored | 7 / 7 | 7 / 7 |
+| Time to explore all | 1736 s | **1072 s** |
+| Wasted walking while exploring | 33 % | **22 %** |
+| ATE (whole 50 min run) | **14.7 cm** | 34.6 cm (patrol false closures) |
+| Map accuracy vs real scene | **4.4 cm** | 7.0 cm |
+| Map F1 vs real scene | **93.4 %** | 87.3 % |
+| Contacts / tipping | 2 stuck | 3 single hits, no loops, no tipping |
+| Real-time factor / peak memory | 0.55 / 4.4 GB | **0.69 / 606 MB** |
+Current code = run 12. Remaining gap: false loop closures during patrol; the fix is a camera check on closures (needs RGB recorded).
