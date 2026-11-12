@@ -19,7 +19,7 @@ from evaluation.accuracy_evaluator import evaluate_trajectory
 from core.robot import gait_body_speed
 
 
-def replay(path, overrides=None, verbose=False):
+def replay(path, overrides=None, verbose=False, recalibrate=False):
     rec = np.load(path)
     t, gt, act = rec["t"], rec["gt"], rec["act"]
     pts, offs = rec["scan_points"], rec["scan_offsets"]
@@ -41,12 +41,14 @@ def replay(path, overrides=None, verbose=False):
         slam.step(float(t[k]))
         p = bus.get_latest("pose/slam")
         est.append((p.x, p.y, p.yaw) if p else (x0, y0, yaw0))
-        _, lat, dyaw, speed, fresh = act[k]
+        rec_fwd, lat, dyaw, speed, fresh = act[k]
         if fresh:
-            # Forward odometry is recomputed with the current gait calibration, as LocomotionAgent would.
+            # Forward odometry exactly as the run's SLAM received it. With recalibrate=True it is recomputed from the
+            # current gait calibration instead, for calibration studies only: the gait and its calibration changed on
+            # 2026-11-12, so recomputing would replay older recordings with the wrong odometry.
             dt = max(0.01, min(float(t[k]) - last_cmd_t, 0.25)) if last_cmd_t is not None else 0.0
             last_cmd_t = float(t[k])
-            fwd = gait_body_speed(float(speed)) * dt
+            fwd = gait_body_speed(float(speed)) * dt if recalibrate else float(rec_fwd)
             bus.publish("control/actuation", ActuationMsg(timestamp=float(t[k]), joint_targets={}, heading_error=0.0,
                                                           speed=float(speed), state_str="", odom_forward=float(fwd),
                                                           odom_lateral=float(lat), gyro_dyaw=float(dyaw)))
