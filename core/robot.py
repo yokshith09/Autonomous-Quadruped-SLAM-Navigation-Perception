@@ -16,10 +16,11 @@ SLOW_ANGLE = 0.30
 HEADING_RATE = 0.18
 
 # Proprioceptive odometry model: body speed (m/s) vs. gait speed command, piecewise linear.
-# Calibration knob, measured with ground truth by `python -m evaluation.gait_bench --speed 0.35 0.75 1.0` (20 s straight
-# walks, LEG_LIFT 0.05, 2026-11-12). The previous curve was off by 54 % at 0.75 (0.053 vs 0.082 m/s). Re-measure after
-# any change to the gait constants above.
-GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.0499), (0.75, 0.0824), (1.0, 0.0782))
+# Calibration knob, measured with ground truth (LEG_LIFT 0.05, 2026-11-12). 0.35 and 1.0: straight 20 s walks in
+# `python -m evaluation.gait_bench --speed 0.35 0.75 1.0`. 0.75 (the walking command): live driving, where steering
+# corrections cost speed; the straight-walk value (0.0824) overstated it by 4.3 % in live run 9 and doubled its ATE
+# (replay: 38.9 cm, 21.2 cm with the live value). Re-measure after any change to the gait constants above.
+GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.0499), (0.75, 0.0790), (1.0, 0.0782))
 GYRO_NOISE_RAD_S = math.radians(0.10)   # white noise on z-rate (MPU-6050 class)
 GYRO_BIAS_RAD_S = math.radians(0.05)    # constant turn-on bias magnitude
 
