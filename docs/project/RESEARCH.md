@@ -53,3 +53,11 @@ Each entry says what the paper found and what we do with it here. Status refers 
 | Bellegarda et al., *AllGaits*, arXiv 2411.04787 | A CPG of coupled oscillators whose couplings select the gait; smooth transitions at any speed | Our gait is fixed sinusoids; measured body surge (18 % of samples moving backward within a stride) is a stance-phase problem a coupled-oscillator trot addresses | Candidate (gait redesign, then odometry recalibration) |
 | Liu et al., *An Improved Method Based on CPG to Achieve Trotting Gait of Quadrupedal Robot*, 2019 (via fastwrite) | Dropping the assumption that only the upper limb moves during stance (lower limb fixed) greatly reduces torso pitch and roll | First thing to check in our `apply_gait` for the measured forward-back surge | Candidate, high value |
 | Liu et al., *A Trainable CPG Framework for Quadruped Locomotion*, arXiv 2610.36537 (2026) | Symmetric 8-neuron CPG plus a learned joint mapping tracks velocity and yaw rate across gaits | Longer-term option; needs training | Later |
+
+## Tried and rejected after replay
+
+| Idea | Result |
+|---|---|
+| Temporal-consistency check for loop closures (second agreeing closure within 5 s, 8 cm), motivated by run 8's 69 cm spike: one unconfirmed 18 cm closure against a keyframe 57 m old | Inconsistent across routes: from another keyframe run 2 24.8 -> 9.8 cm but run 3 17.8 -> 44.7 cm (closures 65 -> 10, good ones rejected too); any second closure 24.8 -> 20.0 and 17.8 -> 29.5 cm. Not adopted; camera verification of closures remains the candidate |
+| KISS-ICP-style adaptive odometry gate | Worse on all 5 recordings (see Localization) |
+| Soft pull of submap corrections | Worse on 3 of 4 recordings |
