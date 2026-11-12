@@ -292,7 +292,7 @@ class KeyframeLoopManager:
     def __init__(self, keyframe_dist: float = 0.5, keyframe_rot_deg: float = 25.0,
                  loop_search_radius: float = 2.5, min_loop_time_diff: float = 12.0,
                  max_loop_correction: float = 0.10, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6,
-                 loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 1.5, max_loop_yaw_deg: float = 5.0,
+                 loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 0.70, max_loop_yaw_deg: float = 5.0,
                  visual_min_inliers: int = 0, visual_min_age_m: float = 10.0,
                  degeneracy_ratio: float = 0.0):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
@@ -302,6 +302,8 @@ class KeyframeLoopManager:
         # the heading limit matches the gyro-led heading error (under 1 deg) instead of 20 deg.
         self.max_loop_correction = max_loop_correction
         self.loop_gate_per_m = loop_gate_per_m
+        # 0.70 m (was 1.5): wrong closures of 0.70, 0.87 and 0.87 m ruined runs 12, 13 and 17; the largest closure that was
+        # right in any recording is 0.65 m. Replay of 5 recordings: never worse, run 12 34.6 -> 22.8 cm.
         self.max_loop_correction_cap = max_loop_correction_cap
         self.max_loop_yaw = math.radians(max_loop_yaw_deg)
         self.travel = 0.0  # metres walked so far (estimated)

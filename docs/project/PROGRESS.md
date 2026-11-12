@@ -133,3 +133,9 @@ Reading: on long missions closures are essential (run 7/8: 15 vs 60 cm); short r
 Run 16 (live, camera on, 1215 s, no tip-over): 32 cm at 1200 s; replay of its own recording: camera on 32.2 cm, scan only 20.6 cm. The check refused two genuine closures against 65-79 m old keyframes (+16 and +10 cm) because the views differ in heading (0 agreeing features), exactly as it refuses wrong ones.
 Rule tuned on run 13 only. On the three recordings it was not tuned on (scan only -> camera): run 14 27.2 -> 11.8, run 15 28.1 -> 32.5, run 16 20.6 -> 32.2; mean 25.3 -> 25.5. No demonstrated gain, so it is off by default. Camera views are still recorded for research. A heading-independent place check is the open problem.
 Live run 16 also fired the F52 turn-away recovery twice (legs loaded at (-3.96, -2.31)) with no tip-over.
+
+### F53 closure cap 1.5 -> 0.70 m (2026-11-12 night)
+Live run 17 (config of runs 12-16): a single closure at 896.6 s applied 87 cm against a keyframe 33 m old, error 40 -> 98 cm, 56 frontiers then "unreachable", mission declared complete. Same signature as run 12 (87 cm), run 13 (70 cm). The largest closure that was right in any recording is 65 cm (run 8).
+Replay ATE (cm), cap 1.5 -> 0.70: run 7 14.6 -> 14.6, run 8 14.7 -> 14.7, run 12 34.6 -> 22.8, run 13 35.5 -> 35.5 (its jump is 0.70 m, just under), run 17 28.3 -> 25.5 (max error 42 cm). Never worse. Adopted.
+Series note: runs 17 and 18 ran with cap 1.5; run 19 runs with 0.70.
+Run 17: failed at 897 s (98 cm), stopped at 910 s. Run 18: 300 s 10 cm, 600 s 9 cm average, F1 99 %.
