@@ -247,7 +247,10 @@ def main():
     t = 0.0
     complete_streak = 0  # frontier evaluations in a row reporting MISSION_COMPLETE
     complete_at = None   # simulated time when no reachable frontier was left (the run continues to --max-time)
-    rec = {"t": [], "gt": [], "scans": [], "act": []}
+    rec = {"t": [], "gt": [], "offsets": [0], "act": []}
+    # Scans go straight to a raw float64 file instead of a list in memory (F15): a 50 min run holds about 0.67 GB of
+    # scan points, and joining them at the end made a second full copy. The saved .npz format is unchanged.
+    rec_fh = open(args.record + ".scans.f64", "wb") if args.record else None
 
     print("  [OK] Multi-Agent System operational. Commencing systematic exploration.\n")
 
@@ -287,7 +290,10 @@ def main():
                 # float64, matching what SLAM actually consumes: float32 here would truncate points enough to
                 # flip borderline ICP/loop-closure accept decisions, making the replay silently diverge from the
                 # live run it is supposed to reproduce exactly.
-                rec["scans"].append(np.asarray(rec_scan.points_2d, dtype=np.float64) if rec_scan else np.empty((0, 2), np.float64))
+                pts = np.ascontiguousarray(rec_scan.points_2d, dtype=np.float64).reshape(-1, 2) if rec_scan \
+                    else np.empty((0, 2), np.float64)
+                pts.tofile(rec_fh)
+                rec["offsets"].append(rec["offsets"][-1] + len(pts))
                 rec["t"].append(t)
                 rec["gt"].append((true_x, true_y, true_heading))
             n_track = len(slam_agent.track_times_ms)
@@ -485,15 +491,25 @@ def main():
         os.makedirs("accuracy_results", exist_ok=True)
         os.makedirs("captured_matrices", exist_ok=True)
 
-        if args.record and rec["act"]:
-            n_rec = len(rec["act"])
-            scans = rec["scans"][:n_rec]
-            np.savez_compressed(
-                args.record, t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
-                scan_points=np.concatenate(scans) if scans else np.empty((0, 2), np.float64),
-                scan_offsets=np.cumsum([0] + [len(sc) for sc in scans]),
-                initial_pose=np.array([init_x, init_y, init_heading]))
-            print(f"  [SAVED] SLAM input recording ({n_rec} steps) -> {args.record}")
+        if rec_fh is not None:
+            rec_fh.close()
+            raw = args.record + ".scans.f64"
+            if rec["act"]:
+                n_rec = len(rec["act"])
+                n_pts = rec["offsets"][n_rec]
+                # Memory-mapped: the OS pages the scan points in while compressing, no second copy in RAM
+                pts = np.memmap(raw, dtype=np.float64, mode="r", shape=(max(n_pts, 1), 2))[:n_pts] if n_pts \
+                    else np.empty((0, 2), np.float64)
+                np.savez_compressed(
+                    args.record, t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
+                    scan_points=pts, scan_offsets=np.array(rec["offsets"][:n_rec + 1], dtype=np.int64),
+                    initial_pose=np.array([init_x, init_y, init_heading]))
+                del pts
+                print(f"  [SAVED] SLAM input recording ({n_rec} steps) -> {args.record}")
+            try:
+                os.remove(raw)
+            except OSError as e:  # Windows keeps a mapped file open until the map is collected
+                print(f"  [WARN] could not remove {raw}: {e}")
 
         # Export Knowledge Graph & Episodic Memory
         mission_report = supervisor_agent.export_mission_report()
