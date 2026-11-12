@@ -394,8 +394,31 @@ def test_blocked_legs_are_felt_and_phantom_odometry_stops():
             assert not events and acts[-1].odom_forward > 0.0, "free walking reported stuck or no odometry"
     stuck = [t for t, e in events if e == "ROBOT_STUCK"]
     assert stuck and 2.0 < stuck[0] <= 2.8, f"blocked legs not felt within 0.8 s (stuck events at {stuck})"
-    at = [a for a in acts if abs(a.timestamp - stuck[0]) < 1e-9][0]
-    assert at.odom_forward == 0.0, "the step that detected the block still reported distance"
+    net = sum(a.odom_forward for a in acts if 2.0 - 1e-9 <= a.timestamp <= stuck[0] + 1e-9)
+    assert abs(net) < 1e-9, f"odometry reported while blocked was not taken back (net {net * 100:.2f} cm)"
+    print("PASSED")
+
+
+def test_doorway_given_up_after_repeated_failures():
+    """Live run 11 drove into the same obstacle on the way to one doorway more than 20 times: doorway failures were never
+    counted. After DOOR_MAX_FAILS stuck transits the doorway is skipped."""
+    print("Running test_doorway_given_up_after_repeated_failures...", end=" ")
+    from agents.bus import MissionEventMsg
+    grid = _walled_room()
+    grid.grid_log_odds[38:41, 20:23] = 0.0  # a frontier elsewhere, so the agent has an alternative
+    labels = np.full((grid.height, grid.width), 4, dtype=np.int32)
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.explored_rooms, fa.active_room_id = {4}, 4
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=labels, doorways=[(0.3, 0.0)], doorway_rooms=[(4, 8)]))
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-0.9, y=0.0, yaw=0.0))  # transit target lands 0.55 m past the doorway, as live
+    chosen = []
+    for k in range(3):
+        tgt = fa.select_frontier(current_time=float(k))
+        chosen.append(bool(tgt and tgt.is_doorway))
+        fa.on_mission_event(MissionEventMsg(timestamp=float(k), event_type="ROBOT_STUCK", details={"x": 0.0, "y": 0.0}))
+    grid.grid_log_odds[38:41, 20:23] = -2.0
+    assert chosen == [True, True, False], f"doorway choices after failures: {chosen}"
     print("PASSED")
 
 
@@ -670,6 +693,7 @@ if __name__ == "__main__":
     test_unfinished_room_is_not_abandoned_on_label_change()
     test_patrol_after_exploration_instead_of_idle()
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
+    test_doorway_given_up_after_repeated_failures()
     test_doorway_ahead_preferred_over_slightly_nearer_one_behind()
     test_compiled_wavefront_matches_python()
     test_detour_is_progress_not_stuck()

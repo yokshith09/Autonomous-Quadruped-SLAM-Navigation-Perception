@@ -51,7 +51,8 @@ else:
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
-DOOR_TURN_COST_M = 1.5       # a doorway straight behind the robot counts this much further than one ahead
+DOOR_MAX_FAILS = 2           # doorway transits ending stuck or unreachable before that doorway is skipped
+DOOR_TURN_COST_M = 1.5      # a doorway straight behind the robot counts this much further than one ahead
 PATROL_STEP = 15            # cells (0.75 m) between candidate patrol points
 PATROL_SECONDS_PER_M = 20.0  # staleness worth one metre of walking (the robot walks about 12 s per metre)
 EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
@@ -79,6 +80,7 @@ class FrontierAgent(BaseAgent):
         self.patrol = True
         self.visits = SpatialMemory(bucket=1.0)
         self.patrol_failed = SpatialMemory(bucket=1.0)
+        self.failed_doorways = SpatialMemory(bucket=1.0)  # doorway transits that ended stuck or unreachable
         self.patrol_target: Optional[Tuple[int, int]] = None
         self._patrol_best = (float("inf"), 0.0)
         self._complete_log_t = -1e9
@@ -240,7 +242,11 @@ class FrontierAgent(BaseAgent):
             tgy = event_msg.details.get("target_gy")
             if tgx is not None and tgy is not None:
                 self._strike((tgx, tgy), limit=2)
-            # Temporary back-off: clear committed doorway without marking it permanently visited
+            # Back off from the doorway without marking it traversed, but count the failure by place: run 11 retried one
+            # doorway along the same blocked path more than 20 times because these failures were never counted.
+            if self.committed_doorway is not None:
+                self.failed_doorways.add("fail", self.committed_doorway[0], self.committed_doorway[1],
+                                         t=event_msg.timestamp)
             self.committed_doorway = None
             if self.committed_target is not None:
                 self._retire_committed(limit=2)
@@ -535,6 +541,8 @@ class FrontierAgent(BaseAgent):
         for i, d in enumerate(doorways):
             if self._is_doorway_visited(d):
                 continue
+            if sum(1 for _ in self.failed_doorways.near("fail", d[0], d[1], 0.6)) >= DOOR_MAX_FAILS:
+                continue  # tried and failed repeatedly: other doorways or frontiers lead on
             if i < len(door_rooms) and all(r in self.explored_rooms for r in door_rooms[i]):
                 continue  # joins two finished rooms: nothing new behind it (run 5 toured such doorways for 600 s)
             dgx, dgy = self.grid.world_to_grid(d[0], d[1])
