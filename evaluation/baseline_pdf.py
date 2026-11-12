@@ -63,13 +63,21 @@ def derived(d):
     cum = np.concatenate([[0.0], np.cumsum(seg)])
     out = {"dist": float(o["distance_travelled_gt_m"]), "speed": float(o["distance_travelled_gt_m"] / t[-1, 0])}  # the run's recorded distance
     if d["prog"]:
-        final = d["prog"][-1]["explored"]
+        # Waste is measured over the exploration phase only: from 97 % of coverage to the moment every reachable
+        # frontier was explored. Runs now continue to their time limit after that and patrol on purpose, which is
+        # reported separately (patrol_dist) instead of counted as waste. A run that never finished exploring (the
+        # baseline) uses its full length, so its value is unchanged.
+        done_t = o.get("explored_complete_at_s") or float(t[-1, 0])
+        prog = [r for r in d["prog"] if r["t"] <= done_t] or d["prog"]
+        final = prog[-1]["explored"]
         for frac, key in ((0.95, "t95"), (0.97, "t97")):
-            out[key] = next(r["t"] for r in d["prog"] if r["explored"] >= frac * final)
-        i = int(np.searchsorted(t[:, 0], out["t97"]))
-        out["dist_after_plateau"] = float(cum[-1] - cum[min(i, len(cum) - 1)])
-        out["waste_pct"] = 100.0 * out["dist_after_plateau"] / float(cum[-1])
-        out["coverage_gain_after_plateau"] = final - next(r["explored"] for r in d["prog"] if r["t"] == out["t97"])
+            out[key] = next(r["t"] for r in prog if r["explored"] >= frac * final)
+        i = min(int(np.searchsorted(t[:, 0], out["t97"])), len(cum) - 1)
+        k = min(int(np.searchsorted(t[:, 0], done_t)), len(cum) - 1)
+        out["dist_after_plateau"] = float(cum[k] - cum[min(i, k)])
+        out["waste_pct"] = 100.0 * out["dist_after_plateau"] / max(float(cum[k]), 1e-9)
+        out["coverage_gain_after_plateau"] = final - next(r["explored"] for r in prog if r["t"] == out["t97"])
+        out["patrol_dist"] = float(cum[-1] - cum[k])
     ev = m["data_quality"]["events"]
     out["stuck_per_100m"] = o["stuck_events"] / out["dist"] * 100.0
     out["room_entries_per_room"] = ev.get("ROOM_ENTERED", 0) / max(1, o["rooms_discovered"])
