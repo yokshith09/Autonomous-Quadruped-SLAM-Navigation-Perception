@@ -264,6 +264,46 @@ def load_tests(loader, standard_tests, pattern):
     return suite
 
 
+def test_camera_check_separates_same_view_from_other_view():
+    """Same place seen from a slightly different pose agrees (many inliers); a different place does not."""
+    import cv2
+    from core import loop_verify
+    rng = np.random.default_rng(3)
+    scene = cv2.GaussianBlur((rng.random((400, 520)) * 255).astype(np.uint8), (0, 0), 1.2)
+    other = cv2.GaussianBlur((rng.random((400, 520)) * 255).astype(np.uint8), (0, 0), 1.2)
+    view = lambda img, dx: loop_verify.make_thumb(img[20:380, 30 + dx:490 + dx])
+    a = loop_verify.describe(view(scene, 0))
+    same = loop_verify.count_inliers(a, loop_verify.describe(view(scene, 12)))
+    diff = loop_verify.count_inliers(a, loop_verify.describe(view(other, 0)))
+    assert same >= 25 and diff < 12, (same, diff)
+    assert loop_verify.count_inliers(None, a) == 0
+
+
+def test_loop_closure_needs_camera_agreement():
+    """With the camera check on, a scan-accepted closure whose views disagree is refused; matching views pass."""
+    from core import loop_verify
+    import cv2
+    rng = np.random.default_rng(5)
+    mk = lambda: cv2.GaussianBlur((rng.random((144, 192)) * 255).astype(np.uint8), (0, 0), 1.0)
+    room, elsewhere = mk(), mk()
+
+    def run(current_view):
+        m = KeyframeLoopManager(visual_min_inliers=15)
+        scan = np.array([[x, 2.0] for x in np.linspace(-1.5, 1.5, 80)] + [[2.0, y] for y in np.linspace(-1.5, 1.5, 80)])
+        m.current_thumb = room
+        m.add_keyframe(0.0, 0.0, 0.0, 0.0, scan)
+        for i in range(1, 4):
+            m.add_keyframe(5.0 * i, 3.0 * i, 0.0, 0.0, scan)
+        m.travel = 20.0
+        m.current_thumb = current_view
+        return m.detect_loop_closure(40.0, 0.1, 0.0, 0.0, scan), m
+
+    ok, m_ok = run(room)
+    bad, m_bad = run(elsewhere)
+    assert ok is not None and m_ok.visual_log[-1]["accepted"]
+    assert bad is None and not m_bad.visual_log[-1]["accepted"]
+
+
 if __name__ == "__main__":
     print("=== RUNNING SLAM ACCURACY & LOOP CLOSURE UNIT TESTS ===")
     test_normal_estimation()
@@ -277,6 +317,8 @@ if __name__ == "__main__":
     test_depth_to_base_projection()
     test_icp_odometry_prior_and_recovery()
     test_pose_graph_optimization()
+    test_camera_check_separates_same_view_from_other_view()
+    test_loop_closure_needs_camera_agreement()
     print("=== ALL SLAM ACCURACY TESTS PASSED SUCCESSFULLY! ===")
 
 

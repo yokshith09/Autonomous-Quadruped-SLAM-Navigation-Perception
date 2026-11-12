@@ -25,6 +25,12 @@ class ScanMsg:
 
 
 @dataclass
+class ThumbMsg:
+    timestamp: float
+    thumb: np.ndarray  # small grayscale view for the loop-closure camera check
+
+
+@dataclass
 class RGBDMsg:
     timestamp: float
     rgb_image: Optional[np.ndarray] = None  # (H, W, 3) uint8

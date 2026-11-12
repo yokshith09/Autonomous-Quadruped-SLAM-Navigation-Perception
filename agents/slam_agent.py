@@ -1,7 +1,7 @@
 """SLAM Agent: IMU-stabilized scan-matching odometry and continuous pose estimation."""
 import math
 from .base import BaseAgent
-from .bus import MessageBus, PoseMsg, ScanMsg, ActuationMsg, MissionEventMsg
+from .bus import MessageBus, PoseMsg, ScanMsg, ActuationMsg, MissionEventMsg, ThumbMsg
 from core.slam import ICPPoseEstimator, wrap_angle
 
 
@@ -18,6 +18,7 @@ class SLAMAgent(BaseAgent):
         self.accum_odom_dyaw = 0.0
         self.track_times_ms = []
         self.odom_distance_m = 0.0
+        self.latest_thumb = None  # small grayscale camera view for the loop-closure check
         self.tipped = False  # set from the locomotion state: robot tipped over
 
     def initialize(self) -> bool:
@@ -25,11 +26,15 @@ class SLAMAgent(BaseAgent):
         if self.use_ground_truth_nav:
             self.bus.subscribe("pose/ground_truth", self.on_gt_pose)
         self.bus.subscribe("control/actuation", self.on_actuation)
+        self.bus.subscribe("sensor/thumb", self.on_thumb)
         self.is_running = True
         return True
 
     def on_scan(self, scan_msg: ScanMsg):
         self.latest_scan = scan_msg
+
+    def on_thumb(self, msg: ThumbMsg):
+        self.latest_thumb = msg.thumb
 
     def on_gt_pose(self, pose_msg: PoseMsg):
         self.latest_gt_pose = (pose_msg.x, pose_msg.y, pose_msg.yaw)
@@ -57,6 +62,7 @@ class SLAMAgent(BaseAgent):
             base_pts = self.latest_scan.points_2d
             
             # Run Point-to-Line Metric ICP with kinematic odometry & gyro prior + loop closure PGO
+            self.pose_estimator.loop_manager.current_thumb = self.latest_thumb
             prev_closures = len(self.pose_estimator.loop_manager.loop_closures)
             slam_pose = self.pose_estimator.update(
                 base_pts,

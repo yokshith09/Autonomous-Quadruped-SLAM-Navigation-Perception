@@ -29,9 +29,10 @@ except ImportError:
     from zmqRemoteApi import RemoteAPIClient
 
 from agents import (
-    MessageBus, PoseMsg, PerceptionAgent, SLAMAgent, MappingAgent, FrontierAgent, PlanningAgent,
+    MessageBus, PoseMsg, ThumbMsg, PerceptionAgent, SLAMAgent, MappingAgent, FrontierAgent, PlanningAgent,
     LocomotionAgent, SupervisorAgent
 )
+from core import loop_verify
 from core.robot import LizardRobot, patch_coppelasim_scripts, norm_angle
 from core.sensors import initialize_sensors, get_depth_heatmap
 from core.grid import BayesianOccupancyGrid
@@ -45,6 +46,7 @@ try:
 except Exception:
     pass
 
+THUMB_EVERY = 3     # a small camera view every 3rd step (0.3 s); the loop-closure camera check uses the latest one
 MAX_TIME = 3000.0  # owner's mission length (50 min simulated); the robot keeps exploring for all of it
 MAP_X_MIN, MAP_X_MAX = -5.5, 5.5
 MAP_Y_MIN, MAP_Y_MAX = -5.5, 5.5
@@ -143,6 +145,8 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
     parser.add_argument("--stop-on-complete", action="store_true",
                         help="End the run as soon as no reachable frontier is left (default: run the full --max-time)")
+    parser.add_argument("--loop-camera-inliers", type=int, default=15,
+                        help="a loop closure the scan accepts needs this many agreeing camera features (0 = scan only)")
     parser.add_argument("--show-estimate", action="store_true",
                         help="Draw the SLAM-estimated pose (magenta cross) in the scene; its offset from the robot is the "
                              "live localization error")
@@ -197,6 +201,7 @@ def main():
         bus, initial_x=init_x, initial_y=init_y, initial_yaw=init_heading,
         use_ground_truth_nav=args.ground_truth_nav, update_rate_hz=10.0
     )
+    slam_agent.pose_estimator.loop_manager.visual_min_inliers = args.loop_camera_inliers
     mapping_agent = MappingAgent(bus, MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX, resolution=GRID_RES, update_rate_hz=10.0)
     frontier_agent = FrontierAgent(bus, grid_ref=mapping_agent.grid, update_rate_hz=1.0)
     planning_agent = PlanningAgent(bus, grid_ref=mapping_agent.grid, update_rate_hz=5.0)
@@ -251,6 +256,8 @@ def main():
     # Scans go straight to a raw float64 file instead of a list in memory (F15): a 50 min run holds about 0.67 GB of
     # scan points, and joining them at the end made a second full copy. The saved .npz format is unchanged.
     rec_fh = open(args.record + ".scans.f64", "wb") if args.record else None
+    thumb_fh = open(args.record + ".thumbs.u8", "wb") if args.record else None
+    rec_thumb_steps = []  # step index of every recorded camera view (the loop-closure camera check replays from these)
 
     print("  [OK] Multi-Agent System operational. Commencing systematic exploration.\n")
 
@@ -285,6 +292,14 @@ def main():
             # B. Step Multi-Rate Agents
             # Step 1: Perception & SLAM (every step / 10Hz)
             tel.step(perception_agent, t)
+            if step_count % THUMB_EVERY == 0:
+                rgbd = bus.get_latest("sensor/rgbd")
+                if rgbd is not None and rgbd.rgb_image is not None and rgbd.timestamp == t:
+                    thumb = loop_verify.make_thumb(rgbd.rgb_image)
+                    bus.publish("sensor/thumb", ThumbMsg(timestamp=t, thumb=thumb))
+                    if thumb_fh is not None:
+                        thumb.tofile(thumb_fh)
+                        rec_thumb_steps.append(len(rec["t"]))
             if args.record:
                 rec_scan = bus.get_latest("sensor/scan")
                 # float64, matching what SLAM actually consumes: float32 here would truncate points enough to
@@ -491,6 +506,8 @@ def main():
         os.makedirs("accuracy_results", exist_ok=True)
         os.makedirs("captured_matrices", exist_ok=True)
 
+        if thumb_fh is not None:
+            thumb_fh.close()
         if rec_fh is not None:
             rec_fh.close()
             raw = args.record + ".scans.f64"
@@ -500,13 +517,17 @@ def main():
                 # Memory-mapped: the OS pages the scan points in while compressing, no second copy in RAM
                 pts = np.memmap(raw, dtype=np.float64, mode="r", shape=(max(n_pts, 1), 2))[:n_pts] if n_pts \
                     else np.empty((0, 2), np.float64)
+                n_th = len(rec_thumb_steps)
+                thumbs = np.fromfile(args.record + ".thumbs.u8", dtype=np.uint8).reshape(
+                    n_th, loop_verify.THUMB_SIZE[1], loop_verify.THUMB_SIZE[0]) if n_th else np.empty((0, 1, 1), np.uint8)
                 np.savez_compressed(
-                    args.record, t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
+                    args.record, thumbs=thumbs, thumb_steps=np.array(rec_thumb_steps, dtype=np.int64), t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
                     scan_points=pts, scan_offsets=np.array(rec["offsets"][:n_rec + 1], dtype=np.int64),
                     initial_pose=np.array([init_x, init_y, init_heading]))
                 del pts
                 print(f"  [SAVED] SLAM input recording ({n_rec} steps) -> {args.record}")
             try:
+                os.remove(args.record + ".thumbs.u8")
                 os.remove(raw)
             except OSError as e:  # Windows keeps a mapped file open until the map is collected
                 print(f"  [WARN] could not remove {raw}: {e}")

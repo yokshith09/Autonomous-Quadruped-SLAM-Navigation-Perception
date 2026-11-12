@@ -1,6 +1,6 @@
 ﻿"""Autonomous Quadruped Multi-Agent Robotics Stack."""
 from .bus import (
-    MessageBus, PoseMsg, ScanMsg, RGBDMsg, GridMapMsg,
+    MessageBus, PoseMsg, ScanMsg, RGBDMsg, ThumbMsg, GridMapMsg,
     FrontierTargetMsg, PathMsg, ActuationMsg, MissionEventMsg
 )
 from .base import BaseAgent
@@ -15,7 +15,7 @@ from .knowledge_graph import SpatialKnowledgeGraph, RoomNode, DoorwayNode, Entit
 from .episodic_memory import EpisodicMemory, EpisodicEvent
 
 __all__ = [
-    "MessageBus", "PoseMsg", "ScanMsg", "RGBDMsg", "GridMapMsg",
+    "MessageBus", "PoseMsg", "ScanMsg", "RGBDMsg", "ThumbMsg", "GridMapMsg",
     "FrontierTargetMsg", "PathMsg", "ActuationMsg", "MissionEventMsg",
     "BaseAgent", "PerceptionAgent", "SLAMAgent", "MappingAgent",
     "FrontierAgent", "PlanningAgent", "LocomotionAgent", "SupervisorAgent",

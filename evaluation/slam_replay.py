@@ -14,7 +14,7 @@ import time
 import numpy as np
 
 from agents import MessageBus, SLAMAgent
-from agents.bus import ActuationMsg, ScanMsg
+from agents.bus import ActuationMsg, ScanMsg, ThumbMsg
 from evaluation.accuracy_evaluator import evaluate_trajectory
 from core.robot import gait_body_speed
 
@@ -24,6 +24,8 @@ def replay(path, overrides=None, verbose=False, recalibrate=False):
     t, gt, act = rec["t"], rec["gt"], rec["act"]
     pts, offs = rec["scan_points"], rec["scan_offsets"]
     x0, y0, yaw0 = rec["initial_pose"]
+    thumbs, thumb_steps = (rec["thumbs"], rec["thumb_steps"]) if "thumbs" in rec.files else (None, None)
+    next_thumb = 0
 
     bus = MessageBus()
     slam = SLAMAgent(bus, initial_x=x0, initial_y=y0, initial_yaw=yaw0)
@@ -37,6 +39,9 @@ def replay(path, overrides=None, verbose=False, recalibrate=False):
     last_cmd_t = None
     start = time.perf_counter()
     for k in range(len(t)):
+        if thumbs is not None and next_thumb < len(thumb_steps) and thumb_steps[next_thumb] == k:
+            bus.publish("sensor/thumb", ThumbMsg(timestamp=float(t[k]), thumb=thumbs[next_thumb]))
+            next_thumb += 1
         bus.publish("sensor/scan", ScanMsg(timestamp=float(t[k]), points_2d=pts[offs[k]:offs[k + 1]].astype(np.float64)))
         slam.step(float(t[k]))
         p = bus.get_latest("pose/slam")

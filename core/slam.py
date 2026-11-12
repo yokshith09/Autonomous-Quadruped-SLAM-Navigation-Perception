@@ -13,6 +13,8 @@ import math
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Any
 
+from core import loop_verify
+
 try:
     from scipy.spatial import cKDTree
 except ImportError:  # pragma: no cover
@@ -281,6 +283,7 @@ class Keyframe:
     scan_points: np.ndarray
     normals: np.ndarray
     travel: float = 0.0  # metres walked from the start of the run when this keyframe was taken
+    visual: Any = None   # ORB features of the camera view at this keyframe (core.loop_verify), or None
 
 
 class KeyframeLoopManager:
@@ -289,7 +292,8 @@ class KeyframeLoopManager:
     def __init__(self, keyframe_dist: float = 0.5, keyframe_rot_deg: float = 25.0,
                  loop_search_radius: float = 2.5, min_loop_time_diff: float = 12.0,
                  max_loop_correction: float = 0.10, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6,
-                 loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 1.5, max_loop_yaw_deg: float = 5.0):
+                 loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 1.5, max_loop_yaw_deg: float = 5.0,
+                 visual_min_inliers: int = 0):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
         # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
         # A fixed gate both rejects the closures that would repair a large drift and accepts impossible ones (a
@@ -300,6 +304,12 @@ class KeyframeLoopManager:
         self.max_loop_correction_cap = max_loop_correction_cap
         self.max_loop_yaw = math.radians(max_loop_yaw_deg)
         self.travel = 0.0  # metres walked so far (estimated)
+        # Camera check (core.loop_verify): a closure the scan accepts is trusted only when at least this many ORB
+        # features of the current view agree with the matched keyframe's view. 0 = off (scan only; recordings
+        # without images replay as before). visual_log keeps every check for offline study.
+        self.visual_min_inliers = visual_min_inliers
+        self.current_thumb = None
+        self.visual_log: List[Dict[str, Any]] = []
         # Closures correct position only; heading stays with the gyro and the Manhattan prior (mean error under
         # 1 deg). Live run 3: eleven same-sign closure yaw corrections of 1.4 to 4.7 deg in 115 s added 31 deg,
         # each one rotating the submap the next scan locks onto.
@@ -331,6 +341,8 @@ class KeyframeLoopManager:
             normals=normals,
             travel=self.travel
         )
+        if self.visual_min_inliers > 0 and self.current_thumb is not None:
+            kf.visual = loop_verify.describe(self.current_thumb)
         self.keyframes.append(kf)
         self.last_kf_pose = (x, y, yaw)
         return kf
@@ -385,6 +397,14 @@ class KeyframeLoopManager:
                        self.max_loop_correction + self.loop_gate_per_m * (self.travel - best_kf.travel))
             if math.hypot(err_dx, err_dy) > gate or abs(err_dyaw) > self.max_loop_yaw:
                 return None
+
+            if self.visual_min_inliers > 0:
+                cur = loop_verify.describe(self.current_thumb) if self.current_thumb is not None else None
+                inl = loop_verify.count_inliers(cur, best_kf.visual)
+                self.visual_log.append({"t": current_time, "keyframe_id": best_kf.keyframe_id, "inliers": inl,
+                                        "correction": (err_dx, err_dy), "accepted": inl >= self.visual_min_inliers})
+                if inl < self.visual_min_inliers:
+                    return None
 
             closure_info = {
                 "keyframe_id": best_kf.keyframe_id,
