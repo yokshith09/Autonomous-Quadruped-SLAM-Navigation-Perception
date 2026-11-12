@@ -62,6 +62,8 @@ is** with small error, and **detects the objects** in each room.
 | 2026-11-12 | Measurement: wasted walking counted only while exploring (run 8: 61 -> 33 %); recording streamed to disk (F15); replay uses recorded odometry; robot parts no longer scored as wall | commits `3532a2f`, `7181ecb`, `f02ea6a`, `b3e2f7e` |
 | 2026-11-12 | Live runs 9-11 with the new gait: run 9 odometry calibration error (fixed), run 10 wall contact with 122 cm phantom drift, run 11 wedged at Cylinder3 and seen upside down. Diagnosed from recordings and simulator re-enactment; fixed by F45-F50 | runs `20261112_101356`, `20261112_103326`, `20261112_105216` |
 | 2026-11-12 | Rejected after replay: loop-closure temporal-consistency check (inconsistent across routes) | `RESEARCH.md` |
+| 2026-11-12 | **Live run 12 (F45-F50)**: all 7 real rooms explored by **1072 s (fastest)**, wasted walking while exploring 22 % (best), 3 single contacts and no loops or tipping, real-time factor 0.69, peak memory 606 MB (-80 %). Patrol phase: false loop closures against keyframes 40-142 m old (gate opens to 1.5 m) pushed the error to 77 cm repeatedly; whole-run ATE 34.6 cm. Stopped at 2100 s | run `20261112_111339`, `docs/results/comparison_run12.md` |
+| 2026-11-12 | Loop-closure gate cap replay (0.3 / 0.4 / 0.6 m): run 2 24.8 -> 12.9, baseline 22.0 -> 17.6, run 12 34.6 -> 14.5 cm, but run 8 14.7 -> 43.5 cm (its large corrections were genuine). Not adopted: closures need verification beyond the 2D scan (camera check) | replay, 4 recordings |
 
 ## Not done yet
 | Item | Status | Needs |
