@@ -13,7 +13,10 @@ OMEGA = 2 * math.pi * FREQ
 # is byte-identical across all three files -- this steering aggressiveness is
 # what actually changed the perceived "gait".
 SLOW_ANGLE = 0.30
-HEADING_RATE = 0.18
+# Largest yaw change per control step (20 Hz). steer_heading sets the body's yaw directly (simulation shortcut F23), so
+# 0.18 rad/step spun the body at up to 206 deg/s: in live run 11 it swung 170 deg in 2 s beside Cylinder3 and swept its
+# legs into it until wedged. 0.06 rad/step (about 69 deg/s) is a realistic turn rate for a small quadruped.
+HEADING_RATE = 0.06
 
 # Proprioceptive odometry model: body speed (m/s) vs. gait speed command, piecewise linear.
 # Calibration knob, measured with ground truth (LEG_LIFT 0.05, 2026-11-12). 0.35 and 1.0: straight 20 s walks in
