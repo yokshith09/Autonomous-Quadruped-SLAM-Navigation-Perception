@@ -9,6 +9,7 @@ from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEven
 from .spatial_memory import SpatialMemory
 from core.robot import norm_angle
 from core.grid import bresenham_line
+from core.planner import CLEARANCE_KERNEL
 
 try:
     from numba import njit
@@ -156,7 +157,7 @@ class FrontierAgent(BaseAgent):
         """
         h, w = self.grid.height, self.grid.width
         occ = (self.grid.grid_log_odds > self.grid.thresh_occ).astype(np.uint8)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, CLEARANCE_KERNEL)
         inflated = cv2.dilate(occ, kernel, iterations=1)
 
         # Snap start outside inflation margin if robot is close to a wall

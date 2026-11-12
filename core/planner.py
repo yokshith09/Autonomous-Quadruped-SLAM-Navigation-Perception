@@ -4,6 +4,14 @@ import cv2
 import numpy as np
 from core.grid import bresenham_line
 
+# Hard clearance kept between any path and occupied cells, in 5 cm cells. The robot's footprint radius is about 0.13 m
+# (legs at rest; more while they swing), so the former 3 cells (0.15 m) left about 2 cm for localization error and the
+# robot brushed walls and Cylinder3 in live runs 10 and 11. On the final maps of runs 5, 6 and 8 all 7 real rooms stay
+# reachable up to 4 cells (0.20 m); doorways start to close at 5 (0.25 m). Shared by A*, smoothing and the frontier
+# agent's walking-distance field, which must agree on what is reachable.
+CLEARANCE_CELLS = 4
+CLEARANCE_KERNEL = (2 * CLEARANCE_CELLS + 1, 2 * CLEARANCE_CELLS + 1)
+
 def a_star_search(grid, start, goal, smooth=False):
     """
     A* search algorithm for grid path planning with obstacle clearance margin.
@@ -14,9 +22,9 @@ def a_star_search(grid, start, goal, smooth=False):
     if start == goal:
         return [grid.grid_to_world(*start)]
 
-    # Precompute 15cm hard obstacle clearance for collision avoidance (3 cells radius at 5cm resolution)
+    # Hard obstacle clearance for collision avoidance (CLEARANCE_CELLS)
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, CLEARANCE_KERNEL)
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
     
     # Precompute soft wall clearance field using Euclidean Distance Transform (meters)
@@ -163,7 +171,7 @@ def smooth_path(grid, path, min_spacing=0.20):
     
     # Safety clearance mask for line of sight
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, CLEARANCE_KERNEL)
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
 
     smoothed = [path[0]]
