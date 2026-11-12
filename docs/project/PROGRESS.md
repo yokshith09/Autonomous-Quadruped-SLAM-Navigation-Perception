@@ -128,3 +128,8 @@ Reading: on long missions closures are essential (run 7/8: 15 vs 60 cm); short r
 - **F52 recovery**: runs 13 and 14 tipped within 0.4 s of the first reverse step. A turn/walk dither was sampled mid-walk by the stall watchdog and called a stall; the reverse gait then flipped the body. Now a stall needs 80 % of the last second walking, and recovery stops the legs and turns 70 deg towards the open side. Two tests fail on the old code and pass on the new.
 - Not adopted: gate measured from the last closure (baseline 22 -> 41, run 7 14.6 -> 35); odometry scale 1.08 (run 14 27 -> 51, run 15 no-closure 16 -> 24); degeneracy-aware closures (core/slam.py `degeneracy_ratio`, default off): ratio 0.15 better on 4 of 7 recordings, worse on 3 (mean 25.2 -> 21.7 cm).
 - Same code, different routes: 7 cm to 32 cm average error at 600 s (runs 14 vs 15). Accuracy claims need several full runs.
+
+### F51 camera check: not shown to help, switched off by default (--loop-camera-inliers 5 turns it on)
+Run 16 (live, camera on, 1215 s, no tip-over): 32 cm at 1200 s; replay of its own recording: camera on 32.2 cm, scan only 20.6 cm. The check refused two genuine closures against 65-79 m old keyframes (+16 and +10 cm) because the views differ in heading (0 agreeing features), exactly as it refuses wrong ones.
+Rule tuned on run 13 only. On the three recordings it was not tuned on (scan only -> camera): run 14 27.2 -> 11.8, run 15 28.1 -> 32.5, run 16 20.6 -> 32.2; mean 25.3 -> 25.5. No demonstrated gain, so it is off by default. Camera views are still recorded for research. A heading-independent place check is the open problem.
+Live run 16 also fired the F52 turn-away recovery twice (legs loaded at (-3.96, -2.31)) with no tip-over.
