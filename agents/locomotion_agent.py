@@ -23,6 +23,7 @@ STALL_MIN_CMD = 0.3       # below this command the load is too small to judge
 # about 0.027 normalised) it crosses on the 5th blocked step, so the 4 steps before it reported motion that did not
 # happen and are taken back.
 STALL_DELAY_STEPS = 4
+RECOVERY_TURN_RAD = 1.2    # recovery turns the body this far towards the open side (about 70 deg)
 TIPPED_UP_Z = 0.7071      # body tilted more than 45 deg from upright
 
 class LocomotionAgent(BaseAgent):
@@ -42,6 +43,9 @@ class LocomotionAgent(BaseAgent):
         self.last_stuck_pos: Tuple[float, float] = (0.0, 0.0)
         self.stuck_ticks: int = 0
         self.recovery_countdown: int = 0
+        self.recovery_heading: float = 0.0
+        self._walk_steps: int = 0   # steps commanded to walk since the last stall check
+        self._window_steps: int = 0
         # Progress watchdog: a goal the robot cannot get closer to (wall in the way, mis-registered map) is dropped.
         self.progress_timeout_s: float = 15.0
         self._goal_best_dist = float("inf")
@@ -77,14 +81,25 @@ class LocomotionAgent(BaseAgent):
         return len(self._load_hist) == STALL_WINDOW and sum(self._load_hist) / STALL_WINDOW > STALL_LOAD_RATIO
 
     def _enter_recovery(self, current_time: float, rx: float, ry: float, why: str) -> None:
-        print(f"  [LOCOMOTION] {why} at ({rx:.2f}, {ry:.2f}) -> Executing reverse recovery step")
+        print(f"  [LOCOMOTION] {why} at ({rx:.2f}, {ry:.2f}) -> Executing turn-away recovery")
         self.recovery_countdown = 14
+        self.recovery_heading = norm_angle(self.latest_pose.yaw + RECOVERY_TURN_RAD * self._open_side())
         self.stuck_ticks = 0
         self._load_hist.clear()
         self.waypoints = []
         self.wp_idx = 0
         self.bus.publish("mission/event", MissionEventMsg(
             timestamp=current_time, event_type="ROBOT_STUCK", details={"x": rx, "y": ry}))
+
+    def _open_side(self) -> float:
+        """+1 to turn left, -1 to turn right: towards the side whose scan returns are farther (more open)."""
+        pts = None if self.latest_scan is None else self.latest_scan.points_2d
+        if pts is None or len(pts) == 0:
+            return 1.0
+        ahead = pts[(pts[:, 0] > 0.0) & (pts[:, 0] < 1.5)]
+        left, right = ahead[ahead[:, 1] > 0.0], ahead[ahead[:, 1] <= 0.0]
+        mean_range = lambda p: float(np.mean(np.hypot(p[:, 0], p[:, 1]))) if len(p) else 99.0
+        return 1.0 if mean_range(left) >= mean_range(right) else -1.0
 
     def _remaining_path(self, rx: float, ry: float) -> float:
         wps = self.waypoints[self.wp_idx:]
@@ -131,16 +146,20 @@ class LocomotionAgent(BaseAgent):
                     odom_forward=0.0, odom_lateral=0.0, gyro_dyaw=0.0))
                 return
 
-        # 1. Anti-stuck active recovery maneuver (reverse step)
+        # 1. Anti-stuck recovery: stop the legs and turn the body away from the obstacle. It used to walk backwards
+        # (speed -0.6) with the legs jammed; in live runs 13 and 14 the body flipped within 0.4 s of the first
+        # reverse step, which ended the mission. A turn is a heading change, it cannot flip the body.
         if self.recovery_countdown > 0:
             self.recovery_countdown -= 1
-            self.speed = -0.6  # Reverse gait swing
-            self.state_str = "RECOVER_BACKUP"
-            d_fwd, d_lat, dyaw_gyro = gait_body_speed(self.speed) * dt_step, 0.0, 0.0
+            self.speed = 0.0
+            self.state_str = "RECOVER_TURN"
+            d_fwd, d_lat, dyaw_gyro = 0.0, 0.0, 0.0
             if self.robot is not None:
                 try:
-                    self.robot.apply_gait(current_time, self.speed)
-                    d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, self.speed)
+                    orient = self.robot.sim.getObjectOrientation(self.robot.base, self.robot.sim.handle_world)
+                    self.robot.steer_heading(orient, r_yaw, self.recovery_heading)
+                    self.robot.stop_motors()
+                    d_fwd, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, 0.0)
                     d_lat = getattr(self.robot, "last_odom_lateral", 0.0)
                 except Exception as e:
                     self.handle_error(e)
@@ -253,9 +272,15 @@ class LocomotionAgent(BaseAgent):
                     self.state_str = "WALK"
 
                 # Anti-stuck watchdog: verify physical progress every 1.0s
+                self._window_steps += 1
+                self._walk_steps += 1 if self.speed > 0.2 else 0
                 if current_time - self.last_stuck_check_time >= 1.0:
                     dist_moved = math.hypot(rx - self.last_stuck_pos[0], ry - self.last_stuck_pos[1])
-                    if self.speed > 0.2 and dist_moved < 0.05:
+                    # Turn-then-walk dithering samples as "walking" now and then without ever walking a second: only a
+                    # robot that walked most of the window can be stalled (live runs 13/14: false stall -> flip).
+                    walked_window = self._walk_steps >= 0.8 * max(1, self._window_steps)
+                    self._walk_steps = self._window_steps = 0
+                    if walked_window and dist_moved < 0.05:
                         self.stuck_ticks += 1
                     else:
                         self.stuck_ticks = 0

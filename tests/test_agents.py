@@ -219,7 +219,7 @@ def test_locomotion_agent():
     # Simulate staying stuck at same position over consecutive intervals
     loco.step(current_time=2.5)
     loco.step(current_time=3.6)
-    assert loco.recovery_countdown > 0 or loco.state_str in ["RECOVER_BACKUP", "IDLE"]
+    assert loco.recovery_countdown > 0 or loco.state_str in ["RECOVER_TURN", "IDLE"]
     print("PASSED")
 
 
@@ -401,6 +401,58 @@ def test_blocked_legs_are_felt_and_phantom_odometry_stops():
     assert stuck and 2.0 < stuck[0] <= 2.8, f"blocked legs not felt within 0.8 s (stuck events at {stuck})"
     net = sum(a.odom_forward for a in acts if 2.0 - 1e-9 <= a.timestamp <= stuck[0] + 1e-9)
     assert abs(net) < 1e-9, f"odometry reported while blocked was not taken back (net {net * 100:.2f} cm)"
+    print("PASSED")
+
+
+def test_recovery_turns_away_and_never_reverses():
+    """Live runs 13 and 14: the reverse gait flipped the body within 0.4 s. Recovery now stops the legs and turns the body
+    towards the more open side (here left: far returns on the left, a near one on the right)."""
+    print("Running test_recovery_turns_away_and_never_reverses...", end=" ")
+    from agents import LocomotionAgent
+    bus = MessageBus()
+    events = []
+    bus.subscribe("mission/event", lambda e: events.append(e.event_type))
+    robot = _FakeRobot()
+    gaits, steers = [], []
+    robot.apply_gait = lambda t, sp: gaits.append(sp)
+    robot.steer_heading = lambda orient, cur, des: steers.append(des)
+    loco = LocomotionAgent(bus, robot_driver=robot)
+    loco.initialize()
+    loco.on_scan(ScanMsg(timestamp=0.0, points_2d=np.array([[1.0, 0.8], [1.2, 0.9], [0.4, -0.1]])))
+    loco.on_path(PathMsg(timestamp=0.0, waypoints=[(0.1 * i, 0.0) for i in range(1, 200)]))
+    states = []
+    for k in range(60):
+        t = k * 0.05
+        robot.blocked = t >= 0.5
+        loco.on_pose(PoseMsg(timestamp=t, x=0.0, y=0.0, yaw=0.0))
+        loco.step(t)
+        states.append(loco.state_str)
+    assert "ROBOT_STUCK" in events and "RECOVER_TURN" in states
+    assert min(gaits) >= 0.0, f"a reverse gait was commanded ({min(gaits)})"
+    assert any(abs(h - 1.2) < 1e-6 for h in steers), f"did not turn towards the open (left) side: {sorted(set(steers))[:5]}"
+    print("PASSED")
+
+
+def test_turn_walk_dithering_is_not_a_stall():
+    """Live runs 13/14: turning and walking alternately for seconds without moving was sampled mid-walk and called a stall.
+    Only a robot that walked most of the last second can be stalled; one that walks the whole time and does not move is."""
+    print("Running test_turn_walk_dithering_is_not_a_stall...", end=" ")
+    from agents import LocomotionAgent
+
+    def run(yaw_of_step):
+        bus = MessageBus()
+        events = []
+        bus.subscribe("mission/event", lambda e: events.append(e.event_type))
+        loco = LocomotionAgent(bus, robot_driver=_FakeRobot())
+        loco.initialize()
+        loco.on_path(PathMsg(timestamp=0.0, waypoints=[(0.1 * i, 0.0) for i in range(1, 200)]))
+        for k in range(100):  # 5 s
+            loco.on_pose(PoseMsg(timestamp=k * 0.05, x=0.0, y=0.0, yaw=yaw_of_step(k)))
+            loco.step(k * 0.05)
+        return events
+
+    assert "ROBOT_STUCK" not in run(lambda k: 1.0 if k % 2 else 0.0), "dithering was called a stall"
+    assert "ROBOT_STUCK" in run(lambda k: 0.0), "a robot walking in place was not called a stall"
     print("PASSED")
 
 
@@ -731,6 +783,8 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_recovery_turns_away_and_never_reverses()
+    test_turn_walk_dithering_is_not_a_stall()
     test_doorway_ahead_preferred_over_slightly_nearer_one_behind()
     test_compiled_wavefront_matches_python()
     test_detour_is_progress_not_stuck()
