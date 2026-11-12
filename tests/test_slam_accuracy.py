@@ -302,6 +302,14 @@ def test_loop_closure_needs_camera_agreement():
     bad, m_bad = run(elsewhere)
     assert ok is not None and m_ok.visual_log[-1]["accepted"]
     assert bad is None and not m_bad.visual_log[-1]["accepted"]
+    # a recent keyframe (under visual_min_age_m of walking) is not checked: the distance gate already bounds it
+    m = KeyframeLoopManager(visual_min_inliers=15)
+    scan = np.array([[x, 2.0] for x in np.linspace(-1.5, 1.5, 80)] + [[2.0, y] for y in np.linspace(-1.5, 1.5, 80)])
+    for i in range(4):
+        m.add_keyframe(5.0 * i, 3.0 * i, 0.0, 0.0, scan)
+    m.travel = 5.0
+    m.current_thumb = elsewhere
+    assert m.detect_loop_closure(40.0, 0.1, 0.0, 0.0, scan) is not None and not m.visual_log
 
 
 if __name__ == "__main__":

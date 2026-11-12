@@ -293,7 +293,7 @@ class KeyframeLoopManager:
                  loop_search_radius: float = 2.5, min_loop_time_diff: float = 12.0,
                  max_loop_correction: float = 0.10, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6,
                  loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 1.5, max_loop_yaw_deg: float = 5.0,
-                 visual_min_inliers: int = 0):
+                 visual_min_inliers: int = 0, visual_min_age_m: float = 10.0):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
         # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
         # A fixed gate both rejects the closures that would repair a large drift and accepts impossible ones (a
@@ -308,6 +308,10 @@ class KeyframeLoopManager:
         # features of the current view agree with the matched keyframe's view. 0 = off (scan only; recordings
         # without images replay as before). visual_log keeps every check for offline study.
         self.visual_min_inliers = visual_min_inliers
+        # Only keyframes older than this many metres of walking are checked: against a recent keyframe the distance
+        # gate is already tight and its closures help (run 13 audit: 34 closures, +18 cm net), while against old
+        # ones (loose gate) the scan alone accepted a 70 cm wrong jump with 0 agreeing features (9 closures, -52 cm).
+        self.visual_min_age_m = visual_min_age_m
         self.current_thumb = None
         self.visual_log: List[Dict[str, Any]] = []
         # Closures correct position only; heading stays with the gyro and the Manhattan prior (mean error under
@@ -398,7 +402,7 @@ class KeyframeLoopManager:
             if math.hypot(err_dx, err_dy) > gate or abs(err_dyaw) > self.max_loop_yaw:
                 return None
 
-            if self.visual_min_inliers > 0:
+            if self.visual_min_inliers > 0 and self.travel - best_kf.travel > self.visual_min_age_m:
                 cur = loop_verify.describe(self.current_thumb) if self.current_thumb is not None else None
                 inl = loop_verify.count_inliers(cur, best_kf.visual)
                 self.visual_log.append({"t": current_time, "keyframe_id": best_kf.keyframe_id, "inliers": inl,

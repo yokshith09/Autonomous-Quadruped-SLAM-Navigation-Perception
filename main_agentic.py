@@ -145,8 +145,8 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run without OpenCV GUI window")
     parser.add_argument("--stop-on-complete", action="store_true",
                         help="End the run as soon as no reachable frontier is left (default: run the full --max-time)")
-    parser.add_argument("--loop-camera-inliers", type=int, default=15,
-                        help="a loop closure the scan accepts needs this many agreeing camera features (0 = scan only)")
+    parser.add_argument("--loop-camera-inliers", type=int, default=5,
+                        help="a loop closure against a keyframe more than 10 m of walking old needs this many agreeing camera features (0 = scan only)")
     parser.add_argument("--show-estimate", action="store_true",
                         help="Draw the SLAM-estimated pose (magenta cross) in the scene; its offset from the robot is the "
                              "live localization error")
