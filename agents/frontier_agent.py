@@ -582,7 +582,7 @@ class FrontierAgent(BaseAgent):
         if self.active_room_id > 0 and self.active_room_id not in self.explored_rooms:
             self.explored_rooms.add(self.active_room_id)
             self._remember_explored(self.active_room_id, room_labels)
-            print(f"  [FRONTIER] ★ Room {self.active_room_id} 100% EXPLORED! Marked closed.")
+            print(f"  [FRONTIER] * Room {self.active_room_id} 100% EXPLORED! Marked closed.")
             self.bus.publish("mission/event", MissionEventMsg(
                 timestamp=current_time,
                 event_type="ROOM_COMPLETED",
