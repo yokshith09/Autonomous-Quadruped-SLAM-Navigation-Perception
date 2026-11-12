@@ -3,7 +3,7 @@ import random
 
 FREQ = 6.5
 HIP_AMP = 0.48
-LEG_LIFT = 0.025
+LEG_LIFT = 0.05   # was 0.025: swing legs scuffed and the body slid back in 18 % of 50 ms samples (gait_bench)
 LEG_PLANT = -0.025
 OMEGA = 2 * math.pi * FREQ
 # Restored to match path_planning_nav.py / path_planning_nav_dstar.py.
@@ -16,9 +16,10 @@ SLOW_ANGLE = 0.30
 HEADING_RATE = 0.18
 
 # Proprioceptive odometry model: body speed (m/s) vs. gait speed command, piecewise linear.
-# Calibration knob: measured offline from an early recording made with ground-truth navigation (ground truth used only
-# there; that recording is no longer kept). Re-calibrate from a current run's recording (fix F5).
-GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.047), (0.75, 0.053), (1.0, 0.0785))
+# Calibration knob, measured with ground truth by `python -m evaluation.gait_bench --speed 0.35 0.75 1.0` (20 s straight
+# walks, LEG_LIFT 0.05, 2026-11-12). The previous curve was off by 54 % at 0.75 (0.053 vs 0.082 m/s). Re-measure after
+# any change to the gait constants above.
+GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.0499), (0.75, 0.0824), (1.0, 0.0782))
 GYRO_NOISE_RAD_S = math.radians(0.10)   # white noise on z-rate (MPU-6050 class)
 GYRO_BIAS_RAD_S = math.radians(0.05)    # constant turn-on bias magnitude
 

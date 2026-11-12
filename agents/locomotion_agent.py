@@ -8,6 +8,9 @@ from core.robot import LizardRobot, gait_body_speed, norm_angle
 
 TURN_IN_PLACE_RAD = 0.45  # heading error above which the robot stops and turns before walking on
 LOOKAHEAD_M = 0.40        # pure-pursuit lookahead along the path
+# Gait command for walking. 0.75 beats 1.0 on every measure (gait_bench, 20 s straight walks): 0.0824 vs 0.0782 m/s,
+# 0 % vs 6 % of samples sliding backward, 12.7 vs 18.4 deg/s yaw wobble; at 1.0 the legs overdrive and slip.
+WALK_CMD = 0.75
 
 class LocomotionAgent(BaseAgent):
     def __init__(self, bus: MessageBus, robot_driver: Optional[LizardRobot] = None, wp_radius: float = 0.18, update_rate_hz: float = 20.0):
@@ -184,7 +187,7 @@ class LocomotionAgent(BaseAgent):
                     self.speed = 0.0
                     self.state_str = "TURN"
                 else:
-                    self.speed = 1.0   # Full forward walk along the path line
+                    self.speed = WALK_CMD  # forward walk along the path line
                     self.state_str = "WALK"
 
                 # Anti-stuck watchdog: verify physical progress every 1.0s
