@@ -293,7 +293,8 @@ class KeyframeLoopManager:
                  loop_search_radius: float = 2.5, min_loop_time_diff: float = 12.0,
                  max_loop_correction: float = 0.10, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6,
                  loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 1.5, max_loop_yaw_deg: float = 5.0,
-                 visual_min_inliers: int = 0, visual_min_age_m: float = 10.0):
+                 visual_min_inliers: int = 0, visual_min_age_m: float = 10.0,
+                 degeneracy_ratio: float = 0.0):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
         # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
         # A fixed gate both rejects the closures that would repair a large drift and accepts impossible ones (a
@@ -312,6 +313,10 @@ class KeyframeLoopManager:
         # gate is already tight and its closures help (run 13 audit: 34 closures, +18 cm net), while against old
         # ones (loose gate) the scan alone accepted a 70 cm wrong jump with 0 agreeing features (9 closures, -52 cm).
         self.visual_min_age_m = visual_min_age_m
+        # A scan of long straight walls constrains position only across them: along the wall the match is free to
+        # slide, and a closure there is arbitrary. When the weakest direction of the matched geometry is under this
+        # fraction of the strongest, the correction along it is dropped (0 = off).
+        self.degeneracy_ratio = degeneracy_ratio
         self.current_thumb = None
         self.visual_log: List[Dict[str, Any]] = []
         # Closures correct position only; heading stays with the gyro and the Manhattan prior (mean error under
@@ -397,6 +402,14 @@ class KeyframeLoopManager:
             err_dx = corrected_x - current_x
             err_dy = corrected_y - current_y
             err_dyaw = wrap_angle(corrected_yaw - current_yaw)
+            if self.degeneracy_ratio > 0.0 and len(best_kf.normals) >= 3:
+                nx = ck * best_kf.normals[:, 0] - sk * best_kf.normals[:, 1]   # keyframe normals in the world frame
+                ny = sk * best_kf.normals[:, 0] + ck * best_kf.normals[:, 1]
+                w, v = np.linalg.eigh(np.array([[nx @ nx, nx @ ny], [nx @ ny, ny @ ny]]))
+                if w[1] > 1e-9 and w[0] / w[1] < self.degeneracy_ratio:
+                    weak = v[:, 0]
+                    along = weak[0] * err_dx + weak[1] * err_dy
+                    err_dx, err_dy = err_dx - along * weak[0], err_dy - along * weak[1]
             gate = min(self.max_loop_correction_cap,
                        self.max_loop_correction + self.loop_gate_per_m * (self.travel - best_kf.travel))
             if math.hypot(err_dx, err_dy) > gate or abs(err_dyaw) > self.max_loop_yaw:

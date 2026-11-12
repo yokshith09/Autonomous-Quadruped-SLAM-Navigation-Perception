@@ -108,3 +108,23 @@ Best results so far:
 | Contacts / tipping | 2 stuck | 3 single hits, no loops, no tipping |
 | Real-time factor / peak memory | 0.55 / 4.4 GB | **0.69 / 606 MB** |
 Current code = run 12. Remaining gap: false loop closures during patrol; the fix is a camera check on closures (needs RGB recorded).
+
+## 2026-11-12 (evening): loop-closure study, F51 camera check, F52 recovery
+Audit of every accepted closure against the true pose (runs 8 and 12): about a third help, a third hurt, a third change nothing; RMSE, match ratio and keyframe age do not separate them. One wrong closure (87 cm) in run 12 and one (70 cm, keyframe 38 m old, 0 agreeing camera features) in run 13.
+
+Replay ATE (cm), same recordings, closures on / off:
+| Recording | Closures on | Closures off |
+|---|---|---|
+| baseline 20261024_210638 | 22.0 | 17.3 |
+| run 7 | 14.6 | 58.7 |
+| run 8 | 14.7 | 64.4 |
+| run 12 | 34.6 | 38.1 |
+| run 13 (830 s) | 35.5 | 39.5 |
+| run 14 (813 s) | 27.2 | 13.1 |
+| run 15 (620 s) | 28.1 | 15.9 |
+Reading: on long missions closures are essential (run 7/8: 15 vs 60 cm); short routes can do without. The goal is to refuse only the wrong ones.
+
+- **F51 camera check** (core/loop_verify.py): a scan-accepted closure against a keyframe more than 10 m of walking old needs at least 5 agreeing ORB features between the current view and the keyframe's view. Run 13 replay 35.5 -> 10.6 cm (the data it was tuned on), run 14 27.2 -> 11.8, run 15 28.1 -> 32.5. First live version (all ages, 15 features) refused good early closures and was worse (run 13: 35 cm at 600 s); the age limit fixed that. Recordings now keep a 192x144 grayscale view every 0.3 s.
+- **F52 recovery**: runs 13 and 14 tipped within 0.4 s of the first reverse step. A turn/walk dither was sampled mid-walk by the stall watchdog and called a stall; the reverse gait then flipped the body. Now a stall needs 80 % of the last second walking, and recovery stops the legs and turns 70 deg towards the open side. Two tests fail on the old code and pass on the new.
+- Not adopted: gate measured from the last closure (baseline 22 -> 41, run 7 14.6 -> 35); odometry scale 1.08 (run 14 27 -> 51, run 15 no-closure 16 -> 24); degeneracy-aware closures (core/slam.py `degeneracy_ratio`, default off): ratio 0.15 better on 4 of 7 recordings, worse on 3 (mean 25.2 -> 21.7 cm).
+- Same code, different routes: 7 cm to 32 cm average error at 600 s (runs 14 vs 15). Accuracy claims need several full runs.
