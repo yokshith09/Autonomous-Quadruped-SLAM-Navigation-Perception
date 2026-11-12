@@ -43,7 +43,9 @@ def load_truth(scene_json, ref_logodds):
     walls, objects = np.zeros((N, N), bool), {}
     for o in objs:
         a, size = o["alias"], o.get("bbox_size")
-        if size is None or a.startswith(ROBOT_PREFIXES) or "ResizableFloor" in a:
+        # The robot model sits under the wall object guard15 in the scene tree (/guard15/Base/...), so its own parts
+        # passed the "guard" wall test below and were scored as wall at the start pose.
+        if size is None or a.startswith(ROBOT_PREFIXES) or "/Base" in a or "ResizableFloor" in a:
             continue
         z0, z1 = o["pos"][2] - size[2] / 2, o["pos"][2] + size[2] / 2
         if z1 < BAND[0] or z0 > BAND[1]:
