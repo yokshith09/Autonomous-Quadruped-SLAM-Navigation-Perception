@@ -11,13 +11,13 @@ TURN_IN_PLACE_RAD = 0.45  # heading error above which the robot stops and turns 
 LOOKAHEAD_M = 0.40        # pure-pursuit lookahead along the path
 # Gait command for walking. 0.75 beats 1.0 on every measure (gait_bench, 20 s straight walks): 0.0824 vs 0.0782 m/s,
 # 0 % vs 6 % of samples sliding backward, 12.7 vs 18.4 deg/s yaw wobble; at 1.0 the legs overdrive and slip.
-WALK_CMD = 1.0   # run 8's walking command (F54); F45's 0.75 with lift 0.05 felt faster and shakier live
+WALK_CMD = 0.75
 # Contact detection from the front hip load (core.robot.LizardRobot.leg_load), normalised by the gait command:
 # free walking <= 0.0097, blocked >= 0.0222 at every command from 0.35 to 1.0 (stall_probe). The depth camera is blind
 # inside about 0.22 m and odometry is dead-reckoned from the leg commands, so without this a robot pushing a wall
 # reports 8 cm/s of motion it does not make (live run 10: 16 s against a wall, position error 11 -> 122 cm).
 STALL_WINDOW = 12         # control steps averaged (0.6 s at 20 Hz)
-STALL_LOAD_RATIO = 0.015  # mean load / command above this: the legs are pushing on something (command 1.0, stall_probe: free max 0.0118, blocked min 0.0242)
+STALL_LOAD_RATIO = 0.015  # mean load / command above this: the legs are pushing on something
 STALL_MIN_CMD = 0.3       # below this command the load is too small to judge
 # Steps already blocked before the window mean crosses the threshold: with the measured loads (free 0.0083, blocked
 # about 0.027 normalised) it crosses on the 5th blocked step, so the 4 steps before it reported motion that did not

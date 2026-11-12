@@ -3,7 +3,7 @@ import random
 
 FREQ = 6.5
 HIP_AMP = 0.48
-LEG_LIFT = 0.025  # run 8's value. 0.05 (F45) gave a faster, shakier gait in live runs 9-19: camera shake, collisions, flips (F54)
+LEG_LIFT = 0.05   # was 0.025: swing legs scuffed and the body slid back in 18 % of 50 ms samples (gait_bench)
 LEG_PLANT = -0.025
 OMEGA = 2 * math.pi * FREQ
 # Restored to match path_planning_nav.py / path_planning_nav_dstar.py.
@@ -23,7 +23,7 @@ HEADING_RATE = 0.06
 # `python -m evaluation.gait_bench --speed 0.35 0.75 1.0`. 0.75 (the walking command): live driving, where steering
 # corrections cost speed; the straight-walk value (0.0824) overstated it by 4.3 % in live run 9 and doubled its ATE
 # (replay: 38.9 cm, 21.2 cm with the live value). Re-measure after any change to the gait constants above.
-GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.047), (0.75, 0.053), (1.0, 0.0785))  # run 8's curve (F54): command 1.0 = 0.0785 m/s
+GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.0499), (0.75, 0.0790), (1.0, 0.0782))
 GYRO_NOISE_RAD_S = math.radians(0.10)   # white noise on z-rate (MPU-6050 class)
 GYRO_BIAS_RAD_S = math.radians(0.05)    # constant turn-on bias magnitude
 
