@@ -21,7 +21,8 @@ from evaluation.accuracy_evaluator import evaluate_grid_accuracy
 
 RES, X0 = 0.05, -5.5
 ARENA_HALF = 4.95            # inner face of the 10 x 10 m outer wall (wall centres at +/-5 m, 0.10 m thick)
-BAND = (0.04, 0.60)          # obstacle height band the perception agent keeps (m)
+BAND = (0.04, 0.25)          # obstacle height band above the floor that the robot treats as obstacles (m); the
+                             # perception band is 0.04-0.20 m above the body origin, which sits ~0.055 m up
 MATCH_M = 0.5                # a detection within this distance of a real object counts as that object
 ROBOT_PREFIXES = ("/Base", "/Kinect", "/kinect")
 

@@ -204,3 +204,15 @@ Standing of the final code (cap 0.50, replay of 5 full recordings from the curre
 Robot model present (/Base at (0, -1.8)); scene fits the 11 x 11 m map. Run 20261113_213216 ended at ~90 s when the scene was switched back: ATE 20 cm at 30 s, 40 cm at 60 s, 54 cm at 90 s (now 81 cm), F1 55 %, 4 unreachable targets, no contacts or tip-over.
 Cause: the gait covers less ground on that floor. First 90 s: odometry 6.56 m vs true 4.99 m (ratio 1.32); original scene 6.86 vs 7.78 m (0.88). GAIT_SPEED_CURVE is calibrated on the original floor, so dead reckoning over-reports by about a third there. Gyro is fine (+134 vs +129 deg). Needed before testing in a new scene: gait speed calibration on that floor (evaluation/gait_bench.py), scene truth export (evaluation/scene_truth.py), obstacle band for low furniture, clearance for narrow gaps.
 Final results for scene 1 written to docs/results/FINAL_scene1.md (five runs, three-run comparison vs baseline).
+
+### F61 robust pose graph for loop closures; F62 obstacle band lowered for tables (2026-11-14)
+Root cause of the run-ruining jumps: each closure was applied once as a hard shift and could never be undone. F61 keeps every closure as a soft link in a pose graph over keyframes (odometry chain from raw keyframe positions with past corrections removed) and re-solves it on each closure with dynamic covariance scaling (Agarwal et al. 2013; switchable constraints, Suenderhauf & Protzel 2012). A closure that disagrees with the chain and the other closures is scaled down, including after the fact. Heading is held by gyro + Manhattan prior, so the graph is linear in x, y (scipy sparse solve, 8 IRLS iterations).
+Replay of the five full recordings, ATE cm (cap 0.50): before | robust, odometry 3 %/m | robust, 1 %/m | robust 1 %/m + looser detection
+- run 19: 15.2 | 13.0 | 17.0 | 16.5
+- run 24: 19.0 | 22.9 | 22.6 | 16.8
+- run 29: 17.6 | 34.6 | 18.0 | 18.9
+- run 30: 27.1 | 20.9 | 28.7 | 16.8
+- run 31: 49.1 | 12.3 | 10.2 | 30.3
+- mean 25.6 | 20.7 | 19.3 | 19.9; worst 49.1 | 34.6 | 28.7 | 30.3
+Adopted robust graph with odometry 1 %/m (default), cap 0.50 (cap 1.5 was worse on run 29: 37.6), strict detection. First setting with no large regression on any recording.
+F62: perception obstacle band top 0.60 -> 0.20 m above the body origin (~0.25 m above the floor; robot is ~7 cm tall), so the 0.40-0.50 m tabletop is not an obstacle and only its legs are mapped. truth_eval BAND 0.60 -> 0.25 m to match (map scores from now on are not comparable with earlier ones unless re-scored). Cannot be replayed (recordings hold the filtered scan); short live check run 32 (900 s).

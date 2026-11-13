@@ -6,6 +6,7 @@ from .bus import MessageBus, RGBDMsg, ScanMsg
 from core.sensors import depth_to_base_points, grab_depth_frame, grab_rgb_frame
 
 
+OBSTACLE_MAX_Z = 0.20  # metres above the body origin; see PerceptionAgent.max_height
 CLOUD_VOXEL = 0.06   # 3D view kept for 3D matching: one point per 6 cm voxel
 CLOUD_MAX_Z = 2.5    # metres above the body origin
 
@@ -28,7 +29,10 @@ class PerceptionAgent(BaseAgent):
         self.point_stride = 4
         self.self_mask_radius = 0.22  # 22cm radial deadzone around base origin
         self.min_height = 0.04
-        self.max_height = 0.60
+        # Top of the obstacle band, above the body origin (about 5.5 cm over the floor). The robot is about 7 cm tall:
+        # anything higher than ~25 cm above the floor (a 40-50 cm tabletop) is not an obstacle, so it can walk under
+        # tables and only the legs are mapped. Was 0.60, which mapped the whole tabletop as a solid block.
+        self.max_height = OBSTACLE_MAX_Z
         self.publish_cloud = False  # full 3D view for offline 3D-matching studies (main_agentic --record-3d)
 
     def initialize(self) -> bool:

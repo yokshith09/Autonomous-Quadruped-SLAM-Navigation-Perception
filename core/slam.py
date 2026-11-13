@@ -296,7 +296,9 @@ class KeyframeLoopManager:
                  visual_min_inliers: int = 0, visual_min_age_m: float = 10.0,
                  degeneracy_ratio: float = 0.0, confirm_above_m: float = 0.0, confirm_window_s: float = 6.0,
                  confirm_tol_m: float = 0.12, confirm_other_kf: bool = True, map_consistency: bool = False,
-                 consistency_radius: float = 3.0, consistency_tol: float = 0.06):
+                 consistency_radius: float = 3.0, consistency_tol: float = 0.06, robust_pgo: bool = True,
+                 pgo_odom_sigma0: float = 0.01, pgo_odom_sigma_per_m: float = 0.01, pgo_closure_sigma: float = 0.05,
+                 pgo_dcs_phi: float = 1.0, pgo_iters: int = 8):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
         # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
         # A fixed gate both rejects the closures that would repair a large drift and accepts impossible ones (a
@@ -336,6 +338,18 @@ class KeyframeLoopManager:
         self.map_consistency = map_consistency
         self.consistency_radius = consistency_radius
         self.consistency_tol = consistency_tol
+        # Robust pose graph (Suenderhauf & Protzel 2012 switchable constraints; Agarwal et al. 2013 dynamic covariance
+        # scaling). Every closure stays a soft link between keyframes; the graph (odometry chain + all closures) is
+        # re-solved on each new closure and links that disagree with the rest are scaled down, so a wrong closure can
+        # be undone after the fact instead of being applied once and kept forever. Heading is held by gyro and the
+        # Manhattan prior, so the graph is linear in x, y.
+        self.robust_pgo = robust_pgo
+        self.pgo_odom_sigma0, self.pgo_odom_sigma_per_m = pgo_odom_sigma0, pgo_odom_sigma_per_m
+        self.pgo_closure_sigma, self.pgo_dcs_phi, self.pgo_iters = pgo_closure_sigma, pgo_dcs_phi, pgo_iters
+        self.raw_xy: List[Tuple[float, float]] = []      # keyframe positions with all past corrections removed
+        self.corr_offset = np.zeros(2)                    # sum of corrections applied to the live pose
+        self.pg_edges: List[Tuple[int, int, float, float]] = []  # (k, L, mx, my): x_L - x_k = (mx, my)
+        self.pg_scale: List[float] = []                   # last DCS scale per closure edge (diagnostics)
         self.current_thumb = None
         self.visual_log: List[Dict[str, Any]] = []
         # Closures correct position only; heading stays with the gyro and the Manhattan prior (mean error under
@@ -372,6 +386,7 @@ class KeyframeLoopManager:
         if self.visual_min_inliers > 0 and self.current_thumb is not None:
             kf.visual = loop_verify.describe(self.current_thumb)
         self.keyframes.append(kf)
+        self.raw_xy.append((x - self.corr_offset[0], y - self.corr_offset[1]))
         self.last_kf_pose = (x, y, yaw)
         return kf
 
@@ -478,6 +493,52 @@ class KeyframeLoopManager:
             return best_kf, err_dx, err_dy, err_dyaw
 
         return None
+
+    def robust_pgo_closure(self, matched_kf: Keyframe, err_dx: float, err_dy: float,
+                           cur_x: float, cur_y: float) -> Tuple[float, float]:
+        """Add a closure as a soft link, re-solve the graph robustly, move the keyframes. Returns the shift to apply to
+        the live pose (that of the newest keyframe)."""
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.linalg import spsolve
+        n = len(self.keyframes)
+        k = next(i for i, kf in enumerate(self.keyframes) if kf.keyframe_id == matched_kf.keyframe_id)
+        L = n - 1
+        last = self.keyframes[L]
+        mx = (cur_x + err_dx - matched_kf.x) - (cur_x - last.x)
+        my = (cur_y + err_dy - matched_kf.y) - (cur_y - last.y)
+        if k == L:
+            return err_dx, err_dy
+        self.pg_edges.append((k, L, mx, my))
+        raw = np.asarray(self.raw_xy)
+        d = np.diff(raw, axis=0)                                   # odometry edges i-1 -> i
+        w_o = 1.0 / (self.pgo_odom_sigma0 + self.pgo_odom_sigma_per_m * np.hypot(d[:, 0], d[:, 1])) ** 2
+        E = np.asarray([(a, b) for a, b, _, _ in self.pg_edges], dtype=np.int64)
+        M = np.asarray([(u, v) for _, _, u, v in self.pg_edges])
+        x = np.array([[kf.x, kf.y] for kf in self.keyframes])     # warm start: current keyframe positions
+        w_c0 = 1.0 / self.pgo_closure_sigma ** 2
+        idx = np.arange(1, n)
+        rows = np.concatenate([np.arange(n - 1), np.arange(n - 1), [n - 1],
+                               n + np.arange(len(E)), n + np.arange(len(E))])
+        cols = np.concatenate([idx, idx - 1, [0], E[:, 1], E[:, 0]])
+        vals = np.concatenate([np.ones(n - 1), -np.ones(n - 1), [1.0], np.ones(len(E)), -np.ones(len(E))])
+        A = coo_matrix((vals, (rows, cols)), shape=(n + len(E), n)).tocsr()
+        b = np.vstack([d, [[self.keyframes[0].x, self.keyframes[0].y]], M])
+        scale = np.ones(len(E))
+        for _ in range(self.pgo_iters):
+            r = (x[E[:, 1]] - x[E[:, 0]]) - M
+            chi2 = (r[:, 0] ** 2 + r[:, 1] ** 2) * w_c0
+            scale = np.minimum(1.0, 2.0 * self.pgo_dcs_phi / (self.pgo_dcs_phi + chi2))
+            W = np.concatenate([w_o, [1e8], w_c0 * scale ** 2])
+            AtW = A.T.multiply(W).tocsr()
+            H = (AtW @ A).tocsc()
+            x = np.column_stack([spsolve(H, AtW @ b[:, 0]), spsolve(H, AtW @ b[:, 1])])
+        self.pg_scale = scale.tolist()
+        shift = (x[L, 0] - last.x, x[L, 1] - last.y)
+        for i, kf in enumerate(self.keyframes):
+            kf.x, kf.y = float(x[i, 0]), float(x[i, 1])
+        self.last_kf_pose = (last.x, last.y, last.yaw)
+        self.corr_offset += shift
+        return shift
 
     def optimize_pose_graph(self, matched_kf: Keyframe, err_dx: float, err_dy: float, err_dyaw: float) -> int:
         """Spread the loop-closure correction linearly along the keyframe chain after the anchor."""
@@ -665,9 +726,15 @@ class ICPPoseEstimator:
             if closure:
                 matched_kf, err_dx, err_dy, err_dyaw = closure
                 matched_kf.timestamp = timestamp
-                self.loop_manager.optimize_pose_graph(matched_kf, err_dx, err_dy, err_dyaw)
-                self.pose.x += err_dx
-                self.pose.y += err_dy
+                if self.loop_manager.robust_pgo:
+                    sx, sy = self.loop_manager.robust_pgo_closure(matched_kf, err_dx, err_dy, self.pose.x, self.pose.y)
+                    self.pose.x += sx
+                    self.pose.y += sy
+                else:
+                    self.loop_manager.optimize_pose_graph(matched_kf, err_dx, err_dy, err_dyaw)
+                    self.pose.x += err_dx
+                    self.pose.y += err_dy
+                    self.loop_manager.corr_offset += (err_dx, err_dy)
                 self.pose.yaw = wrap_angle(self.pose.yaw + err_dyaw)
         else:
             self.pose.x += odom_dx
