@@ -496,7 +496,7 @@ def test_planner_keeps_path_unless_clearly_shorter():
     paths = [[(0.0, 1.0), (2.0, 1.0), (2.0, 0.0)], [(0.0, -1.0), (2.0, -1.0), (2.0, 0.0)], [(1.0, 0.0), (2.0, 0.0)]]
     calls = iter(paths)
     orig_a, orig_s = pa.a_star_search, pa.smooth_path
-    pa.a_star_search, pa.smooth_path = (lambda g, s, e, smooth=False: next(calls)), (lambda g, p: p)
+    pa.a_star_search, pa.smooth_path = (lambda g, s, e, smooth=False, **kw: next(calls)), (lambda g, p, **kw: p)
     try:
         gx, gy = grid.world_to_grid(2.0, 0.0)
         agent.on_target(FrontierTargetMsg(timestamp=0.0, target_gx=gx, target_gy=gy, target_wx=2.0, target_wy=0.0,
@@ -560,6 +560,41 @@ def test_tabletop_is_scan_structure_but_not_an_obstacle():
     assert not top(m.obstacle_2d), "tabletop treated as an obstacle for the bumper"
     assert m.base_points_3d[:, 2].max() <= pa.OBSTACLE_MAX_Z, "tabletop sent to the map"
     assert len(m.obstacle_2d) == 4, "table legs missing from the obstacle points"
+    print("PASSED")
+
+
+def test_narrow_gap_opens_only_with_the_narrow_setting():
+    """A 0.35 m gap is closed by the 0.20 m margin. With --narrow-gaps the planner retries at 0.15 m and goes through;
+    without it (the scene-1 default) the behaviour is unchanged."""
+    print("Running test_narrow_gap_opens_only_with_the_narrow_setting...", end=" ")
+    import agents.planning_agent as pa
+    from core import planner
+    from agents.bus import FrontierTargetMsg
+    from core.grid import BayesianOccupancyGrid
+    grid = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+    grid.grid_log_odds[:] = grid.l_min
+    wx, _ = grid.world_to_grid(0.0, 0.0)
+    gy0, gy1 = grid.world_to_grid(0.0, -0.175)[1], grid.world_to_grid(0.0, 0.175)[1]
+    grid.grid_log_odds[:, wx] = grid.l_max                       # a wall across the room at x = 0 ...
+    grid.grid_log_odds[gy0:gy0 + 7, wx] = grid.l_min             # ... with a 0.35 m gap (7 cells)
+    def plan(narrow):
+        planner.NARROW_GAPS = narrow
+        bus = MessageBus()
+        agent = pa.PlanningAgent(bus, grid_ref=grid)
+        agent.initialize()
+        gx, gy = grid.world_to_grid(2.0, 0.0)
+        agent.on_target(FrontierTargetMsg(timestamp=0.0, target_gx=gx, target_gy=gy, target_wx=2.0, target_wy=0.0,
+                                          room_id=1, area=10, is_doorway=False))
+        agent.on_pose(PoseMsg(timestamp=0.0, x=-2.0, y=0.0, yaw=0.0))
+        return agent.plan_path(0.0)
+    try:
+        assert not plan(False), "default margin went through a 0.35 m gap"
+        path = plan(True)
+        assert path and path[-1][0] > 1.5, "narrow setting did not open the 0.35 m gap"
+        cells = [grid.world_to_grid(x, y) for x, y in path]
+        assert all(grid.grid_log_odds[cy, cx] < grid.thresh_occ for cx, cy in cells), "path crosses the wall"
+    finally:
+        planner.NARROW_GAPS = False
     print("PASSED")
 
 
@@ -679,6 +714,30 @@ def test_patrol_walks_unwalked_floor_first():
     fa.on_pose(PoseMsg(timestamp=500.0, x=-1.2, y=-1.2, yaw=0.0))
     tgt = fa.select_frontier(current_time=500.0)
     assert tgt is not None and math.hypot(tgt.target_wx - hole[0], tgt.target_wy - hole[1]) < 0.35,         f"patrol chose walked floor ({tgt.target_wx:.2f}, {tgt.target_wy:.2f}) over the unwalked spot {hole}"
+    print("PASSED")
+
+
+def test_far_tiny_frontier_is_left_to_patrol_near_one_is_explored():
+    """Run 34 crossed the map for 3-8 cell frontier slivers for its last 13 minutes (+1 % coverage). A tiny sliver far
+    away is left to the floor-coverage patrol; the same sliver near the robot is still explored (small gaps matter)."""
+    print("Running test_far_tiny_frontier_is_left_to_patrol_near_one_is_explored...", end=" ")
+    def run(robot):
+        grid = BayesianOccupancyGrid(-4.0, 4.0, -4.0, 4.0, 0.05)
+        lo = grid.grid_log_odds
+        lo[:] = 0.0
+        lo[10:151, 10:151] = 2.0
+        lo[11:150, 11:150] = -2.0                      # 7 x 7 m explored room
+        hx, hy = grid.world_to_grid(3.0, 3.0)
+        lo[hy, hx - 1:hx + 2] = 0.0                    # 1 x 3 unknown cells: a tiny frontier sliver at (3, 3)
+        fa = FrontierAgent(MessageBus(), grid_ref=grid)
+        fa.on_pose(PoseMsg(timestamp=1.0, x=robot[0], y=robot[1], yaw=0.0))
+        fa.visits.add("visit", robot[0], robot[1], t=1.0)
+        tgt = fa.select_frontier(current_time=100.0)
+        return fa.state, tgt
+    state_far, _ = run((-3.0, -3.0))
+    assert state_far == "MISSION_COMPLETE", f"robot sent 8 m for a tiny sliver ({state_far})"
+    state_near, tgt = run((2.0, 2.2))
+    assert state_near != "MISSION_COMPLETE" and tgt is not None and math.hypot(tgt.target_wx - 3.0, tgt.target_wy - 3.0) < 0.6,         f"a nearby small gap was not explored ({state_near})"
     print("PASSED")
 
 
@@ -907,9 +966,11 @@ if __name__ == "__main__":
     test_unfinished_room_is_not_abandoned_on_label_change()
     test_patrol_after_exploration_instead_of_idle()
     test_patrol_walks_unwalked_floor_first()
+    test_far_tiny_frontier_is_left_to_patrol_near_one_is_explored()
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_narrow_gap_opens_only_with_the_narrow_setting()
     test_tabletop_is_scan_structure_but_not_an_obstacle()
     test_planner_escapes_a_ring_of_clearance_margins()
     test_planner_keeps_path_unless_clearly_shorter()

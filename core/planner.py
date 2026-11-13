@@ -12,6 +12,12 @@ from core.grid import bresenham_line
 CLEARANCE_CELLS = 4
 ESCAPE_CELLS = 8   # 0.40 m: margin-free radius around the robot's own cell (covers the 0.25 m contact mark + 0.20 m margin, minus overlap)
 CLEARANCE_KERNEL = (2 * CLEARANCE_CELLS + 1, 2 * CLEARANCE_CELLS + 1)
+NARROW_CLEARANCE_CELLS = 3   # 0.15 m: tried only when no route exists at CLEARANCE_CELLS (gaps of ~0.35 m and up)
+NARROW_GAPS = False          # main_agentic --narrow-gaps; off keeps scene-1 results reproducible
+
+
+def kernel_for(cells: int):
+    return (2 * cells + 1, 2 * cells + 1)
 
 
 def clear_margin_near(inflated, occ, sx, sy):
@@ -29,7 +35,7 @@ def clear_margin_near(inflated, occ, sx, sy):
     inflated[y0:y1, x0:x1][near] = occ[y0:y1, x0:x1][near]
 
 
-def a_star_search(grid, start, goal, smooth=False):
+def a_star_search(grid, start, goal, smooth=False, clearance_cells: int = CLEARANCE_CELLS):
     """
     A* search algorithm for grid path planning with obstacle clearance margin.
     start: (gx, gy) grid coordinates
@@ -41,7 +47,7 @@ def a_star_search(grid, start, goal, smooth=False):
 
     # Hard obstacle clearance for collision avoidance (CLEARANCE_CELLS)
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, CLEARANCE_KERNEL)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_for(clearance_cells))
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
     
     # Precompute soft wall clearance field using Euclidean Distance Transform (meters)
@@ -184,13 +190,13 @@ def _line_of_sight(grid, p1, p2, inflated_mask=None):
                     return False
     return True
 
-def smooth_path(grid, path, min_spacing=0.20):
+def smooth_path(grid, path, min_spacing=0.20, clearance_cells: int = CLEARANCE_CELLS):
     if len(path) <= 2:
         return path
     
     # Safety clearance mask for line of sight
     occ = (grid.grid_log_odds > grid.thresh_occ).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, CLEARANCE_KERNEL)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_for(clearance_cells))
     inflated_mask = cv2.dilate(occ, kernel, iterations=1)
 
     smoothed = [path[0]]

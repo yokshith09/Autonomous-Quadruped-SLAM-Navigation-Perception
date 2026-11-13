@@ -33,6 +33,7 @@ from agents import (
     LocomotionAgent, SupervisorAgent
 )
 from core import loop_verify
+from core import planner as planner_module
 from core.robot import LizardRobot, patch_coppelasim_scripts, norm_angle
 from core.sensors import initialize_sensors, get_depth_heatmap
 from core.grid import BayesianOccupancyGrid
@@ -147,6 +148,8 @@ def main():
                         help="End the run as soon as no reachable frontier is left (default: run the full --max-time)")
     parser.add_argument("--loop-camera-inliers", type=int, default=0,
                         help="a loop closure against a keyframe more than 10 m of walking old needs this many agreeing camera features (0 = scan only)")
+    parser.add_argument("--narrow-gaps", action="store_true",
+                        help="let the planner use a 0.15 m margin (gaps from ~0.35 m) when no route exists at 0.20 m")
     parser.add_argument("--record-3d", action="store_true",
                         help="also record the 3D view per step (about 250 MB per 10 min) for evaluation.icp3d_probe")
     parser.add_argument("--show-estimate", action="store_true",
@@ -261,6 +264,7 @@ def main():
     thumb_fh = open(args.record + ".thumbs.u8", "wb") if args.record else None
     cloud_fh = open(args.record + ".cloud.f32", "wb") if args.record and args.record_3d else None
     perception_agent.publish_cloud = bool(args.record_3d)
+    planner_module.NARROW_GAPS = bool(args.narrow_gaps)
     cloud_offsets = [0]  # 3D view per step, for offline 3D-matching studies
     rec_thumb_steps = []  # step index of every recorded camera view (the loop-closure camera check replays from these)
 

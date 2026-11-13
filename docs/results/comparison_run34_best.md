@@ -7,7 +7,7 @@
 | Simulated time | 1800 s | 1800 s | +0 (+0%) | - |
 | Distance travelled | 157.9 m | 156.9 m | -1.0 (-1%) | - |
 | Average speed | 0.088 m/s | 0.087 m/s | -0.001 (-1%) | Same |
-| Real floor mapped | 88.2 % | 94.6 % | +6.3 (+7%) | Better |
+| Real floor mapped | 88.3 % | 94.6 % | +6.2 (+7%) | Better |
 | Free space mapped outside the arena | 0.59 m2 | 0.16 m2 | -0.42 (-72%) | Better |
 | Frontiers remaining | 48 | 51 | +3 (+6%) | Worse |
 | Stuck events | 4 | 0 | -4 (-100%) | Better |
@@ -27,11 +27,11 @@
 | Loop closures | 68 | 84 | +16 (+24%) | - |
 | Scan-match acceptance | 26.9 % | 23.8 % | -3.0 (-11%) | Worse |
 | **Mapping vs real scene** | | | | |
-| Map accuracy | 10.6 cm | 2.8 cm | -7.8 (-74%) | Better |
-| Map completion | 9.1 cm | 5.8 cm | -3.3 (-36%) | Better |
-| Precision | 73.9 % | 99.7 % | +25.7 (+35%) | Better |
-| Recall | 82.0 % | 92.4 % | +10.5 (+13%) | Better |
-| F1 | 77.7 % | 95.9 % | +18.2 (+23%) | Better |
+| Map accuracy | 10.8 cm | 2.8 cm | -8.0 (-74%) | Better |
+| Map completion | 8.8 cm | 5.8 cm | -3.0 (-34%) | Better |
+| Precision | 73.4 % | 99.7 % | +26.2 (+36%) | Better |
+| Recall | 83.0 % | 92.4 % | +9.4 (+11%) | Better |
+| F1 | 77.9 % | 95.9 % | +18.0 (+23%) | Better |
 | **Detection** | | | | |
 | Detections on a real object | 21.2 % | 21.6 % | +0.4 (+2%) | Same |
 | **Processing time** | | | | |

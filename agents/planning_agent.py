@@ -4,6 +4,7 @@ import math
 from typing import List, Tuple, Optional
 from .base import BaseAgent
 from .bus import MessageBus, PathMsg, FrontierTargetMsg, PoseMsg, MissionEventMsg
+from core import planner
 from core.planner import a_star_search, smooth_path
 from core.grid import find_nearest_free
 
@@ -100,7 +101,12 @@ class PlanningAgent(BaseAgent):
 
         # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
         t_p0 = time.perf_counter()
+        cells = planner.CLEARANCE_CELLS
         world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False)
+        if not world_path and planner.NARROW_GAPS:  # only through a gap the normal margin closes
+            cells = planner.NARROW_CLEARANCE_CELLS
+            world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False,
+                                       clearance_cells=cells)
         if not world_path:
             print(f"  [PLANNER] Target ({self.latest_target.target_wx:.2f}, {self.latest_target.target_wy:.2f}) unreachable! Blacklisting & replanning...")
             self.bus.publish("mission/event", MissionEventMsg(
@@ -116,7 +122,7 @@ class PlanningAgent(BaseAgent):
             return None
 
         # Line-of-sight shortcut smoothing on world coordinates
-        world_waypoints = smooth_path(self.grid, world_path)
+        world_waypoints = smooth_path(self.grid, world_path, clearance_cells=cells)
         if not hasattr(self, "plan_times_ms"):
             self.plan_times_ms = []
         self.plan_times_ms.append((time.perf_counter() - t_p0) * 1000.0)

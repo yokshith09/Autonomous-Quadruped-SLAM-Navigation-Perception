@@ -68,6 +68,12 @@ def derived(d):
         # reported separately (patrol_dist) instead of counted as waste. A run that never finished exploring (the
         # baseline) uses its full length, so its value is unchanged.
         done_t = o.get("explored_complete_at_s") or float(t[-1, 0])
+        # Exploration ends the first time the robot reports everything reachable explored and starts patrolling. The
+        # floor-coverage patrol (F63) can uncover a few new frontiers later and reopen exploration briefly; that is
+        # deliberate coverage walking, not waste (run 34: 48 % "waste" because the last completion was at 1785 s).
+        first_done = next((r["t"] for r in d["prog"] if r.get("state") == "MISSION_COMPLETE" and r["t"] > 60), None)
+        if first_done is not None:
+            done_t = min(done_t, first_done)
         prog = [r for r in d["prog"] if r["t"] <= done_t] or d["prog"]
         final = prog[-1]["explored"]
         for frac, key in ((0.95, "t95"), (0.97, "t97")):

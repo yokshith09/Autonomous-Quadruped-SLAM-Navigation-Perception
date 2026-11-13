@@ -9,7 +9,8 @@ from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEven
 from .spatial_memory import SpatialMemory
 from core.robot import norm_angle
 from core.grid import bresenham_line
-from core.planner import CLEARANCE_KERNEL, clear_margin_near
+from core import planner
+from core.planner import CLEARANCE_KERNEL, clear_margin_near, kernel_for
 
 try:
     from numba import njit
@@ -48,6 +49,8 @@ if njit is not None:
 else:
     _wavefront_kernel = None
 
+MIN_GLOBAL_AREA = 10       # cells: a smaller frontier is only worth a trip if it is near
+NEAR_FRONTIER_M = 3.0      # ... this close (m); far tiny ones are left to the floor-coverage patrol
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
@@ -161,7 +164,8 @@ class FrontierAgent(BaseAgent):
         """
         h, w = self.grid.height, self.grid.width
         occ = (self.grid.grid_log_odds > self.grid.thresh_occ).astype(np.uint8)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, CLEARANCE_KERNEL)
+        cells = planner.NARROW_CLEARANCE_CELLS if planner.NARROW_GAPS else planner.CLEARANCE_CELLS
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_for(cells))
         inflated = cv2.dilate(occ, kernel, iterations=1)
         clear_margin_near(inflated, occ, start_gx, start_gy)  # same rule as the planner: margins do not trap the robot
 
@@ -530,6 +534,10 @@ class FrontierAgent(BaseAgent):
         dist_candidates = [c for c in candidates if c[1] >= self.min_dist]
         if not dist_candidates:
             dist_candidates = candidates
+        # Run 34 spent its last ~13 min (1000-1785 s, coverage 80.0 -> 81.0 %) crossing the map for 3-8 cell frontier
+        # slivers along walls; 51 of them were left at the end. Far tiny ones are left to the floor-coverage patrol;
+        # small gaps near the robot are still explored.
+        dist_candidates = [(f, d) for f, d in dist_candidates if f[2] >= MIN_GLOBAL_AREA or d <= NEAR_FRONTIER_M]
 
         # Classify into active room vs other rooms
         room_frontiers = []

@@ -7,17 +7,17 @@ Run 34, folder `runs/20261113_232046`, code tag `best-sim-v3` on `improve/explor
 |---|---|---|
 | Position error (ATE RMSE) | 31.0 cm | **11.7 cm** |
 | Largest position error | 63.1 cm | **24.5 cm** |
-| Map accuracy vs real scene | 10.6 cm | **2.8 cm** |
-| Map precision / recall / F1 | 73.9 / 82.0 / 77.7 % | **99.7 / 92.4 / 95.9 %** |
-| Real floor mapped | 88.2 % | **94.6 %** |
+| Map accuracy vs real scene | 10.8 cm | **2.8 cm** |
+| Map precision / recall / F1 | 73.4 / 83.0 / 77.9 % | **99.7 / 92.4 / 95.9 %** |
+| Real floor mapped | 88.3 % | **94.6 %** |
 | Real rooms explored | 6 of 7 | **7 of 7** |
 | Contacts / stuck events / tip-overs | 4 stuck | **0 / 0 / 0** |
 | Under the table | no (tabletop mapped as a block) | **yes: 29 s underneath, within 7 cm of the centre** |
 | Real-time factor | 0.32 | **0.73** |
 | Peak memory | 2973 MB | **930 MB** |
 
-Against the baseline: 24 better, 3 worse, 5 within 3 % of 32 metrics. Map figures use the obstacle band of 0.04-0.25 m
-above the floor (F62). Wasted walking while exploring is 48 % (baseline 46 %): the new patrol walks unwalked floor such as
+Against the baseline: 24 better, 3 worse, 5 within 3 % of 32 metrics. Both runs' map figures are scored with the same obstacle band, 0.04-0.25 m above the floor
+(F62; the baseline was re-scored on it). Wasted walking while exploring is 48 % (baseline 46 %): the new patrol walks unwalked floor such as
 under the table, and this run's 30 min ends shortly after everything was explored (1785 s).
 
 ## What changed to get here
