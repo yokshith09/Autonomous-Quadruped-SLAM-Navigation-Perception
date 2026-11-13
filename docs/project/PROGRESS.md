@@ -164,3 +164,13 @@ F57: planner kept re-planning from scratch every 4 s to the same goal, so the bl
 ### Final run 24 (20261113_120000), code cf2102a: F55 degeneracy 0.15 + F56 contact memory on run 19's code
 Full 3000 s, no tip-over, 2 contacts (no repeat at the same spot), everything reachable explored at 1257 s, 7/7 real rooms, wasted walking while exploring 21 %, ATE 17.9 cm (largest 58.5 cm, first > 0.5 m at 1255 s), map accuracy 6.0 cm, F1 90.7 %, floor mapped 91.7 %, RTF 0.58, peak memory 1354 MB. vs baseline: 24 better, 4 worse, 4 same (docs/results/comparison_run24.md).
 vs run 19: faster to explore everything (1257 vs 1371 s), less wasted walking (21 vs 32 %), fewer contacts (2 vs 4); accuracy a little worse (17.9 vs 16.5 cm ATE, 6.0 vs 4.7 cm map, F1 90.7 vs 92.0 %). F57 (path hysteresis) was committed during the run and is not in it.
+
+### Root-cause investigation of the remaining drift (2026-11-13, all rejected or reverted)
+- Scan-match rejection (run 24 replay): 68.7 % rejected for disagreeing with odometry (median 3.7 cm in a 0.4 cm step), 22.6 % accepted.
+- F58 level scans by body roll/pitch: walking tilt is real (tilt_probe: roll -5.3..+5.8 deg, p95 5.8 deg; camera rigidly mounted). Live run 25 (stopped at 460 s): acceptance 17.6 % vs run 24's 20.2 % over the same 460 s, ATE 14.2 vs 11.4 cm. Reverted.
+- Gate after removing the along-wall slide: worse (run 18 27.2 -> 32.2, run 7 14.6 -> 22.2). Removed.
+- Ground truth per step (run 24, first 460 s): scan-match step error median 3.0 cm, odometry 0.38 cm. Scan-to-scan (2.2 cm) and 3-keyframe submaps (2.9 cm) are no better than 8 keyframes, and ATE is worse (34.0 / 27.6 vs 11.4 cm).
+- Is the scan-matched pose closer to the truth than the odometry pose? Gap < 1.4 cm (accepted): 50 %; 1.4-3 cm: 48 %; 3-6 cm: 39 %; 6-10 cm: 22 %; > 10 cm: 8 %. The gate rejects the right steps.
+- More heading from the scan match: icp_yaw_weight 0.3 -> 11.2 cm, 0.6 -> 21.0, 1.0 -> 38.5; manhattan_gain 0.3 -> 34.4 (base 11.4). Rejected.
+- Step from odometry, scan match only as a fit check: 11.4 -> 16.2 cm. The accepted matches keep the pose consistent with the map. Rejected.
+Conclusion: the front end is limited by a 60 deg depth camera sliced to 2D; per-step matches carry little information and the error between closures is drift that only loop closures repair. Further gains need a different front end (3D depth matching or a wider sensor), not tuning.
