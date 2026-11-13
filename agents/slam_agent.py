@@ -60,10 +60,14 @@ class SLAMAgent(BaseAgent):
             # is integrated like any other, but only the settled part estimates the bias.
             if self._gyro_cal_start is None:
                 self._gyro_cal_start = t
-            if dt > 0.0 and t - self._gyro_cal_start >= GYRO_SETTLE_S:
-                self._gyro_cal_sum += gyro_dyaw
-                self._gyro_cal_t += dt
-                self.gyro_bias = self._gyro_cal_sum / self._gyro_cal_t
+            if t - self._gyro_cal_start >= GYRO_SETTLE_S:
+                if dt > 0.0:
+                    self._gyro_cal_sum += gyro_dyaw
+                    self._gyro_cal_t += dt
+                    self.gyro_bias = self._gyro_cal_sum / self._gyro_cal_t
+                # Settled: the robot is still by definition, so these readings are bias, not rotation. Integrating them
+                # left runs 10 and 11 with +1.6 deg of heading error (30 s x 0.05 deg/s) for the whole run.
+                gyro_dyaw = 0.0
         else:
             gyro_dyaw -= self.gyro_bias * dt
         mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * gyro_dyaw)
