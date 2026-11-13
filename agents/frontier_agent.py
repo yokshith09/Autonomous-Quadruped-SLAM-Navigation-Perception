@@ -57,6 +57,7 @@ STANDOFF_M = 0.35         # a frontier is viewed from at least this far back fro
                           # stairwell stays unknown for ever (rescue run 9 picked viewpoints 7 cm from the drop with a
                           # 30 cm position error); the camera sees well past its 0.22 m blind zone
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
+FAIL_RADIUS_M = 0.6       # failures this close together are the same place (rescue run 12: points 0.25-0.5 m apart)
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
 DOOR_MAX_FAILS = 2           # doorway transits ending stuck or unreachable before that doorway is skipped
 DOOR_TURN_COST_M = 1.5      # a doorway straight behind the robot counts this much further than one ahead
@@ -93,7 +94,7 @@ class FrontierAgent(BaseAgent):
         self.patrol_target: Optional[Tuple[int, int]] = None
         self._patrol_best = (float("inf"), 0.0)
         self._complete_log_t = -1e9
-        self.strikes: dict = {}
+        self.failed_places = SpatialMemory(bucket=1.0)   # failed attempts, by place in metres
         self.committed_frontier: Optional[Tuple[int, int]] = None  # raw frontier cell behind committed_target (a nav cell)
         self._raw_of: dict = {}
         self.visited_positions: List[Tuple[float, float]] = []
@@ -116,20 +117,30 @@ class FrontierAgent(BaseAgent):
         return any(math.hypot(dw[0] - vd[0], dw[1] - vd[1]) < 0.65 for vd in self.visited_doorways)
 
     def _is_blacklisted(self, gx: int, gy: int, radius: float = RETIRE_RADIUS) -> bool:
-        return self.retired.any_near("frontier", gx, gy, radius)
+        if self.retired.any_near("frontier", gx, gy, radius):
+            return True
+        wx, wy = self.grid.grid_to_world(gx, gy)
+        return self.retired.any_near("place", wx, wy, FAIL_RADIUS_M)
 
     def _strike(self, cell, limit: int) -> None:
-        """Count a failed attempt at a frontier; retire it permanently after `limit` failures."""
+        """Count a failed attempt at a frontier; after `limit` failures within FAIL_RADIUS_M the place is retired.
+        By place, not by cell: in rubble the frontier point beside an unreachable gap moves 0.25-0.5 m with every map
+        update, and counting per 0.3 m cell let rescue run 12 try five points of one place for 300 s."""
         if cell is None:
             return
-        k = (int(cell[0]) // 6, int(cell[1]) // 6)
-        self.strikes[k] = self.strikes.get(k, 0) + 1
-        if self.strikes[k] >= limit:
+        wx, wy = self.grid.grid_to_world(int(cell[0]), int(cell[1]))
+        self.failed_places.add("fail", wx, wy)
+        if sum(1 for _ in self.failed_places.near("fail", wx, wy, FAIL_RADIUS_M)) >= limit:
             self.retired.add("frontier", int(cell[0]), int(cell[1]))
+            self.retired.add("place", wx, wy)
 
     def _retire_committed(self, limit: int) -> None:
-        self._strike(self.committed_target, limit)
-        self._strike(self.committed_frontier, limit)
+        """One attempt is one failure, counted at the frontier (its viewpoint is within FAIL_RADIUS_M of it)."""
+        self._strike(self.committed_frontier if self.committed_frontier is not None else self.committed_target, limit)
+        if self.committed_target is not None:
+            wx, wy = self.grid.grid_to_world(*self.committed_target)
+            if self.retired.any_near("place", wx, wy, FAIL_RADIUS_M) or self._is_blacklisted(*self.committed_target):
+                self.retired.add("frontier", int(self.committed_target[0]), int(self.committed_target[1]))
 
     def _remember_explored(self, room_id: int, room_labels) -> None:
         """Keep the floor of a finished room by place, not by label: labels change when the map is re-segmented."""

@@ -1132,6 +1132,25 @@ def test_pose_follows_gyro_and_legs_while_the_camera_sees_nothing():
     print("PASSED")
 
 
+def test_failures_count_by_place_when_the_frontier_point_wanders():
+    """In rubble the frontier point next to an unreachable gap moves 0.25-0.5 m every time the map updates. Failures
+    were counted per 0.3 m grid bucket, so rescue run 12 tried five such points within 0.6 m of each other for 300 s
+    and never retired the place. Two failures within FAIL_RADIUS_M retire the place."""
+    print("Running test_failures_count_by_place_when_the_frontier_point_wanders...", end=" ")
+    grid = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.grid = grid
+    a = grid.world_to_grid(0.00, 1.60)
+    b = grid.world_to_grid(0.25, 1.75)             # the same gap, its frontier point moved 0.29 m
+    c = grid.world_to_grid(-0.20, 1.90)            # and moved again
+    fa._strike(a, limit=2)
+    fa._strike(b, limit=2)
+    assert fa._is_blacklisted(*c), "third wandering point of a twice-failed place is still a target"
+    far = grid.world_to_grid(1.5, 0.0)
+    assert not fa._is_blacklisted(*far), "a place 1.5 m away was retired too"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -1189,6 +1208,7 @@ if __name__ == "__main__":
     test_frontier_is_viewed_from_a_standoff_not_from_the_drop()
     test_narrow_first_view_does_not_end_the_mission()
     test_pose_follows_gyro_and_legs_while_the_camera_sees_nothing()
+    test_failures_count_by_place_when_the_frontier_point_wanders()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 
