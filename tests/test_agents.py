@@ -795,6 +795,22 @@ def test_far_tiny_frontier_is_left_to_patrol_near_one_is_explored():
     print("PASSED")
 
 
+def test_frontier_at_the_map_edge_is_not_a_target():
+    """Rescue run 5: the floor runs past the 11 x 11 m map window; frontiers on the window edge were chased and found
+    unreachable twice. Unknown space beyond the map cannot be explored."""
+    print("Running test_frontier_at_the_map_edge_is_not_a_target...", end=" ")
+    grid = BayesianOccupancyGrid(-2.0, 2.0, -2.0, 2.0, 0.05)
+    lo = grid.grid_log_odds
+    lo[:] = -2.0                     # all free ...
+    lo[:, 0:2] = 0.0                 # ... except a strip of unknown on the map's west edge
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_pose(PoseMsg(timestamp=1.0, x=0.5, y=0.0, yaw=0.0))
+    fa.visits.add("visit", 0.5, 0.0, t=1.0)
+    tgt = fa.select_frontier(current_time=10.0)
+    assert fa.state == "MISSION_COMPLETE" or (tgt is not None and tgt.target_wx > -1.7),         f"robot sent to the map edge ({tgt.target_wx:.2f}, {tgt.target_wy:.2f})"
+    print("PASSED")
+
+
 def test_compiled_wavefront_matches_python():
     """The numba geodesic wavefront and the Python loop give a bit-identical distance field."""
     print("Running test_compiled_wavefront_matches_python...", end=" ")
@@ -1020,6 +1036,7 @@ if __name__ == "__main__":
     test_unfinished_room_is_not_abandoned_on_label_change()
     test_patrol_after_exploration_instead_of_idle()
     test_patrol_walks_unwalked_floor_first()
+    test_frontier_at_the_map_edge_is_not_a_target()
     test_far_tiny_frontier_is_left_to_patrol_near_one_is_explored()
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()

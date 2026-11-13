@@ -1,8 +1,9 @@
 {
   "odom_scale": 0.754,
   "narrow_gaps": true,
-  "note": "SearchRescueScene: odom_scale from runs/20261113_213216 (evaluation/floor_calibration.py); rubble needs narrow gaps; manhattan_gain 0: rubble is not at right angles (replay of rescue run 2: ATE 20.3 -> 12.4 cm, max 43 -> 20 cm); gyro_calibration_s 8: stand still at start to measure gyro bias (no right-angle prior to cancel it)",
+  "note": "SearchRescueScene: odom_scale from runs/20261113_213216 (evaluation/floor_calibration.py); rubble needs narrow gaps; manhattan_gain 0: rubble is not at right angles (replay of rescue run 2: ATE 20.3 -> 12.4 cm, max 43 -> 20 cm); gyro_calibration_s 8: stand still at start to measure gyro bias (no right-angle prior to cancel it); icp_yaw_weight 0: with the gyro bias removed, scan heading pull hurts in rubble (replay of rescue run 5: 14.4 -> 10.5 cm, heading 1.71 -> 1.05 deg)",
   "scene_truth": "evaluation/data/scene_truth_searchrescuescene.json",
   "manhattan_gain": 0.0,
-  "gyro_calibration_s": 8.0
+  "gyro_calibration_s": 8.0,
+  "icp_yaw_weight": 0.0
 }

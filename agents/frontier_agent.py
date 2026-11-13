@@ -49,6 +49,7 @@ if njit is not None:
 else:
     _wavefront_kernel = None
 
+MAP_EDGE_CELLS = 3          # frontiers this close to the map window's edge open onto space outside the map
 MIN_GLOBAL_AREA = 10       # cells: a smaller frontier is only worth a trip if it is near
 NEAR_FRONTIER_M = 3.0      # ... this close (m); far tiny ones are left to the floor-coverage patrol
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
@@ -508,6 +509,8 @@ class FrontierAgent(BaseAgent):
             gx, gy, area = f
             if self._is_blacklisted(gx, gy):
                 continue
+            if min(gx, gy, self.grid.width - 1 - gx, self.grid.height - 1 - gy) < MAP_EDGE_CELLS:
+                continue  # unknown space beyond the map window cannot be explored (rescue floor runs past it)
             geo_dist, nav_cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=6)
             if not np.isfinite(geo_dist):
                 continue  # Provably unreachable by A* right now -> skip!
