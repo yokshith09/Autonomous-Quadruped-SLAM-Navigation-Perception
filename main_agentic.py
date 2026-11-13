@@ -214,6 +214,11 @@ def main():
 
     robot = LizardRobot(sim)
     init_x, init_y, init_heading, _ = robot.get_pose()
+    global MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX
+    if "map_half_m" in scene:  # the map window must cover the whole floor, or space past its edge is never explored
+        h = float(scene["map_half_m"])
+        MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX = -h, h, -h, h
+    print(f"  [SCENE] map window x {MAP_X_MIN:.2f}..{MAP_X_MAX:.2f} y {MAP_Y_MIN:.2f}..{MAP_Y_MAX:.2f} m")
 
     # 1. Instantiate Message Bus
     bus = MessageBus()
@@ -281,7 +286,7 @@ def main():
     t = 0.0
     complete_streak = 0  # frontier evaluations in a row reporting MISSION_COMPLETE
     complete_at = None   # simulated time when no reachable frontier was left (the run continues to --max-time)
-    rec = {"t": [], "gt": [], "offsets": [0], "act": []}
+    rec = {"t": [], "gt": [], "offsets": [0], "act": [], "load": []}
     # Scans go straight to a raw float64 file instead of a list in memory (F15): a 50 min run holds about 0.67 GB of
     # scan points, and joining them at the end made a second full copy. The saved .npz format is unchanged.
     rec_fh = open(args.record + ".scans.f64", "wb") if args.record else None
@@ -402,6 +407,7 @@ def main():
                 fresh = act is not None and act.timestamp == t
                 rec["act"].append((act.odom_forward, act.odom_lateral, act.gyro_dyaw, act.speed, 1.0) if fresh
                                   else (0.0, 0.0, 0.0, 0.0, 0.0))
+                rec["load"].append(locomotion_agent.last_load)  # hip load / command (nan when not measured)
 
             # Step 6: Supervisor Agent (Knowledge graph & memory events)
             if step_count % 10 == 0:
@@ -566,7 +572,7 @@ def main():
                 np.savez_compressed(
                     args.record, **({"cloud_points": cloud, "cloud_offsets": np.array(cloud_offsets[:n_rec + 1], dtype=np.int64)}
                                     if cloud_fh is not None else {}),
-                    thumbs=thumbs, thumb_steps=np.array(rec_thumb_steps, dtype=np.int64), t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
+                    thumbs=thumbs, thumb_steps=np.array(rec_thumb_steps, dtype=np.int64), t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]), leg_load=np.array(rec["load"], dtype=np.float32),
                     scan_points=pts, scan_offsets=np.array(rec["offsets"][:n_rec + 1], dtype=np.int64),
                     initial_pose=np.array([init_x, init_y, init_heading]))
                 del pts, cloud

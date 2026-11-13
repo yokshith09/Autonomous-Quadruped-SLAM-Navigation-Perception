@@ -16,7 +16,7 @@ import sys
 import numpy as np
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 
-RES, X0, N = 0.05, -5.5, 221          # the robot's map grid (main_agentic MAP_*_MIN/MAX, GRID_RES)
+RES = 0.05                            # the robot's map grid (main_agentic GRID_RES)
 BAND = (0.04, 0.25)                   # metres above the floor top
 SAMPLE = 0.01                         # surface sampling step (m)
 
@@ -40,7 +40,13 @@ def _sample(tris):
     return np.vstack(out) if out else np.empty((0, 3))
 
 
-def build(key):
+def build(key, half=None):
+    """half: map window half-size (m); default the scene profile's map_half_m, else main_agentic's 5.5."""
+    if half is None:
+        prof = f"config/scenes/{key}.json"
+        half = json.load(open(prof, encoding="utf-8")).get("map_half_m", 5.5) if os.path.exists(prof) else 5.5
+    X0 = -float(half)
+    N = int(round(2 * half / RES)) + 1    # BayesianOccupancyGrid cell count for that window
     sim = RemoteAPIClient().require("sim")
     shapes = [h for h in sim.getObjectsInTree(sim.handle_scene, sim.object_shape_type, 0)]
     robot = None
@@ -82,7 +88,7 @@ def build(key):
     fb = floor_box or (lo, hi, lo, hi)
     area = [max(lo, fb[0]), min(hi, fb[1]), max(lo, fb[2]), min(hi, fb[3])]
     out = f"evaluation/data/scene_truth_{key}.json"
-    json.dump({"grid": grid_path, "area_xyxy": area, "band_above_floor_m": BAND, "floor_top_z": floor_top},
+    json.dump({"grid": grid_path, "x0": X0, "area_xyxy": area, "band_above_floor_m": BAND, "floor_top_z": floor_top},
               open(out, "w", encoding="utf-8"), indent=1)
     print(f"  obstacle cells {int(occ.sum())} ({occ.sum() * RES * RES:.1f} m2) | scored area x {area[0]:.2f}..{area[1]:.2f} "
           f"y {area[2]:.2f}..{area[3]:.2f} | floor top z {floor_top:.3f} -> {out}")

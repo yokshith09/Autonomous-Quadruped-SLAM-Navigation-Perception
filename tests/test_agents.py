@@ -1032,6 +1032,65 @@ def test_compiled_raycast_matches_python():
     print("PASSED")
 
 
+def test_near_frontier_behind_beats_far_one_ahead():
+    """Turning round costs a few seconds, not metres: a frontier 0.8 m behind beats one 5 m ahead (the old heading
+    bonus and reversal penalty were worth about 12 m of walking, so rescue run 8 walked the west strip end to end and
+    back for the frontiers it had passed). A frontier only slightly further ahead still beats one just behind."""
+    print("Running test_near_frontier_behind_beats_far_one_ahead...", end=" ")
+    g = BayesianOccupancyGrid(-5.5, 5.5, -5.5, 5.5, 0.05)
+    fa = FrontierAgent(MessageBus(), grid_ref=g)
+    fa.grid = g
+
+    def pick(ahead_m, behind_m):
+        a, b = g.world_to_grid(ahead_m, 0.0), g.world_to_grid(-behind_m, 0.0)
+        best = fa._score_frontiers([((a[0], a[1], 20), ahead_m), ((b[0], b[1], 20), behind_m)], 0.0, 0.0, 0.0)
+        return "ahead" if (best[0], best[1]) == a else "behind"
+
+    assert pick(5.0, 0.8) == "behind", "walked 5 m ahead instead of turning for a frontier 0.8 m behind"
+    assert pick(1.3, 1.0) == "ahead", "turned round for a frontier only 0.3 m nearer"
+    print("PASSED")
+
+
+def test_floor_calibration_uses_net_progress_not_swaying_path():
+    """The body sways sideways with every step, so its path is longer than its progress. Calibrating leg odometry on
+    path length left it 7 % long on the rescue floor (net 0.931 vs path 0.995), and with nothing to scan-match in open
+    floor rescue run 9 drifted 3 cm every 5 s. The calibration must return net progress / odometry."""
+    print("Running test_floor_calibration_uses_net_progress_not_swaying_path...", end=" ")
+    import os, tempfile
+    from evaluation.floor_calibration import ratio
+    n, dt = 2400, 0.05
+    t = np.arange(n) * dt
+    odo = np.full(n, 0.004)                      # odometry: 4 mm per step straight ahead
+    x = np.cumsum(0.9 * odo)                     # true progress: 90 % of it
+    y = 0.01 * np.sin(2 * np.pi * t / 0.5)       # 1 cm sideways sway, two steps a second
+    gt = np.column_stack([x, y, np.zeros(n)])
+    act = np.column_stack([odo, np.zeros(n), np.zeros(n), np.full(n, 0.75), np.ones(n)])
+    path = os.path.join(tempfile.mkdtemp(), "rec.npz")
+    np.savez(path, t=t, gt=gt, act=act)
+    r, _ = ratio(path)
+    assert abs(r - 0.9) < 0.01, f"calibration {r:.3f}, true net progress ratio 0.900"
+    print("PASSED")
+
+
+def test_frontier_is_viewed_from_a_standoff_not_from_the_drop():
+    """The rescue floor ends in a drop with no wall: beyond its edge stays unknown for ever. Rescue run 9 picked
+    frontier viewpoints 7 cm from the edge (one past it) while its position error was 30 cm. The robot must stand
+    back from unknown space when it goes to look at it; the camera sees well past its 0.22 m blind zone."""
+    print("Running test_frontier_is_viewed_from_a_standoff_not_from_the_drop...", end=" ")
+    from agents.frontier_agent import STANDOFF_M
+    grid = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+    lo = grid.grid_log_odds
+    lo[:] = 0.0                      # unknown ...
+    lo[:, :80] = -2.0                # ... floor seen up to x = +1.0, nothing past it (the edge of the floor)
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_pose(PoseMsg(timestamp=1.0, x=-2.0, y=0.0, yaw=0.0))
+    tgt = fa.select_frontier(current_time=10.0)
+    assert tgt is not None, "no target"
+    edge_x = grid.grid_to_world(80, 0)[0] - 0.5 * grid.res
+    assert edge_x - tgt.target_wx >= STANDOFF_M - grid.res,         f"viewpoint {edge_x - tgt.target_wx:.2f} m from unknown space (standoff {STANDOFF_M} m)"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -1084,6 +1143,9 @@ if __name__ == "__main__":
     test_target_without_progress_is_dropped()
     test_grid_world_round_trip()
     test_compiled_raycast_matches_python()
+    test_near_frontier_behind_beats_far_one_ahead()
+    test_floor_calibration_uses_net_progress_not_swaying_path()
+    test_frontier_is_viewed_from_a_standoff_not_from_the_drop()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 

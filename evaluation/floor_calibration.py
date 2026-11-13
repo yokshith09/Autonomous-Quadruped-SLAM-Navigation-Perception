@@ -13,14 +13,29 @@ import argparse
 import numpy as np
 
 
+WINDOW = 100   # steps (5 s at 20 Hz): long enough for the sideways sway of each step to cancel
+
+
 def ratio(recording, cmd=0.75):
+    """True net progress / odometry over windows of steady walking. Net progress, not path length: the body sways
+    sideways with every step, so its path is longer than the ground it gains (rescue floor: path 0.995, net 0.931),
+    and SLAM integrates odometry as progress along the heading."""
     z = np.load(recording)
-    t, a, g = z["t"], z["act"], z["gt"]
-    d = np.hypot(np.diff(g[:, 0]), np.diff(g[:, 1]))
-    walk = (np.abs(a[1:, 3] - cmd) < 1e-3) & (a[1:, 4] > 0)
-    if walk.sum() < 200:
-        raise SystemExit(f"only {walk.sum()} walking steps at command {cmd}; record a longer run")
-    return float(d[walk].sum() / a[1:][walk, 0].sum()), int(walk.sum())
+    a, g = z["act"], z["gt"]
+    walk = (np.abs(a[:, 3] - cmd) < 1e-3) & (a[:, 4] > 0)
+    true_sum = odo_sum = 0.0
+    n = 0
+    for k in range(0, len(g) - WINDOW, WINDOW):
+        if not walk[k + 1:k + WINDOW + 1].all():
+            continue
+        h = g[k:k + WINDOW, 2]                       # odometry laid along the true heading: isolates distance error
+        f = a[k + 1:k + WINDOW + 1, 0]
+        odo_sum += np.hypot((f * np.cos(h)).sum(), (f * np.sin(h)).sum())
+        true_sum += np.hypot(*(g[k + WINDOW, :2] - g[k, :2]))
+        n += WINDOW
+    if n < 2000:
+        raise SystemExit(f"only {n} steps of steady walking at command {cmd}; record a longer run")
+    return float(true_sum / odo_sum), n
 
 
 def main():
@@ -29,7 +44,7 @@ def main():
     ap.add_argument("--current-scale", type=float, default=1.0, help="odom_scale the recording was made with")
     args = ap.parse_args()
     r, n = ratio(args.recording)
-    print(f"  true / odometry distance over {n} walking steps: {r:.3f}")
+    print(f"  true net progress / odometry over {n} walking steps: {r:.3f}")
     print(f"  odom_scale for this floor: {args.current_scale * r:.3f}")
 
 

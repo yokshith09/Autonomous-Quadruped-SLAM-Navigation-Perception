@@ -57,6 +57,7 @@ class LocomotionAgent(BaseAgent):
         self._goal_best_time = None
         self._load_hist = deque(maxlen=STALL_WINDOW)  # hip load / gait command, one sample per walking step
         self._odom_hist = deque(maxlen=STALL_WINDOW)  # forward odometry reported over the same steps
+        self.last_load = float("nan")  # latest hip load / command, recorded for offline contact studies
 
     def initialize(self) -> bool:
         self.bus.subscribe("plan/path", self.on_path)
@@ -74,12 +75,14 @@ class LocomotionAgent(BaseAgent):
 
     def _leg_blocked(self) -> bool:
         """True when the legs have been loaded well above free walking for the whole window."""
+        self.last_load = float("nan")
         if self.robot is None or self.speed < STALL_MIN_CMD or self.recovery_countdown > 0:
             self._load_hist.clear()
             self._odom_hist.clear()
             return False
         try:
-            self._load_hist.append(self.robot.leg_load() / self.speed)
+            self.last_load = self.robot.leg_load() / self.speed
+            self._load_hist.append(self.last_load)
         except Exception as e:
             self.handle_error(e)
             return False

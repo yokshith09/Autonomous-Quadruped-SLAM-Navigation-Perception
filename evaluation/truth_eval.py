@@ -27,8 +27,8 @@ MATCH_M = 0.5                # a detection within this distance of a real object
 ROBOT_PREFIXES = ("/Base", "/Kinect", "/kinect")
 
 
-def _centres(n):
-    c = X0 + (np.arange(n) + 0.5) * RES
+def _centres(n, x0=X0):
+    c = x0 + (np.arange(n) + 0.5) * RES
     return np.meshgrid(c, c)  # X[gy, gx], Y[gy, gx]
 
 
@@ -67,9 +67,10 @@ def evaluate(run_dir, scene_json="evaluation/data/scene_truth.json"):
     slam, ref = np.load(os.path.join(art, "slam_grid.npy")), np.load(os.path.join(art, "true_grid.npy"))
     spec = json.load(open(scene_json, encoding="utf-8"))
     N = ref.shape[0]
-    X, Y = _centres(N)
+    X, Y = _centres(N, spec.get("x0", X0))   # map window origin (scene profile map_half_m)
     if "grid" in spec:   # mesh-based truth (scene_truth_mesh.py): any scene, compound shapes included
         walls, objects = np.load(spec["grid"]).astype(bool), {}
+        assert walls.shape == ref.shape, f"truth grid {walls.shape} vs map {ref.shape}: rebuild it for this map window"
         x0, x1, y0, y1 = spec["area_xyxy"]
         inside = (X > x0) & (X < x1) & (Y > y0) & (Y < y1)
     else:                # box-based truth (scene_truth.py): scene 1

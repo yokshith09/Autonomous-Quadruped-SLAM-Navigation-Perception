@@ -53,6 +53,9 @@ MAP_EDGE_CELLS = 3          # frontiers this close to the map window's edge open
 MIN_GLOBAL_AREA = 10       # cells: a smaller frontier is only worth a trip if it is near
 NEAR_FRONTIER_M = 3.0      # ... this close (m); far tiny ones are left to the floor-coverage patrol
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
+STANDOFF_M = 0.35         # a frontier is viewed from at least this far back from unknown space: an unwalled floor edge or a
+                          # stairwell stays unknown for ever (rescue run 9 picked viewpoints 7 cm from the drop with a
+                          # 30 cm position error); the camera sees well past its 0.22 m blind zone
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
 DOOR_MAX_FAILS = 2           # doorway transits ending stuck or unreachable before that doorway is skipped
@@ -101,7 +104,6 @@ class FrontierAgent(BaseAgent):
         self.committed_doorway: Optional[Tuple[float, float]] = None
         self._commit_best_d: float = float("inf")  # shortest walking distance to the committed target so far
         self._commit_best_t: float = 0.0           # when it last shrank by COMMIT_PROGRESS_M
-        self.sweep_direction: int = 1  # +1 CCW, -1 CW monotonic room sweep
 
     def initialize(self) -> bool:
         self.bus.subscribe("pose/state", self.on_pose)
@@ -502,6 +504,13 @@ class FrontierAgent(BaseAgent):
                 self._retire_committed(limit=2)
             self.committed_target = None
 
+        # Viewpoints: reachable cells at least STANDOFF_M from unknown space
+        lo = self.grid.grid_log_odds
+        known = ((lo <= self.grid.thresh_free) | (lo >= self.grid.thresh_occ)).astype(np.uint8)
+        clear_of_unknown = cv2.distanceTransform(known, cv2.DIST_L2, 3) * self.grid.res >= STANDOFF_M
+        view_map = np.where(clear_of_unknown, dist_map, np.inf).astype(np.float32)
+        standoff_cells = int(math.ceil(STANDOFF_M / self.grid.res))
+
         # 1. Collect all REACHABLE, OBSERVABLE, non-retired candidates using Geodesic Wavefront
         candidates = []
         self._raw_of = {}
@@ -511,9 +520,9 @@ class FrontierAgent(BaseAgent):
                 continue
             if min(gx, gy, self.grid.width - 1 - gx, self.grid.height - 1 - gy) < MAP_EDGE_CELLS:
                 continue  # unknown space beyond the map window cannot be explored (rescue floor runs past it)
-            geo_dist, nav_cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=6)
+            geo_dist, nav_cell = self._query_geodesic_dist(view_map, gx, gy, search_radius=6 + standoff_cells)
             if not np.isfinite(geo_dist):
-                continue  # Provably unreachable by A* right now -> skip!
+                continue  # no reachable viewpoint at a safe standoff right now -> skip!
             if self._visible_unknown(nav_cell[0], nav_cell[1], gx, gy) < MIN_VISIBLE_UNKNOWN:
                 continue  # behind a wall or inside an object: nothing to see from where the robot can stand
             self._raw_of[nav_cell] = (gx, gy)
@@ -681,21 +690,11 @@ class FrontierAgent(BaseAgent):
         return self._finish(current_time, rx, ry, dist_map, inflated_mask, "No candidate left.")
 
     def _score_frontiers(self, frontier_list, rx, ry, r_yaw: float = 0.0):
-        """Score reachable frontiers using Geodesic Cost-to-Go, Volumetric Gain, and Hemisphere-First Monotonic Sweep."""
+        """Score reachable frontiers by unknown area in view, walking distance, clearance, novelty and turning cost."""
         best_f = None
         best_score = -float('inf')
         h, w = self.grid.height, self.grid.width
 
-        # Check if any candidate lies in the forward hemisphere (|angle_err| <= 95 deg)
-        has_forward_candidate = False
-        for f, _ in frontier_list:
-            fwx, fwy = self.grid.grid_to_world(f[0], f[1])
-            ang_err = abs(norm_angle(math.atan2(fwy - ry, fwx - rx) - r_yaw))
-            if ang_err <= 1.65:  # ~95 degrees
-                has_forward_candidate = True
-                break
-
-        best_signed_err = 0.0
         for f, geo_dist in frontier_list:
             gx, gy, area = f
             wx, wy = self.grid.grid_to_world(gx, gy)
@@ -721,29 +720,15 @@ class FrontierAgent(BaseAgent):
                 min_vis_dist = min(math.hypot(wx - vx, wy - vy) for vx, vy in self.visited_positions)
                 score += min(min_vis_dist * 4.0, 14.0)
 
-            # 5. Hemisphere-First & Monotonic Angular Sweep Continuity
-            target_angle = math.atan2(wy - ry, wx - rx)
-            signed_err = norm_angle(target_angle - r_yaw)
-            angle_err = abs(signed_err)
-
-            # Forward view-cone bonus
-            score += math.cos(angle_err) * 14.0
-
-            # If forward frontiers exist, strongly suppress 180-degree turn reversals (eliminates front/back confusion)
-            if has_forward_candidate and angle_err > 1.90:
-                score -= 18.0
-
-            # Monotonic angular sweep bonus (consistent rotational clearing direction)
-            if (signed_err >= 0 and self.sweep_direction >= 0) or (signed_err < 0 and self.sweep_direction < 0):
-                score += 4.5
+            # 5. Turning cost, the same rule as doorways: a frontier straight behind counts DOOR_TURN_COST_M further.
+            # (A heading bonus plus reversal penalty worth ~12 m of walking made rescue run 8 walk the west strip end
+            # to end and back for frontiers it had passed; turning round takes the robot a few seconds.)
+            turn = abs(norm_angle(math.atan2(wy - ry, wx - rx) - r_yaw))
+            score -= 3.8 * DOOR_TURN_COST_M * turn / math.pi
 
             if score > best_score:
                 best_score = score
                 best_f = f
-                best_signed_err = signed_err
-
-        if abs(best_signed_err) > 0.15:
-            self.sweep_direction = 1 if best_signed_err > 0 else -1
 
         return best_f
 
