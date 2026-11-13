@@ -196,7 +196,7 @@ def main():
     bus = MessageBus()
 
     # 2. Instantiate Autonomous Subsystem Agents
-    perception_agent = PerceptionAgent(bus, sim, depth_cam, rgb_cam, camera_matrix, update_rate_hz=10.0, base=base)
+    perception_agent = PerceptionAgent(bus, sim, depth_cam, rgb_cam, camera_matrix, update_rate_hz=10.0)
     slam_agent = SLAMAgent(
         bus, initial_x=init_x, initial_y=init_y, initial_yaw=init_heading,
         use_ground_truth_nav=args.ground_truth_nav, update_rate_hz=10.0

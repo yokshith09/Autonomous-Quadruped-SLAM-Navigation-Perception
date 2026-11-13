@@ -510,26 +510,6 @@ def test_planner_keeps_path_unless_clearly_shorter():
     print("PASSED")
 
 
-def test_scan_is_levelled_for_body_tilt():
-    """Walking rolls the body up to 5.8 deg: without levelling, floor 3 m away reads ~30 cm high and becomes a phantom
-    wall. Levelling by roll/pitch (not yaw) must give the true height and keep the heading."""
-    print("Running test_scan_is_levelled_for_body_tilt...", end=" ")
-    import math
-    from agents.perception_agent import level_rotation
-    def rz(a): return np.array([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]])
-    def rx(a): return np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
-    def ry(a): return np.array([[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]])
-    R_wb = rz(0.7) @ ry(math.radians(-3.7)) @ rx(math.radians(5.8))
-    floor_w = np.array([[3.0 * math.cos(0.7 + 1.0), 3.0 * math.sin(0.7 + 1.0), -0.15]])  # floor, 3 m away, base 15 cm up
-    body = floor_w @ R_wb                     # what the tilted body sees (R_wb^T p)
-    assert abs(body[0, 2] + 0.15) > 0.10, "test setup: tilt should lift the floor point"
-    lev = body @ level_rotation(R_wb).T
-    assert abs(lev[0, 2] + 0.15) < 1e-9, f"levelled floor height {lev[0, 2]:.3f}"
-    expect = floor_w @ rz(0.7)                # same point in the heading-only frame
-    assert np.allclose(lev, expect), "levelling changed the heading"
-    print("PASSED")
-
-
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -857,7 +837,6 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
-    test_scan_is_levelled_for_body_tilt()
     test_planner_keeps_path_unless_clearly_shorter()
     test_contact_obstacle_stays_in_map()
     test_recovery_turns_away_and_never_reverses()

@@ -495,7 +495,7 @@ class ICPPoseEstimator:
                  use_point_to_line: bool = True, max_trans_disagreement: float = 0.01,
                  trans_disagreement_ratio: float = 1.0, degeneracy_filter: bool = True,
                  max_yaw_disagreement: float = math.radians(3.0), icp_yaw_weight: float = 0.1,
-                 manhattan_gain: float = 0.1, gate_after_degeneracy: bool = False):
+                 manhattan_gain: float = 0.1):
         self.pose = PoseEstimate(x, y, yaw)
         self.previous_scan = None
         self.previous_normals = None
@@ -508,10 +508,6 @@ class ICPPoseEstimator:
         self.max_yaw_disagreement = max_yaw_disagreement
         self.icp_yaw_weight = icp_yaw_weight
         self.manhattan_gain = manhattan_gain
-        # Gate only the part of the scan match that the geometry constrains. Run 24: 68.7 % of steps were rejected for
-        # disagreeing with odometry (median 3.7 cm in a 0.4 cm step): the slide along a featureless wall, which
-        # project_out_degenerate removes, was tested first and threw away the valid correction across the wall.
-        self.gate_after_degeneracy = gate_after_degeneracy
         self.max_manhattan_error = math.radians(15.0)
         self.use_point_to_line = use_point_to_line
         self.loop_manager = KeyframeLoopManager()
@@ -606,19 +602,13 @@ class ICPPoseEstimator:
                 t_fixed, rmse_fixed, corr_fixed = icp_point_to_line(
                     scan, target, target_normals, initial_guess=guess, fixed_rotation=True)
                 tx, ty = t_fixed[0, 2], t_fixed[1, 2]
-                ok = False
                 gate = self.max_trans_disagreement + self.trans_disagreement_ratio * math.hypot(dx_local, dy_local)
-                if corr_fixed >= 20 and np.isfinite(rmse_fixed) and rmse_fixed <= self.max_rmse:
+                if (corr_fixed >= 20 and np.isfinite(rmse_fixed) and rmse_fixed <= self.max_rmse
+                        and math.hypot(tx - dx_local, ty - dy_local) <= gate):
                     aligned = (t_fixed[:2, :2] @ scan.T).T + t_fixed[:2, 2]
                     kept = np.array([tx - dx_local, ty - dy_local])
-                    if self.gate_after_degeneracy and self.degeneracy_filter:
+                    if self.degeneracy_filter:
                         kept = project_out_degenerate(kept, aligned, target, target_normals)
-                        ok = math.hypot(kept[0], kept[1]) <= gate
-                    else:
-                        ok = math.hypot(tx - dx_local, ty - dy_local) <= gate
-                        if ok and self.degeneracy_filter:
-                            kept = project_out_degenerate(kept, aligned, target, target_normals)
-                if corr_fixed >= 20 and np.isfinite(rmse_fixed) and rmse_fixed <= self.max_rmse and ok:
                     dx, dy = dx_local + kept[0], dy_local + kept[1]
                     rmse, correspondences, valid = rmse_fixed, corr_fixed, True
 
