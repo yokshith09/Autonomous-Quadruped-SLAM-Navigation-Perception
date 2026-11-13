@@ -185,3 +185,7 @@ Final candidate: run 19's code (best-sim-v2) + F56 contact memory + F57 stable p
 ### Confirmation run 29 failed; F59 closure cap 0.70 -> 0.50 m (2026-11-13)
 Run 29 (20261113_171057: run 19 code + F56 + F57): healthy to 1837 s (error 3 cm, ATE 19 cm, 0 contacts, all explored at ~1800 s), then one wrong 67 cm closure against a keyframe 176 m old -> 70 cm; stopped at 2100 s (ATE 30 cm). Degeneracy 0.15 would not have stopped it (replay 28.7 vs 30.7 cm).
 Cap 0.70 -> 0.50 replay: run 29 30.7 -> 17.6, run 19 16.5 -> 15.2, run 24 17.9 -> 19.0; old-gait runs 7 and 8 get worse (14.6 -> 43.4, 14.7 -> 38.4) because that gait slipped more and needed corrections over 50 cm. With the current gait every closure over 50 cm seen was wrong (59, 67, 70, 87, 87 cm in runs 18, 29, 13, 12, 17). Adopted 0.50 for the current gait. Confirmation run 30 follows.
+
+### Test-condition findings (2026-11-13)
+- Start pose was not constant: runs 1-11 and 24+ start at (4.000, 4.000, -72.6 deg); runs 12-17 at (4.276, -1.770, 96.6 deg); runs 18-22 (incl. run 19) at (4.276, -1.770, -142.9 deg). Cause unknown (scene state in CoppeliaSim on 2026-11-12; back to the file's pose after restart). Runs from different start poses are different conditions and must not be ranked against each other as code changes.
+- The simulator is not always repeatable: runs 19/20 matched line for line, but runs 29/30 (same start pose, code identical until a >50 cm closure) differ from the first target. A run is one sample.
