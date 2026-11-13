@@ -635,11 +635,15 @@ def test_gyro_bias_is_measured_while_standing_still():
     bias = math.radians(0.05)
     slam = SLAMAgent(MessageBus())
     t = 0.0
+    settle = math.radians(-1.5) / 40           # the body settles -1.5 deg over the first 2 s (rescue run 4)
     for k in range(160):                       # 8 s standing still at 20 Hz
         t = k * 0.05
+        rot = settle if k < 40 else 0.0
         slam.on_actuation(ActuationMsg(timestamp=t, joint_targets={}, heading_error=0.0, speed=0.0, state_str="CALIBRATE",
-                                       odom_forward=0.0, odom_lateral=0.0, gyro_dyaw=bias * 0.05))
-    assert abs(slam.gyro_bias - bias) < 1e-6, f"bias {math.degrees(slam.gyro_bias):.4f} deg/s"
+                                       odom_forward=0.0, odom_lateral=0.0, gyro_dyaw=bias * 0.05 + rot))
+    assert abs(slam.gyro_bias - bias) < 1e-6, f"bias {math.degrees(slam.gyro_bias):.4f} deg/s (settling counted as bias)"
+    # heading keeps the real -1.5 deg settling (plus 8 s of the not-yet-known bias, 0.4 deg)
+    assert abs(math.degrees(slam.accum_odom_dyaw) - (-1.5 + 0.05 * 7.95)) < 0.02, "the real settling rotation was dropped"
     slam.accum_odom_dyaw = 0.0
     for k in range(1, 201):                    # 10 s walking straight: gyro reads only the bias
         slam.on_actuation(ActuationMsg(timestamp=t + k * 0.05, joint_targets={}, heading_error=0.0, speed=0.75,

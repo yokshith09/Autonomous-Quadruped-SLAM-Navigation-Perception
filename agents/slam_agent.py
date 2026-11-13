@@ -5,6 +5,9 @@ from .bus import MessageBus, PoseMsg, ScanMsg, ActuationMsg, MissionEventMsg, Th
 from core.slam import ICPPoseEstimator, wrap_angle
 
 
+GYRO_SETTLE_S = 2.0  # seconds of stand-still calibration ignored for the bias while the body settles
+
+
 class SLAMAgent(BaseAgent):
     def __init__(self, bus: MessageBus, initial_x: float = 0.0, initial_y: float = 0.0, initial_yaw: float = 0.0, 
                  use_ground_truth_nav: bool = False, update_rate_hz: float = 10.0):
@@ -20,7 +23,7 @@ class SLAMAgent(BaseAgent):
         self.odom_distance_m = 0.0
         self.latest_thumb = None  # small grayscale camera view for the loop-closure check
         self.gyro_bias = 0.0           # rad/s, estimated while the robot stands still (CALIBRATE)
-        self._gyro_cal_sum, self._gyro_cal_t, self._gyro_last_t = 0.0, 0.0, None
+        self._gyro_cal_sum, self._gyro_cal_t, self._gyro_last_t, self._gyro_cal_start = 0.0, 0.0, None, None
         self.tipped = False  # set from the locomotion state: robot tipped over
 
     def initialize(self) -> bool:
@@ -51,11 +54,14 @@ class SLAMAgent(BaseAgent):
         dt = 0.0 if last is None else max(0.0, min(t - last, 0.25))
         self._gyro_last_t = t
         if getattr(act_msg, "state_str", "") == "CALIBRATE":
-            if dt > 0.0:  # the first sample has no interval: counting it would bias the mean
+            # The body settles for the first seconds (rescue run 4: -1.49 deg in 0-2 s): that is real rotation, so it
+            # is integrated like any other, but only the settled part estimates the bias.
+            if self._gyro_cal_start is None:
+                self._gyro_cal_start = t
+            if dt > 0.0 and t - self._gyro_cal_start >= GYRO_SETTLE_S:
                 self._gyro_cal_sum += gyro_dyaw
                 self._gyro_cal_t += dt
-            self.gyro_bias = self._gyro_cal_sum / self._gyro_cal_t if self._gyro_cal_t > 0 else 0.0
-            gyro_dyaw = 0.0
+                self.gyro_bias = self._gyro_cal_sum / self._gyro_cal_t
         else:
             gyro_dyaw -= self.gyro_bias * dt
         mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * gyro_dyaw)
