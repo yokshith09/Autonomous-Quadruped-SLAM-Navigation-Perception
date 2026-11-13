@@ -17,8 +17,8 @@ Run 34, folder `runs/20261113_232046`, code tag `best-sim-v3` on `improve/explor
 | Peak memory | 2973 MB | **930 MB** |
 
 Against the baseline: 24 better, 3 worse, 5 within 3 % of 32 metrics. Both runs' map figures are scored with the same obstacle band, 0.04-0.25 m above the floor
-(F62; the baseline was re-scored on it). Wasted walking while exploring is 48 % (baseline 46 %): the new patrol walks unwalked floor such as
-under the table, and this run's 30 min ends shortly after everything was explored (1785 s).
+(F62; the baseline was re-scored on it). Wasted walking while exploring is 48 % (baseline 46 %): from ~1000 s to 1785 s the robot crossed the map for 3-8 cell
+frontier slivers along walls (coverage 80.0 -> 81.0 %). F64 (after this run) skips far slivers; not yet measured.
 
 ## What changed to get here
 
