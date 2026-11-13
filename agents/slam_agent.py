@@ -22,6 +22,7 @@ class SLAMAgent(BaseAgent):
         self.track_times_ms = []
         self.odom_distance_m = 0.0
         self.latest_thumb = None  # small grayscale camera view for the loop-closure check
+        self.calibrating = False       # standing still for gyro calibration: position held (zero-velocity update)
         self.gyro_bias = 0.0           # rad/s, estimated while the robot stands still (CALIBRATE)
         self._gyro_cal_sum, self._gyro_cal_t, self._gyro_last_t, self._gyro_cal_start = 0.0, 0.0, None, None
         self.tipped = False  # set from the locomotion state: robot tipped over
@@ -46,6 +47,7 @@ class SLAMAgent(BaseAgent):
 
     def on_actuation(self, act_msg: ActuationMsg):
         self.tipped = getattr(act_msg, "state_str", "") == "TIPPED"
+        self.calibrating = getattr(act_msg, "state_str", "") == "CALIBRATE"
         gyro_dyaw = act_msg.gyro_dyaw
         # Stand-still gyro calibration: while the robot holds still the true turn rate is zero, so the mean gyro rate
         # is its bias (0.05 deg/s here, 15 deg per 5 min uncorrected). Scene 1's right-angle prior hid it; in rubble
@@ -86,13 +88,21 @@ class SLAMAgent(BaseAgent):
             # Run Point-to-Line Metric ICP with kinematic odometry & gyro prior + loop closure PGO
             self.pose_estimator.loop_manager.current_thumb = self.latest_thumb
             prev_closures = len(self.pose_estimator.loop_manager.loop_closures)
-            slam_pose = self.pose_estimator.update(
-                base_pts,
-                odom_dx=self.accum_odom_dx,
-                odom_dy=self.accum_odom_dy,
-                odom_dyaw=self.accum_odom_dyaw,
-                timestamp=current_time
-            )
+            if self.calibrating:
+                # Zero-velocity update: the robot is standing still (gyro calibration), so position is held. Scan
+                # matching against itself only adds jitter: rescue run 7 drifted 15 cm in 30 s of standing still.
+                # Heading still follows the gyro (the body settles in the first seconds).
+                p = self.pose_estimator.pose
+                p.yaw = wrap_angle(p.yaw + self.accum_odom_dyaw)
+                slam_pose = p
+            else:
+                slam_pose = self.pose_estimator.update(
+                    base_pts,
+                    odom_dx=self.accum_odom_dx,
+                    odom_dy=self.accum_odom_dy,
+                    odom_dyaw=self.accum_odom_dyaw,
+                    timestamp=current_time
+                )
             self.track_times_ms.append((_time.perf_counter() - t_start) * 1000.0)
             self.accum_odom_dx = 0.0
             self.accum_odom_dy = 0.0

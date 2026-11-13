@@ -652,6 +652,28 @@ def test_gyro_bias_is_measured_while_standing_still():
     print("PASSED")
 
 
+def test_position_is_held_while_standing_still():
+    """Rescue run 7: during 32 s of stand-still gyro calibration scan-matching jitter walked the estimate 15 cm. While
+    the robot is known to be still, position is held (zero-velocity update)."""
+    print("Running test_position_is_held_while_standing_still...", end=" ")
+    from agents import SLAMAgent
+    from agents.bus import ActuationMsg
+    bus = MessageBus()
+    slam = SLAMAgent(bus, initial_x=1.0, initial_y=2.0, initial_yaw=0.3)
+    slam.initialize()
+    rng = np.random.default_rng(0)
+    wall = np.array([[2.0, y] for y in np.linspace(-1, 1, 60)] + [[x, 1.5] for x in np.linspace(0.5, 2, 40)])
+    for k in range(200):
+        t = k * 0.05
+        slam.on_actuation(ActuationMsg(timestamp=t, joint_targets={}, heading_error=0.0, speed=0.0, state_str="CALIBRATE",
+                                       odom_forward=0.0, odom_lateral=0.0, gyro_dyaw=0.0))
+        slam.on_scan(ScanMsg(timestamp=t, points_2d=wall + rng.normal(0, 0.02, wall.shape)))
+        slam.step(t)
+    p = slam.pose_estimator.pose
+    assert math.hypot(p.x - 1.0, p.y - 2.0) < 1e-9, f"position moved {math.hypot(p.x - 1.0, p.y - 2.0) * 100:.2f} cm while standing still"
+    print("PASSED")
+
+
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -1041,6 +1063,7 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_position_is_held_while_standing_still()
     test_gyro_bias_is_measured_while_standing_still()
     test_stall_threshold_follows_the_floor_calibration()
     test_narrow_gap_opens_only_with_the_narrow_setting()
