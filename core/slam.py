@@ -294,7 +294,8 @@ class KeyframeLoopManager:
                  max_loop_correction: float = 0.10, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6,
                  loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 0.70, max_loop_yaw_deg: float = 5.0,
                  visual_min_inliers: int = 0, visual_min_age_m: float = 10.0,
-                 degeneracy_ratio: float = 0.0):
+                 degeneracy_ratio: float = 0.15, confirm_above_m: float = 0.0, confirm_window_s: float = 6.0,
+                 confirm_tol_m: float = 0.12, confirm_other_kf: bool = True):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
         # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
         # A fixed gate both rejects the closures that would repair a large drift and accepts impossible ones (a
@@ -319,6 +320,14 @@ class KeyframeLoopManager:
         # slide, and a closure there is arbitrary. When the weakest direction of the matched geometry is under this
         # fraction of the strongest, the correction along it is dropped (0 = off).
         self.degeneracy_ratio = degeneracy_ratio
+        # A large correction is held until a second match (another keyframe if confirm_other_kf) within
+        # confirm_window_s agrees within confirm_tol_m. Single wrong 59-87 cm closures broke runs 12, 13, 17, 18;
+        # a real drift is seen again by the next match. 0 = off.
+        self.confirm_above_m = confirm_above_m
+        self.confirm_window_s = confirm_window_s
+        self.confirm_tol_m = confirm_tol_m
+        self.confirm_other_kf = confirm_other_kf
+        self._pending = None  # (time, dx, dy, keyframe_id)
         self.current_thumb = None
         self.visual_log: List[Dict[str, Any]] = []
         # Closures correct position only; heading stays with the gyro and the Manhattan prior (mean error under
@@ -424,6 +433,16 @@ class KeyframeLoopManager:
                                         "correction": (err_dx, err_dy), "accepted": inl >= self.visual_min_inliers})
                 if inl < self.visual_min_inliers:
                     return None
+
+            if self.confirm_above_m > 0.0 and math.hypot(err_dx, err_dy) > self.confirm_above_m:
+                p = self._pending
+                ok = (p is not None and current_time - p[0] <= self.confirm_window_s
+                      and math.hypot(err_dx - p[1], err_dy - p[2]) <= self.confirm_tol_m
+                      and (not self.confirm_other_kf or p[3] != best_kf.keyframe_id))
+                if not ok:
+                    self._pending = (current_time, err_dx, err_dy, best_kf.keyframe_id)
+                    return None
+                self._pending = None
 
             closure_info = {
                 "keyframe_id": best_kf.keyframe_id,
