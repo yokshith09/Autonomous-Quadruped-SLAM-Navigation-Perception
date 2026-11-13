@@ -180,3 +180,4 @@ Recorded a 600 s run with the full 3D view (6 cm voxels, ~990 points per view; `
 
 ### Run 8 does not reproduce (2026-11-13)
 Reran run 8's code in a separate worktree: tag run8-code (ff74539, the commit in run 8's manifest, written at the end of the run) and 2a9988b (the commit when run 8 started; F44 was committed during the run). Both reruns are identical to each other and diverge from run 8 from 30 s: 30 s 16.5 % explored / 5 cm / now 9 cm vs run 8's 16.1 % / 3 / 4; 60 s 21.1 % / 8 / 16 vs 19.0 % / 4 / 5; the first rerun reached 84 cm error at 90 s and ATE 75 cm, F1 39 % at 300 s. Scene file in the repo unchanged, so the environment (the scene as loaded in CoppeliaSim, or library versions) differs from 2026-11-07. Run 8's 14.7 cm cannot be reproduced today; run 19 (best-sim-v2) is the best reproducible result.
+Final candidate: run 19's code (best-sim-v2) + F56 contact memory + F57 stable path; F55 degeneracy off (default 0.0). Confirmation run 29.

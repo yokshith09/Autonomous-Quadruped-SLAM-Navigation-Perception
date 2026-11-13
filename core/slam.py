@@ -294,7 +294,7 @@ class KeyframeLoopManager:
                  max_loop_correction: float = 0.10, loop_max_rmse: float = 0.03, loop_min_overlap: float = 0.6,
                  loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 0.70, max_loop_yaw_deg: float = 5.0,
                  visual_min_inliers: int = 0, visual_min_age_m: float = 10.0,
-                 degeneracy_ratio: float = 0.15, confirm_above_m: float = 0.0, confirm_window_s: float = 6.0,
+                 degeneracy_ratio: float = 0.0, confirm_above_m: float = 0.0, confirm_window_s: float = 6.0,
                  confirm_tol_m: float = 0.12, confirm_other_kf: bool = True):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
         # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
