@@ -48,6 +48,7 @@ class LocomotionAgent(BaseAgent):
         self.stuck_ticks: int = 0
         self.recovery_countdown: int = 0
         self.recovery_heading: float = 0.0
+        self.calibrate_until: float = 0.0   # seconds of stand-still gyro calibration at the start (scene profile)
         self._walk_steps: int = 0   # steps commanded to walk since the last stall check
         self._window_steps: int = 0
         # Progress watchdog: a goal the robot cannot get closer to (wall in the way, mis-registered map) is dropped.
@@ -131,6 +132,21 @@ class LocomotionAgent(BaseAgent):
         rx, ry, r_yaw = self.latest_pose.x, self.latest_pose.y, self.latest_pose.yaw
         dt_step = max(0.01, current_time - getattr(self, "_prev_cmd_time", current_time - 0.05))
         self._prev_cmd_time = current_time
+
+        # Stand still at the start so SLAM can measure the gyro bias (calibrate_until, from the scene profile).
+        if current_time < self.calibrate_until:
+            self.speed, self.state_str = 0.0, "CALIBRATE"
+            d_fwd, d_lat, dyaw_gyro = 0.0, 0.0, 0.0
+            if self.robot is not None:
+                try:
+                    self.robot.stop_motors()
+                    _, dyaw_gyro = self.robot.get_odometry_imu_delta(dt_step, 0.0)
+                except Exception as e:
+                    self.handle_error(e)
+            self.bus.publish("control/actuation", ActuationMsg(
+                timestamp=current_time, joint_targets={}, heading_error=0.0, speed=0.0, state_str="CALIBRATE",
+                odom_forward=0.0, odom_lateral=0.0, gyro_dyaw=dyaw_gyro))
+            return
 
         # 0. Tipped over (body more than TIPPED_UP_Z from upright): stop the legs and report. SLAM and mapping read the
         # TIPPED state and ignore the camera, which then faces the floor or ceiling and would corrupt the map.

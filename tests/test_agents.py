@@ -626,6 +626,28 @@ def test_stall_threshold_follows_the_floor_calibration():
     print("PASSED")
 
 
+def test_gyro_bias_is_measured_while_standing_still():
+    """Rescue run 3: without the right-angle prior a 0.05 deg/s gyro bias drove heading error to 5 deg. The robot stands
+    still for calibrate_until seconds; SLAM averages the gyro there and removes the bias afterwards."""
+    print("Running test_gyro_bias_is_measured_while_standing_still...", end=" ")
+    from agents import SLAMAgent
+    from agents.bus import ActuationMsg
+    bias = math.radians(0.05)
+    slam = SLAMAgent(MessageBus())
+    t = 0.0
+    for k in range(160):                       # 8 s standing still at 20 Hz
+        t = k * 0.05
+        slam.on_actuation(ActuationMsg(timestamp=t, joint_targets={}, heading_error=0.0, speed=0.0, state_str="CALIBRATE",
+                                       odom_forward=0.0, odom_lateral=0.0, gyro_dyaw=bias * 0.05))
+    assert abs(slam.gyro_bias - bias) < 1e-6, f"bias {math.degrees(slam.gyro_bias):.4f} deg/s"
+    slam.accum_odom_dyaw = 0.0
+    for k in range(1, 201):                    # 10 s walking straight: gyro reads only the bias
+        slam.on_actuation(ActuationMsg(timestamp=t + k * 0.05, joint_targets={}, heading_error=0.0, speed=0.75,
+                                       state_str="WALK", odom_forward=0.004, odom_lateral=0.0, gyro_dyaw=bias * 0.05))
+    assert abs(math.degrees(slam.accum_odom_dyaw)) < 0.01, f"heading drifted {math.degrees(slam.accum_odom_dyaw):.3f} deg"
+    print("PASSED")
+
+
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -998,6 +1020,7 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_gyro_bias_is_measured_while_standing_still()
     test_stall_threshold_follows_the_floor_calibration()
     test_narrow_gap_opens_only_with_the_narrow_setting()
     test_tabletop_is_scan_structure_but_not_an_obstacle()

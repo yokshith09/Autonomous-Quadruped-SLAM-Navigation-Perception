@@ -19,6 +19,8 @@ class SLAMAgent(BaseAgent):
         self.track_times_ms = []
         self.odom_distance_m = 0.0
         self.latest_thumb = None  # small grayscale camera view for the loop-closure check
+        self.gyro_bias = 0.0           # rad/s, estimated while the robot stands still (CALIBRATE)
+        self._gyro_cal_sum, self._gyro_cal_t, self._gyro_last_t = 0.0, 0.0, None
         self.tipped = False  # set from the locomotion state: robot tipped over
 
     def initialize(self) -> bool:
@@ -42,6 +44,20 @@ class SLAMAgent(BaseAgent):
     def on_actuation(self, act_msg: ActuationMsg):
         self.tipped = getattr(act_msg, "state_str", "") == "TIPPED"
         gyro_dyaw = act_msg.gyro_dyaw
+        # Stand-still gyro calibration: while the robot holds still the true turn rate is zero, so the mean gyro rate
+        # is its bias (0.05 deg/s here, 15 deg per 5 min uncorrected). Scene 1's right-angle prior hid it; in rubble
+        # (rescue run 3) it drove heading error to 5 deg and position error to 58 cm.
+        t, last = act_msg.timestamp, self._gyro_last_t
+        dt = 0.0 if last is None else max(0.0, min(t - last, 0.25))
+        self._gyro_last_t = t
+        if getattr(act_msg, "state_str", "") == "CALIBRATE":
+            if dt > 0.0:  # the first sample has no interval: counting it would bias the mean
+                self._gyro_cal_sum += gyro_dyaw
+                self._gyro_cal_t += dt
+            self.gyro_bias = self._gyro_cal_sum / self._gyro_cal_t if self._gyro_cal_t > 0 else 0.0
+            gyro_dyaw = 0.0
+        else:
+            gyro_dyaw -= self.gyro_bias * dt
         mid_yaw = wrap_angle(self.pose_estimator.pose.yaw + self.accum_odom_dyaw + 0.5 * gyro_dyaw)
         odom_lat = getattr(act_msg, "odom_lateral", 0.0)
         self.odom_distance_m += math.hypot(act_msg.odom_forward, odom_lat)

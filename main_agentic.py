@@ -225,12 +225,14 @@ def main():
         use_ground_truth_nav=args.ground_truth_nav, update_rate_hz=10.0
     )
     slam_agent.pose_estimator.loop_manager.visual_min_inliers = args.loop_camera_inliers
+    locomotion_agent_cal = float(scene.get("gyro_calibration_s", 0.0))
     if "manhattan_gain" in scene:  # right-angle wall prior: right for buildings, wrong for scattered rubble
         slam_agent.pose_estimator.manhattan_gain = float(scene["manhattan_gain"])
     mapping_agent = MappingAgent(bus, MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX, resolution=GRID_RES, update_rate_hz=10.0)
     frontier_agent = FrontierAgent(bus, grid_ref=mapping_agent.grid, update_rate_hz=1.0)
     planning_agent = PlanningAgent(bus, grid_ref=mapping_agent.grid, update_rate_hz=5.0)
     locomotion_agent = LocomotionAgent(bus, robot_driver=robot, update_rate_hz=20.0)
+    locomotion_agent.calibrate_until = locomotion_agent_cal
     supervisor_agent = SupervisorAgent(bus, update_rate_hz=2.0)
 
     # Reference Ground-Truth Grid for rigorous numerical benchmarking (decoupled from SLAM grid)
