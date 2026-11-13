@@ -1,6 +1,7 @@
 {
   "odom_scale": 0.754,
   "narrow_gaps": true,
-  "note": "SearchRescueScene: odom_scale from runs/20261113_213216 (evaluation/floor_calibration.py); rubble needs narrow gaps",
-  "scene_truth": "evaluation/data/scene_truth_searchrescuescene.json"
+  "note": "SearchRescueScene: odom_scale from runs/20261113_213216 (evaluation/floor_calibration.py); rubble needs narrow gaps; manhattan_gain 0: rubble is not at right angles (replay of rescue run 2: ATE 20.3 -> 12.4 cm, max 43 -> 20 cm)",
+  "scene_truth": "evaluation/data/scene_truth_searchrescuescene.json",
+  "manhattan_gain": 0.0
 }
