@@ -1,0 +1,83 @@
+{
+ "scene": "evaluation/data/scene_truth.json",
+ "objects_in_band": [
+  "Bill[0]",
+  "Bill[1]",
+  "ConcretBlock",
+  "Cylinder3",
+  "beacon_10",
+  "beacon_8",
+  "beacon_9",
+  "cupboard",
+  "customizableTable",
+  "diningChair",
+  "indoorPlant",
+  "laptop",
+  "obstacle_3"
+ ],
+ "match_radius_m": 0.5,
+ "map_vs_scene": {
+  "f1_score": 0.33631598923432426,
+  "precision": 0.79421768707483,
+  "recall": 0.21332479180012812,
+  "obstacle_iou": 0.057094228686368556,
+  "tolerant_iou": 0.13917685285471143,
+  "free_space_iou": 0.2536317348905445,
+  "overall_grid_accuracy": 0.3552548064126451,
+  "accuracy_meters": 0.16994728810901122,
+  "completion_meters": 1.5251147708977384,
+  "completion_ratio_5cm": 0.10169762972453555,
+  "chamfer_distance_meters": 0.8475310295033748,
+  "hausdorff_95_meters": 3.8996474069179765,
+  "total_true_obstacle_cells": 6244,
+  "total_slam_obstacle_cells": 588,
+  "total_free_cells": 9288,
+  "total_unknown_cells": 38965,
+  "tolerance_margin_meters": 0.15
+ },
+ "reference_vs_scene": {
+  "f1_score": 0.35704154375291114,
+  "precision": 0.8616071428571429,
+  "recall": 0.22517616912235747,
+  "obstacle_iou": 0.05319483789738747,
+  "tolerant_iou": 0.14101353478124015,
+  "free_space_iou": 0.25692188263707194,
+  "overall_grid_accuracy": 0.3586126410188162,
+  "accuracy_meters": 0.10767721499558101,
+  "completion_meters": 1.5434836748541876,
+  "completion_ratio_5cm": 0.10778347213324792,
+  "chamfer_distance_meters": 0.8255804449248842,
+  "hausdorff_95_meters": 3.89688914510762,
+  "total_true_obstacle_cells": 6244,
+  "total_slam_obstacle_cells": 448,
+  "total_free_cells": 9425,
+  "total_unknown_cells": 38968,
+  "tolerance_margin_meters": 0.15
+ },
+ "true_floor_area_m2": 85.73000000000002,
+ "floor_mapped_as_free_pct": 25.711536218359967,
+ "arena_observed_pct": 24.83164983164983,
+ "free_mapped_outside_arena_m2": 0.05250000000000001,
+ "detection": {
+  "real_objects": 13,
+  "objects_found": 2,
+  "objects_found_names": [
+   "Bill[1]",
+   "Cylinder3"
+  ],
+  "object_recall_pct": 15.384615384615385,
+  "detections": 19,
+  "detections_on_a_real_object": 2,
+  "detection_precision_pct": 10.526315789473685,
+  "labelled_chair": 19,
+  "real_chairs": 1,
+  "chair_labels_on_the_real_chair": 0,
+  "wall_entities": 6
+ },
+ "knowledge_graph": {
+  "rooms": 3,
+  "doorways": 4,
+  "rooms_with_centroid_set": 0,
+  "doorways_connecting_rooms_other_than_1_2": 3
+ }
+}

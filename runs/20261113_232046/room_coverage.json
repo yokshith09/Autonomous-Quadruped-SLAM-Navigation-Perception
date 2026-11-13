@@ -1,0 +1,72 @@
+[
+ {
+  "centre": [
+   -3.0,
+   3.5
+  ],
+  "area_m2": 10.640000000000002,
+  "floor_seen_pct": 100.0,
+  "entered": true,
+  "explored": true
+ },
+ {
+  "centre": [
+   3.0,
+   3.5
+  ],
+  "area_m2": 10.640000000000002,
+  "floor_seen_pct": 100.0,
+  "entered": true,
+  "explored": true
+ },
+ {
+  "centre": [
+   -0.009663536776212567,
+   0.9998304642670846
+  ],
+  "area_m2": 28.755000000000006,
+  "floor_seen_pct": 99.9732787031264,
+  "entered": true,
+  "explored": true
+ },
+ {
+  "centre": [
+   -3.0,
+   -1.5
+  ],
+  "area_m2": 10.640000000000002,
+  "floor_seen_pct": 99.70717423133236,
+  "entered": true,
+  "explored": true
+ },
+ {
+  "centre": [
+   3.0,
+   -1.5
+  ],
+  "area_m2": 10.640000000000002,
+  "floor_seen_pct": 99.97557401074744,
+  "entered": true,
+  "explored": true
+ },
+ {
+  "centre": [
+   -3.75,
+   -4.0
+  ],
+  "area_m2": 4.140000000000001,
+  "floor_seen_pct": 90.10830324909747,
+  "entered": true,
+  "explored": true
+ },
+ {
+  "centre": [
+   1.25,
+   -4.0
+  ],
+  "area_m2": 13.140000000000002,
+  "floor_seen_pct": 100.0,
+  "entered": true,
+  "explored": true
+ }
+]

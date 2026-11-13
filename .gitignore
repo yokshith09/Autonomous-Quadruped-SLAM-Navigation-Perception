@@ -13,3 +13,8 @@ accuracy_results/
 captured_matrices/
 
 .playwright-cli/
+
+# Raw recording fragments left by interrupted runs
+runs/*/recording.npz.scans.f64
+runs/*/recording.npz.thumbs.u8
+runs/*/recording.npz.cloud.f32

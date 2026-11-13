@@ -1,0 +1,206 @@
+{
+  "run_id": "20261113_005725",
+  "overall": {
+    "end_reason": "simulation stopped externally",
+    "task_success": false,
+    "explored_complete_at_s": null,
+    "sim_time_s": 608.4999999999943,
+    "wall_time_s": 690.4043369293213,
+    "real_time_factor": 0.8813675804911525,
+    "distance_travelled_gt_m": 53.21123738665918,
+    "rooms_discovered": 10,
+    "rooms_completed": 5,
+    "doorways_detected": 38,
+    "explored_free_area_m2": 64.53000000000002,
+    "explored_pct_of_bounding_box": 58.63925800045045,
+    "stuck_events": 4,
+    "unreachable_targets": 1,
+    "human_interventions": {
+      "value": null,
+      "reason": "no intervention channel exists in the stack; only the 'q' key / external stop, recorded in end_reason"
+    },
+    "collisions": {
+      "value": null,
+      "reason": "CoppeliaSim contact sensing is not wired into the stack"
+    }
+  },
+  "agents": [
+    {
+      "agent": "PerceptionAgent",
+      "rate_hz": 10.0,
+      "calls": 12171,
+      "errors": 0,
+      "ok": 12171,
+      "p50_ms": 3.969400000642054,
+      "p95_ms": 8.457300002191914,
+      "max_ms": 36.17839999787975,
+      "total_s": 61.51650250040984,
+      "task_metric": "median 535 scan pts/update"
+    },
+    {
+      "agent": "SLAMAgent",
+      "rate_hz": 10.0,
+      "calls": 12171,
+      "errors": 0,
+      "ok": 12171,
+      "p50_ms": 6.452900001022499,
+      "p95_ms": 10.803649998706533,
+      "max_ms": 59.77590000111377,
+      "total_s": 83.79599750093621,
+      "task_metric": "26.2% scans matched, 23 loop closures"
+    },
+    {
+      "agent": "MappingAgent",
+      "rate_hz": 10.0,
+      "calls": 12171,
+      "errors": 0,
+      "ok": 12171,
+      "p50_ms": 0.3766000008909032,
+      "p95_ms": 2.0094999999855645,
+      "max_ms": 407.2805000032531,
+      "total_s": 9.462402200231736,
+      "task_metric": "58.6% of grid observed"
+    },
+    {
+      "agent": "FrontierAgent",
+      "rate_hz": 1.0,
+      "calls": 1218,
+      "errors": 0,
+      "ok": 1218,
+      "p50_ms": 12.370249998639338,
+      "p95_ms": 15.160819999073281,
+      "max_ms": 22.799600003054366,
+      "total_s": 13.476004199961608,
+      "task_metric": "5 rooms completed"
+    },
+    {
+      "agent": "PlanningAgent",
+      "rate_hz": 5.0,
+      "calls": 2435,
+      "errors": 0,
+      "ok": 2435,
+      "p50_ms": 0.14870000450173393,
+      "p95_ms": 3.888970001571556,
+      "max_ms": 268.604899996717,
+      "total_s": 2.388503200294508,
+      "task_metric": "194 paths, 1 unreachable"
+    },
+    {
+      "agent": "LocomotionAgent",
+      "rate_hz": 20.0,
+      "calls": 12171,
+      "errors": 0,
+      "ok": 12171,
+      "p50_ms": 7.547200002591126,
+      "p95_ms": 10.706350003601983,
+      "max_ms": 120.45279999438208,
+      "total_s": 96.47058789958828,
+      "task_metric": "4 stuck/watchdog events"
+    },
+    {
+      "agent": "SupervisorAgent",
+      "rate_hz": 2.0,
+      "calls": 1218,
+      "errors": 0,
+      "ok": 1218,
+      "p50_ms": 0.047900000936351717,
+      "p95_ms": 0.10831500148924532,
+      "max_ms": 0.23239999427460134,
+      "total_s": 0.06550799989781808,
+      "task_metric": "164 events logged, 10 rooms in graph"
+    }
+  ],
+  "agents_extra": {
+    "control_loop_p50_ms": 22.313900000881404,
+    "control_loop_p95_ms": 81.33984999949462,
+    "control_loop_max_ms": 1920.954699999129,
+    "component_contribution": {
+      "value": null,
+      "reason": "not measurable from a single live run; run ablate.py on this run's recording"
+    }
+  },
+  "localization": {
+    "ate_rmse_m": 0.451111197926558,
+    "ate_mean_m": 0.3695402212813512,
+    "ate_median_m": 0.23900637797120708,
+    "ate_max_m": 0.8249303731518143,
+    "final_position_error_m": 0.6065041758692289,
+    "final_drift_pct_of_distance": 1.1398046834770434,
+    "rpe_trans_rmse_m_per_1m": 0.09142210157670821,
+    "rpe_trans_pct": 4.770373961201683,
+    "rpe_rot_rmse_deg_per_m": 1.3542575265866674,
+    "rpe_pairs": 11951,
+    "heading_err_mean_deg": 0.8679869859084851,
+    "heading_err_max_deg": 4.788099243992153,
+    "time_error_first_exceeds_0p5m_s": 390.20000000005444,
+    "time_error_first_exceeds_1m_s": null,
+    "tracking_updates": 12170,
+    "icp_acceptance_pct": 26.17912900575185,
+    "tracking_loss_episodes": 200,
+    "tracking_loss_total_s": 241.99999999999704,
+    "relocalized_by_loop_closure_within_30s": 85,
+    "loop_closures": 23,
+    "odometry_distance_m": 45.10702500000564,
+    "odometry_scale_error_pct": -15.230264855079989
+  },
+  "mapping": {
+    "explored_free_area_m2": 64.53000000000002,
+    "occupied_cells": 2828,
+    "reference_occupied_cells": 2093,
+    "wall_accuracy_m": 0.18588453287382498,
+    "wall_completion_m": 0.1026585373657331,
+    "completion_ratio_5cm_pct": 46.67940754897277,
+    "chamfer_m": 0.14427153511977903,
+    "hausdorff95_m": 0.585234995535982,
+    "precision_pct": 58.94625176803394,
+    "recall_pct": 80.02866698518872,
+    "f1_pct": 67.88836424715937,
+    "tolerance_m": 0.15,
+    "free_space_iou_pct": 80.66219145514299,
+    "map_update_p50_ms": 0.3766000008909032,
+    "map_update_p95_ms": 2.0094999999855645,
+    "map_memory_mb": 0.18631362915039062,
+    "frontiers_remaining": 73
+  },
+  "compute": {
+    "cpu": "AMD Ryzen 7 7735HS with Radeon Graphics",
+    "logical_cores": 16,
+    "process_cpu_pct_mean": 50.73567251461988,
+    "process_cpu_pct_p95": 67.7,
+    "rss_mb_mean": 199.06136924342104,
+    "rss_mb_peak": 469.6015625,
+    "resource_samples": 684,
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU, 6144 MiB",
+    "gpu_utilization": {
+      "value": null,
+      "reason": "no code path uses the GPU (NumPy/SciPy/OpenCV on CPU); nothing to attribute"
+    },
+    "slam_tracking_p50_ms": 6.452900001022499,
+    "slam_tracking_p95_ms": 10.803649998706533,
+    "bottleneck_agent": "LocomotionAgent",
+    "telemetry_overhead_ms_per_step": 0.0038457868012859017,
+    "telemetry_overhead_basis": "calibrated estimate: micro-benchmarked cost of the per-agent timing wrapper x calls per step, plus measured tracking bookkeeping; recording the scan stream is not included and no uninstrumented A/B run was made",
+    "note": "process CPU % is per-process and may exceed 100 on multi-core; CoppeliaSim runs in its own process and is not included"
+  },
+  "data_quality": {
+    "warnings": [
+      "mission did not report completion (simulation stopped externally)",
+      "scan matching passed its acceptance gates on only 26 % of updates; rejection reasons are not recorded (and the flag is not refreshed for scans with <20 points), so this is a diagnostic indicator, not a failure rate"
+    ],
+    "limitations": [
+      "Single run: no repeatability or variance claims.",
+      "Ground truth = CoppeliaSim body pose (exact, same timestamps; no alignment applied because SLAM starts at the GT start pose).",
+      "Map reference = occupancy grid built from the same depth stream using the GT pose: it isolates SLAM pose error, but is limited by what the sensor saw; it is not an independent CAD floor plan.",
+      "Simulation only: sensor noise, gait slip and lighting are simulated, not measured on hardware."
+    ],
+    "events": {
+      "ROOM_ENTERED": 4,
+      "OBJECT_DETECTED": 128,
+      "LOOP_CLOSURE_DETECTED": 23,
+      "ROBOT_STUCK": 4,
+      "ROOM_COMPLETED": 4,
+      "PATH_UNREACHABLE": 1
+    },
+    "dropped_samples": {}
+  }
+}

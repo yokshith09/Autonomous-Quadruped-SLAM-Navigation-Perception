@@ -1,0 +1,4 @@
+t_s,state,rooms_cleared,explored_pct,ate_cm,err_now_cm,yaw_err_deg,f1_pct
+0,INTRA_ROOM_SWEEP,0,0.0,0,0,0.0,0
+30,INTRA_ROOM_SWEEP,0,16.0,3,5,0.6,99
+60,INTRA_ROOM_SWEEP,0,20.2,4,5,0.7,99
