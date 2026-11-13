@@ -6,8 +6,16 @@ from .bus import MessageBus, RGBDMsg, ScanMsg
 from core.sensors import depth_to_base_points, grab_depth_frame, grab_rgb_frame
 
 
+def level_rotation(R_wb: np.ndarray) -> np.ndarray:
+    """R_tilt = Rz(yaw)^T @ R_wb: removes roll and pitch from the body orientation, keeps its heading."""
+    yaw = np.arctan2(R_wb[1, 0], R_wb[0, 0])
+    c, s = np.cos(yaw), np.sin(yaw)
+    return np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]]) @ R_wb
+
+
 class PerceptionAgent(BaseAgent):
-    def __init__(self, bus: MessageBus, sim=None, depth_cam=None, rgb_cam=None, camera_matrix=None, update_rate_hz: float = 10.0):
+    def __init__(self, bus: MessageBus, sim=None, depth_cam=None, rgb_cam=None, camera_matrix=None, update_rate_hz: float = 10.0,
+                 base=None):
         super().__init__("PerceptionAgent", bus, update_rate_hz)
         self.sim = sim
         self.depth_cam = depth_cam
@@ -18,6 +26,10 @@ class PerceptionAgent(BaseAgent):
         self.self_mask_radius = 0.22  # 22cm radial deadzone around base origin
         self.min_height = 0.04
         self.max_height = 0.60
+        # Body handle for roll/pitch (an IMU's gravity reading on a real robot; yaw is not used). Walking rolls the body
+        # up to 5.8 deg (tilt_probe): floor 3 m away then reads 30 cm high and enters the 4-60 cm obstacle band as a
+        # phantom wall, which made 69 % of scan matches disagree with odometry (run 24) and put false walls in the map.
+        self.base = base
 
     def initialize(self) -> bool:
         if self.camera_matrix and self.T_base_cam is None:
@@ -25,7 +37,8 @@ class PerceptionAgent(BaseAgent):
         self.is_running = True
         return True
 
-    def process_frame(self, depth_matrix: np.ndarray, rgb_matrix: Optional[np.ndarray], timestamp: float):
+    def process_frame(self, depth_matrix: np.ndarray, rgb_matrix: Optional[np.ndarray], timestamp: float,
+                      tilt: Optional[np.ndarray] = None):
         """Process raw depth and RGB into body-frame 3D points and 2D obstacle scans."""
         if depth_matrix is None:
             return
@@ -41,6 +54,8 @@ class PerceptionAgent(BaseAgent):
         base_points = depth_to_base_points(depth_matrix, self.camera_matrix, self.T_base_cam)
         if len(base_points) == 0:
             return
+        if tilt is not None:
+            base_points = base_points @ tilt.T  # level: z is vertical, heading unchanged
 
         # Radial self-masking in robot base frame: discard returns within chassis/leg radius
         dist_b = np.hypot(base_points[:, 0], base_points[:, 1])
@@ -70,12 +85,18 @@ class PerceptionAgent(BaseAgent):
             min_d = float(np.min(dist_obs)) if len(pts_obs) > 0 else 99.0
             print(f"  [PERCEPTION] Body-frame Scan: {len(sampled_2d)} pts | Closest obstacle: {min_d:.2f}m")
 
+    def _tilt(self) -> Optional[np.ndarray]:
+        """Rotation that takes body-frame points to a gravity-levelled frame with the same heading (roll/pitch only)."""
+        if self.base is None:
+            return None
+        return level_rotation(np.array(self.sim.getObjectMatrix(self.base, self.sim.handle_world)).reshape(3, 4)[:, :3])
+
     def step(self, current_time: float) -> None:
         if self.sim is None or self.depth_cam is None:
             return
         try:
             depth_mat = grab_depth_frame(self.sim, self.depth_cam, self.camera_matrix)
             rgb_mat = grab_rgb_frame(self.sim, self.rgb_cam, self.camera_matrix) if self.rgb_cam else None
-            self.process_frame(depth_mat, rgb_mat, current_time)
+            self.process_frame(depth_mat, rgb_mat, current_time, self._tilt())
         except Exception as e:
             self.handle_error(e)
