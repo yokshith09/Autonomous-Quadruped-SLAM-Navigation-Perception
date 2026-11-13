@@ -6,6 +6,17 @@ from .bus import MessageBus, RGBDMsg, ScanMsg
 from core.sensors import depth_to_base_points, grab_depth_frame, grab_rgb_frame
 
 
+CLOUD_VOXEL = 0.06   # 3D view kept for 3D matching: one point per 6 cm voxel
+CLOUD_MAX_Z = 2.5    # metres above the body origin
+
+
+def voxel_down(points: np.ndarray, voxel: float) -> np.ndarray:
+    if len(points) == 0:
+        return points
+    _, first = np.unique(np.floor(points / voxel).astype(np.int32), axis=0, return_index=True)
+    return points[np.sort(first)]
+
+
 class PerceptionAgent(BaseAgent):
     def __init__(self, bus: MessageBus, sim=None, depth_cam=None, rgb_cam=None, camera_matrix=None, update_rate_hz: float = 10.0):
         super().__init__("PerceptionAgent", bus, update_rate_hz)
@@ -18,6 +29,7 @@ class PerceptionAgent(BaseAgent):
         self.self_mask_radius = 0.22  # 22cm radial deadzone around base origin
         self.min_height = 0.04
         self.max_height = 0.60
+        self.publish_cloud = False  # full 3D view for offline 3D-matching studies (main_agentic --record-3d)
 
     def initialize(self) -> bool:
         if self.camera_matrix and self.T_base_cam is None:
@@ -62,7 +74,9 @@ class PerceptionAgent(BaseAgent):
             timestamp=timestamp,
             points_2d=sampled_2d,
             base_points_3d=pts_map,
-            world_points_3d=pts_map  # Backwards compatibility
+            world_points_3d=pts_map,  # Backwards compatibility
+            cloud_3d=voxel_down(base_points[(dist_b > self.self_mask_radius) & (base_points[:, 2] <= CLOUD_MAX_Z)],
+                                CLOUD_VOXEL).astype(np.float32) if self.publish_cloud else None
         ))
 
         if (timestamp - getattr(self, 'last_log_time', 0.0)) > 30.0:

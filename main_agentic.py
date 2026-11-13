@@ -147,6 +147,8 @@ def main():
                         help="End the run as soon as no reachable frontier is left (default: run the full --max-time)")
     parser.add_argument("--loop-camera-inliers", type=int, default=0,
                         help="a loop closure against a keyframe more than 10 m of walking old needs this many agreeing camera features (0 = scan only)")
+    parser.add_argument("--record-3d", action="store_true",
+                        help="also record the 3D view per step (about 250 MB per 10 min) for evaluation.icp3d_probe")
     parser.add_argument("--show-estimate", action="store_true",
                         help="Draw the SLAM-estimated pose (magenta cross) in the scene; its offset from the robot is the "
                              "live localization error")
@@ -257,6 +259,9 @@ def main():
     # scan points, and joining them at the end made a second full copy. The saved .npz format is unchanged.
     rec_fh = open(args.record + ".scans.f64", "wb") if args.record else None
     thumb_fh = open(args.record + ".thumbs.u8", "wb") if args.record else None
+    cloud_fh = open(args.record + ".cloud.f32", "wb") if args.record and args.record_3d else None
+    perception_agent.publish_cloud = bool(args.record_3d)
+    cloud_offsets = [0]  # 3D view per step, for offline 3D-matching studies
     rec_thumb_steps = []  # step index of every recorded camera view (the loop-closure camera check replays from these)
 
     print("  [OK] Multi-Agent System operational. Commencing systematic exploration.\n")
@@ -309,6 +314,10 @@ def main():
                     else np.empty((0, 2), np.float64)
                 pts.tofile(rec_fh)
                 rec["offsets"].append(rec["offsets"][-1] + len(pts))
+                if cloud_fh is not None:
+                    cl = rec_scan.cloud_3d if rec_scan is not None and rec_scan.cloud_3d is not None                         else np.empty((0, 3), np.float32)
+                    np.ascontiguousarray(cl, dtype=np.float32).tofile(cloud_fh)
+                    cloud_offsets.append(cloud_offsets[-1] + len(cl))
                 rec["t"].append(t)
                 rec["gt"].append((true_x, true_y, true_heading))
             n_track = len(slam_agent.track_times_ms)
@@ -508,6 +517,8 @@ def main():
 
         if thumb_fh is not None:
             thumb_fh.close()
+        if cloud_fh is not None:
+            cloud_fh.close()
         if rec_fh is not None:
             rec_fh.close()
             raw = args.record + ".scans.f64"
@@ -520,14 +531,20 @@ def main():
                 n_th = len(rec_thumb_steps)
                 thumbs = np.fromfile(args.record + ".thumbs.u8", dtype=np.uint8).reshape(
                     n_th, loop_verify.THUMB_SIZE[1], loop_verify.THUMB_SIZE[0]) if n_th else np.empty((0, 1, 1), np.uint8)
+                n_cl = cloud_offsets[n_rec] if cloud_fh is not None else 0
+                cloud = np.memmap(args.record + ".cloud.f32", dtype=np.float32, mode="r", shape=(max(n_cl, 1), 3))[:n_cl]                     if n_cl else np.empty((0, 3), np.float32)
                 np.savez_compressed(
-                    args.record, thumbs=thumbs, thumb_steps=np.array(rec_thumb_steps, dtype=np.int64), t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
+                    args.record, **({"cloud_points": cloud, "cloud_offsets": np.array(cloud_offsets[:n_rec + 1], dtype=np.int64)}
+                                    if cloud_fh is not None else {}),
+                    thumbs=thumbs, thumb_steps=np.array(rec_thumb_steps, dtype=np.int64), t=np.array(rec["t"][:n_rec]), gt=np.array(rec["gt"][:n_rec]), act=np.array(rec["act"]),
                     scan_points=pts, scan_offsets=np.array(rec["offsets"][:n_rec + 1], dtype=np.int64),
                     initial_pose=np.array([init_x, init_y, init_heading]))
-                del pts
+                del pts, cloud
                 print(f"  [SAVED] SLAM input recording ({n_rec} steps) -> {args.record}")
             try:
                 os.remove(args.record + ".thumbs.u8")
+                if cloud_fh is not None:
+                    os.remove(args.record + ".cloud.f32")
                 os.remove(raw)
             except OSError as e:  # Windows keeps a mapped file open until the map is collected
                 print(f"  [WARN] could not remove {raw}: {e}")
