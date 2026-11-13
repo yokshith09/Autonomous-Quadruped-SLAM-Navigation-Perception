@@ -6,6 +6,7 @@ from .bus import MessageBus, RGBDMsg, ScanMsg
 from core.sensors import depth_to_base_points, grab_depth_frame, grab_rgb_frame
 
 
+SCAN_MAX_Z = 0.60      # top of the band used for scan matching (metres above the body origin)
 OBSTACLE_MAX_Z = 0.20  # metres above the body origin; see PerceptionAgent.max_height
 CLOUD_VOXEL = 0.06   # 3D view kept for 3D matching: one point per 6 cm voxel
 CLOUD_MAX_Z = 2.5    # metres above the body origin
@@ -60,23 +61,28 @@ class PerceptionAgent(BaseAgent):
 
         # Radial self-masking in robot base frame: discard returns within chassis/leg radius
         dist_b = np.hypot(base_points[:, 0], base_points[:, 1])
-        map_mask = (dist_b > self.self_mask_radius) & (base_points[:, 2] >= -0.08) & (base_points[:, 2] <= self.max_height)
-        pts_map = base_points[map_mask]
-        if len(pts_map) == 0:
+        z = base_points[:, 2]
+        outside = dist_b > self.self_mask_radius
+        # Two bands. Scan matching keeps the tall band (walls up to SCAN_MAX_Z): its structure is what SLAM needs, and
+        # it keeps SLAM's input identical to earlier recordings. The map and the bumper use the low band (up to
+        # max_height), so a tabletop the robot fits under is not a wall. Live run 32 used the low band for both:
+        # 15 cm error at 150 s against 5-8 cm in runs 19, 24, 31.
+        pts_map = base_points[outside & (z >= -0.08) & (z <= self.max_height)]
+        pts_scan = base_points[outside & (z >= self.min_height) & (z <= SCAN_MAX_Z)]
+        if len(pts_map) == 0 and len(pts_scan) == 0:
             return
-
-        # Obstacle band filtering for 2D scan matching & reactive avoidance
-        obs_mask = pts_map[:, 2] >= self.min_height
-        pts_obs = pts_map[obs_mask]
+        pts_obs = pts_map[pts_map[:, 2] >= self.min_height] if len(pts_map) else np.empty((0, 3))
         dist_obs = np.hypot(pts_obs[:, 0], pts_obs[:, 1]) if len(pts_obs) > 0 else np.array([99.0])
 
-        # Downsample obstacle points for 2D scan matching
-        sampled_2d = pts_obs[::self.point_stride, :2] if len(pts_obs) > 0 else np.empty((0, 2), dtype=np.float64)
+        # Downsample: scan points for matching, low-band obstacle points for the bumper
+        sampled_2d = pts_scan[::self.point_stride, :2] if len(pts_scan) > 0 else np.empty((0, 2), dtype=np.float64)
+        obstacle_2d = pts_obs[::self.point_stride, :2] if len(pts_obs) > 0 else np.empty((0, 2), dtype=np.float64)
 
         # Publish filtered body-frame scan (base_points_3d includes ground + obstacles for raycasting)
         self.bus.publish("sensor/scan", ScanMsg(
             timestamp=timestamp,
             points_2d=sampled_2d,
+            obstacle_2d=obstacle_2d,
             base_points_3d=pts_map,
             world_points_3d=pts_map,  # Backwards compatibility
             cloud_3d=voxel_down(base_points[(dist_b > self.self_mask_radius) & (base_points[:, 2] <= CLOUD_MAX_Z)],

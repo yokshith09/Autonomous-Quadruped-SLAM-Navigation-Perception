@@ -92,9 +92,14 @@ class LocomotionAgent(BaseAgent):
             timestamp=current_time, event_type="ROBOT_STUCK", details={"x": rx, "y": ry, "contact": True,
                                                                     "yaw": self.latest_pose.yaw}))
 
+    def _obstacle_points(self):
+        """Low-band obstacle points (what the body can hit); scan-matching points when perception sent no low band."""
+        o = getattr(self.latest_scan, "obstacle_2d", None)
+        return o if o is not None else self.latest_scan.points_2d
+
     def _open_side(self) -> float:
         """+1 to turn left, -1 to turn right: towards the side whose scan returns are farther (more open)."""
-        pts = None if self.latest_scan is None else self.latest_scan.points_2d
+        pts = None if self.latest_scan is None else self._obstacle_points()
         if pts is None or len(pts) == 0:
             return 1.0
         ahead = pts[(pts[:, 0] > 0.0) & (pts[:, 0] < 1.5)]
@@ -240,8 +245,9 @@ class LocomotionAgent(BaseAgent):
 
                 # Close-range frontal bumper safety envelope (narrowed so lateral doorposts don't trigger false swerving)
                 avoidance_yaw = 0.0
-                if self.latest_scan is not None and self.latest_scan.points_2d is not None and len(self.latest_scan.points_2d) > 0:
-                    pts = self.latest_scan.points_2d
+                obst = self._obstacle_points() if self.latest_scan is not None else None
+                if obst is not None and len(obst) > 0:
+                    pts = obst
                     x_b = pts[:, 0]
                     y_b = pts[:, 1]
 

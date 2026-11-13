@@ -22,6 +22,7 @@ class ScanMsg:
     points_2d: np.ndarray  # (N, 2) in robot base frame
     world_points_3d: Optional[np.ndarray] = None
     base_points_3d: Optional[np.ndarray] = None
+    obstacle_2d: Optional[np.ndarray] = None  # low-band obstacle points for avoidance (None: use points_2d)
     cloud_3d: Optional[np.ndarray] = None  # full 3D view (self-masked, 6 cm voxels, body frame) for 3D matching
 
 

@@ -535,6 +535,34 @@ def test_planner_escapes_a_ring_of_clearance_margins():
     print("PASSED")
 
 
+def test_tabletop_is_scan_structure_but_not_an_obstacle():
+    """The robot (~7 cm tall) fits under a 40-50 cm tabletop. The tabletop stays in the scan-matching points (SLAM
+    keeps its structure) but is not an obstacle for the map or the bumper; the table legs are both."""
+    print("Running test_tabletop_is_scan_structure_but_not_an_obstacle...", end=" ")
+    import agents.perception_agent as pa
+    bus = MessageBus()
+    got = []
+    bus.subscribe("sensor/scan", lambda m: got.append(m))
+    pts = np.array([[1.0, 0.0, 0.40], [1.0, 0.1, 0.42], [1.0, -0.1, 0.41], [1.0, 0.05, 0.40],   # tabletop
+                    [1.0, 0.5, 0.10], [1.0, -0.5, 0.10], [1.0, 0.5, 0.15], [1.0, -0.5, 0.15],    # legs
+                    [2.0, 0.0, -0.05]])                                                          # floor
+    orig = pa.depth_to_base_points
+    pa.depth_to_base_points = lambda *a, **k: pts
+    try:
+        agent = pa.PerceptionAgent(bus, camera_matrix={"T_base_cam": None})
+        agent.point_stride = 1
+        agent.process_frame(np.ones((2, 2)), None, 0.0)
+    finally:
+        pa.depth_to_base_points = orig
+    m = got[-1]
+    top = lambda a: np.any(np.all(np.isclose(a[:, :2], [1.0, 0.0]), axis=1))
+    assert top(m.points_2d), "tabletop dropped from the scan used for matching"
+    assert not top(m.obstacle_2d), "tabletop treated as an obstacle for the bumper"
+    assert m.base_points_3d[:, 2].max() <= pa.OBSTACLE_MAX_Z, "tabletop sent to the map"
+    assert len(m.obstacle_2d) == 4, "table legs missing from the obstacle points"
+    print("PASSED")
+
+
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -862,6 +890,7 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_tabletop_is_scan_structure_but_not_an_obstacle()
     test_planner_escapes_a_ring_of_clearance_margins()
     test_planner_keeps_path_unless_clearly_shorter()
     test_contact_obstacle_stays_in_map()
