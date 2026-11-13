@@ -53,9 +53,10 @@ MAP_EDGE_CELLS = 3          # frontiers this close to the map window's edge open
 MIN_GLOBAL_AREA = 10       # cells: a smaller frontier is only worth a trip if it is near
 NEAR_FRONTIER_M = 3.0      # ... this close (m); far tiny ones are left to the floor-coverage patrol
 MIN_VISIBLE_UNKNOWN = 3   # a frontier must show at least this many unknown cells to its viewpoint, or it is unobservable
-STANDOFF_M = 0.35         # a frontier is viewed from at least this far back from unknown space: an unwalled floor edge or a
+STANDOFF_M = 0.50         # a frontier is viewed from at least this far back from unknown space: an unwalled floor edge or a
                           # stairwell stays unknown for ever (rescue run 9 picked viewpoints 7 cm from the drop with a
-                          # 30 cm position error); the camera sees well past its 0.22 m blind zone
+                          # 30 cm position error; run 13 fell off with 35 cm: in open floor nothing corrects odometry);
+                          # the camera sees well past its 0.22 m blind zone
 RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 FAIL_RADIUS_M = 0.6       # failures this close together are the same place (rescue run 12: points 0.25-0.5 m apart)
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
@@ -373,6 +374,15 @@ class FrontierAgent(BaseAgent):
         # Compute fast Geodesic Wavefront distance map from robot's current cell
         dist_map, inflated_mask = self._compute_geodesic_field(rgx, rgy)
 
+        # Viewpoints: reachable cells at least STANDOFF_M from unknown space. Every frontier target, fresh or slid along a
+        # receding frontier, stands at one (rescue run 13 slid along the floor edge and walked off it).
+        lo = self.grid.grid_log_odds
+        known = ((lo <= self.grid.thresh_free) | (lo >= self.grid.thresh_occ)).astype(np.uint8)
+        clear_of_unknown = cv2.distanceTransform(known, cv2.DIST_L2, 3) * self.grid.res >= STANDOFF_M
+        view_map = np.where(clear_of_unknown, dist_map, np.inf).astype(np.float32)
+        standoff_cells = int(math.ceil(STANDOFF_M / self.grid.res))
+
+
         # Check if committed target was physically reached
         if self.committed_target is not None:
             cwx, cwy = self.grid.grid_to_world(self.committed_target[0], self.committed_target[1])
@@ -457,8 +467,8 @@ class FrontierAgent(BaseAgent):
 
                 # Check if frontier still exists near committed target OR receded forward inside camera cone
                 still_has_frontier = any(
-                    math.hypot(f[0] - self.committed_target[0], f[1] - self.committed_target[1]) <= 9.0
-                    for f in all_frontiers
+                    math.hypot(f[0] - self.committed_target[0], f[1] - self.committed_target[1]) <= 9.0 + standoff_cells
+                    for f in all_frontiers  # the viewpoint stands STANDOFF_M back from its frontier
                 )
                 if still_has_frontier:
                     target_msg = FrontierTargetMsg(
@@ -486,7 +496,7 @@ class FrontierAgent(BaseAgent):
                         if d_shift <= best_slide_d:
                             fwx, fwy = self.grid.grid_to_world(fgx, fgy)
                             ang_err = abs(norm_angle(math.atan2(fwy - ry, fwx - rx) - r_yaw))
-                            f_geo, f_nav = self._query_geodesic_dist(dist_map, fgx, fgy, search_radius=5)
+                            f_geo, f_nav = self._query_geodesic_dist(view_map, fgx, fgy, search_radius=5 + standoff_cells)
                             if ang_err <= 0.65 and np.isfinite(f_geo) and f_geo >= 0.35:
                                 best_slide_d = d_shift
                                 best_slide = (f_nav[0], f_nav[1], fwx, fwy, farea, (fgx, fgy))
@@ -514,13 +524,6 @@ class FrontierAgent(BaseAgent):
             if not np.isfinite(geo_d) or stalled:
                 self._retire_committed(limit=2)
             self.committed_target = None
-
-        # Viewpoints: reachable cells at least STANDOFF_M from unknown space
-        lo = self.grid.grid_log_odds
-        known = ((lo <= self.grid.thresh_free) | (lo >= self.grid.thresh_occ)).astype(np.uint8)
-        clear_of_unknown = cv2.distanceTransform(known, cv2.DIST_L2, 3) * self.grid.res >= STANDOFF_M
-        view_map = np.where(clear_of_unknown, dist_map, np.inf).astype(np.float32)
-        standoff_cells = int(math.ceil(STANDOFF_M / self.grid.res))
 
         # 1. Collect all REACHABLE, OBSERVABLE, non-retired candidates using Geodesic Wavefront
         candidates = []

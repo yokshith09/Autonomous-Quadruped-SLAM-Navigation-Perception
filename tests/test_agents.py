@@ -545,7 +545,8 @@ def test_tabletop_is_scan_structure_but_not_an_obstacle():
     bus.subscribe("sensor/scan", lambda m: got.append(m))
     pts = np.array([[1.0, 0.0, 0.40], [1.0, 0.1, 0.42], [1.0, -0.1, 0.41], [1.0, 0.05, 0.40],   # tabletop
                     [1.0, 0.5, 0.10], [1.0, -0.5, 0.10], [1.0, 0.5, 0.15], [1.0, -0.5, 0.15],    # legs
-                    [2.0, 0.0, -0.05]])                                                          # floor
+                    [2.0, 0.0, -0.05],                                                           # floor
+                    [0.30, 0.0, 0.01], [0.60, 0.0, 0.01]])    # floor ahead (no floor there reads as a drop)
     orig = pa.depth_to_base_points
     pa.depth_to_base_points = lambda *a, **k: pts
     try:
@@ -1151,6 +1152,66 @@ def test_failures_count_by_place_when_the_frontier_point_wanders():
     print("PASSED")
 
 
+def test_target_sliding_along_the_floor_edge_keeps_the_standoff():
+    """Rescue run 13 fell off the floor: as the camera cleared the edge frontier, the committed target slid along it
+    (0.62, 7.82) -> (1.43, 7.88) -> ... within 5 cm of the drop, while the position error was 35 cm. The slide must use
+    the same standoff viewpoints as a fresh choice."""
+    print("Running test_target_sliding_along_the_floor_edge_keeps_the_standoff...", end=" ")
+    from agents.frontier_agent import STANDOFF_M
+    grid = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+    lo = grid.grid_log_odds
+    lo[:] = 0.0
+    edge0 = grid.world_to_grid(0.0, 0.0)[0]
+    lo[:, :edge0] = -2.0                           # floor seen up to x = 0
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-2.0, y=0.0, yaw=0.0))
+    first = fa.select_frontier(current_time=0.0)
+    assert first is not None
+    edge1 = grid.world_to_grid(0.25, 0.0)[0]
+    lo[:, :edge1] = -2.0                           # the camera sees 0.25 m further: the frontier moved on
+    fa.on_pose(PoseMsg(timestamp=1.0, x=-1.8, y=0.0, yaw=0.0))
+    tgt = fa.select_frontier(current_time=1.0)
+    edge_x = grid.grid_to_world(edge1, 0)[0] - 0.5 * grid.res
+    assert edge_x - tgt.target_wx >= STANDOFF_M - grid.res,         f"target {edge_x - tgt.target_wx:.2f} m from unknown space after the frontier moved (standoff {STANDOFF_M} m)"
+    print("PASSED")
+
+
+def test_drop_ahead_is_seen_and_walled_off():
+    """Rescue run 13 walked off the unwalled floor edge with 35 cm of position error: nothing but the map kept it on
+    the floor. The camera sees the floor from ~0.19 m (points at z ~ 0.01 in the body frame): where the floor ends
+    within the window ahead and nothing stands there, a drop is ahead and a virtual wall goes into the obstacle points
+    (bumper, map and planner then keep away), never into the scan used for localization."""
+    print("Running test_drop_ahead_is_seen_and_walled_off...", end=" ")
+    from agents.perception_agent import drop_ahead
+    xs, ys = np.meshgrid(np.arange(0.20, 1.0, 0.01), np.arange(-0.4, 0.4, 0.01))
+    floor = np.column_stack([xs.ravel(), ys.ravel(), np.full(xs.size, 0.012)])
+    assert drop_ahead(floor) is None, "open floor read as a drop"
+    edge = floor[floor[:, 0] < 0.33]                      # the floor ends 0.33 m ahead
+    d = drop_ahead(edge)
+    assert d is not None and 0.30 <= d <= 0.36, f"drop at 0.33 m not found ({d})"
+    block = np.vstack([edge, [[0.30, y, 0.10] for y in np.arange(-0.1, 0.11, 0.02)]])   # a block hides the floor
+    assert drop_ahead(block) is None, "a block in front read as a drop"
+    far_edge = floor[floor[:, 0] < 0.70]                  # floor ends beyond the window: not yet a drop
+    assert drop_ahead(far_edge) is None, "a drop 0.7 m away stopped the robot"
+
+    # In the perception pipeline: virtual wall in obstacle_2d and the map points, not in the localization scan
+    import agents.perception_agent as pa
+    bus = MessageBus()
+    agent = pa.PerceptionAgent(bus, camera_matrix={"T_base_cam": [0.0] * 12})
+    saved = pa.depth_to_base_points
+    pa.depth_to_base_points = lambda *a, **k: edge
+    try:
+        agent.process_frame(np.ones((4, 4), np.float32), None, 1.0)
+    finally:
+        pa.depth_to_base_points = saved
+    scan = bus.get_latest("sensor/scan")
+    assert scan is not None and len(scan.obstacle_2d) > 0, "no virtual wall for the bumper"
+    assert np.all(np.abs(scan.obstacle_2d[:, 0] - d) < 0.10), "virtual wall not at the drop"
+    assert len(scan.points_2d) == 0, "virtual wall leaked into the localization scan"
+    assert (scan.base_points_3d[:, 2] >= 0.04).any(), "virtual wall missing from the map points"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -1209,6 +1270,8 @@ if __name__ == "__main__":
     test_narrow_first_view_does_not_end_the_mission()
     test_pose_follows_gyro_and_legs_while_the_camera_sees_nothing()
     test_failures_count_by_place_when_the_frontier_point_wanders()
+    test_target_sliding_along_the_floor_edge_keeps_the_standoff()
+    test_drop_ahead_is_seen_and_walled_off()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 
