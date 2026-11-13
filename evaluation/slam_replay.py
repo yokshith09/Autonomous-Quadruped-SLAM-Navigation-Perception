@@ -6,6 +6,7 @@ gait speed) plus ground truth for scoring, so SLAM variants can be compared on i
 
   python -m evaluation.slam_replay run.npz
   python -m evaluation.slam_replay run.npz --set icp_yaw_weight=0.2 --set degeneracy_filter=False
+  python -m evaluation.slam_replay run.npz --calibrate-s 32 --set manhattan_gain=0.0 --set icp_yaw_weight=0.0   # rescue
 """
 
 import argparse
@@ -19,7 +20,8 @@ from evaluation.accuracy_evaluator import evaluate_trajectory
 from core.robot import gait_body_speed
 
 
-def replay(path, overrides=None, verbose=False, recalibrate=False):
+def replay(path, overrides=None, verbose=False, recalibrate=False, calibrate_s=0.0):
+    """calibrate_s: the run stood still this long for gyro calibration (scene profile gyro_calibration_s)."""
     rec = np.load(path)
     t, gt, act = rec["t"], rec["gt"], rec["act"]
     pts, offs = rec["scan_points"], rec["scan_offsets"]
@@ -55,7 +57,7 @@ def replay(path, overrides=None, verbose=False, recalibrate=False):
             last_cmd_t = float(t[k])
             fwd = gait_body_speed(float(speed)) * dt if recalibrate else float(rec_fwd)
             bus.publish("control/actuation", ActuationMsg(timestamp=float(t[k]), joint_targets={}, heading_error=0.0,
-                                                          speed=float(speed), state_str="", odom_forward=float(fwd),
+                                                          speed=float(speed), state_str="CALIBRATE" if t[k] < calibrate_s else "", odom_forward=float(fwd),
                                                           odom_lateral=float(lat), gyro_dyaw=float(dyaw)))
     wall = time.perf_counter() - start
     m = evaluate_trajectory(gt, np.array(est), timestamps=t, save_plots=False)
@@ -74,9 +76,10 @@ def main():
     ap.add_argument("recording")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                     help="override an ICPPoseEstimator / KeyframeLoopManager attribute")
+    ap.add_argument("--calibrate-s", type=float, default=0.0, help="stand-still gyro calibration of the run (s)")
     args = ap.parse_args()
     overrides = {k: ast.literal_eval(v) for k, v in (kv.split("=", 1) for kv in args.set)}
-    replay(args.recording, overrides, verbose=True)
+    replay(args.recording, overrides, verbose=True, calibrate_s=args.calibrate_s)
 
 
 if __name__ == "__main__":
