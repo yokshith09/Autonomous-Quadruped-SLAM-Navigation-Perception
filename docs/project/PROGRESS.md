@@ -158,3 +158,4 @@ Run 8's code is tagged `run8-code` (ff74539). F54 put its gait back (leg lift 0.
 ### Final-run configuration (2026-11-13)
 Rejected: confirming a large closure (>0.20/0.30 m) by a second match (any or same keyframe, 6 or 15 s): fixes run 18 (27.2 -> 9.5 cm) but blocks the genuine large corrections of run 7 (14.6 -> 43.4) and run 8 (14.7 -> 42.9). Off by default (`confirm_above_m`).
 Replays of run 19's recording (the route the next identical-code run repeats): base 16.5 cm (max 62); degeneracy 0.15: 15.0 (max 43); gate 1.5-2.0 cm/m: 19.8; camera check: 22.8. Adopted: `degeneracy_ratio` default 0.15 (also better on 4 of 7 recordings, mean 25.2 -> 21.7 cm).
+F56: live run 23 hit an obstacle the camera cannot see five times at (3.0, 0.1) within seconds (turn-away, then the planner routed straight back). Contacts now mark one map cell 0.25 m ahead as occupied, re-applied after every camera update. Run 23 stopped at ~160 s; final run restarted as run 24.

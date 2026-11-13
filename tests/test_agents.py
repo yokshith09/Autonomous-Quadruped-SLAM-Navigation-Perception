@@ -456,6 +456,31 @@ def test_turn_walk_dithering_is_not_a_stall():
     print("PASSED")
 
 
+def test_contact_obstacle_stays_in_map():
+    """Live run 23: five contacts in a row with an obstacle the camera cannot see. A contact marks the cell 0.25 m ahead
+    as occupied, and camera rays passing over it do not clear it."""
+    print("Running test_contact_obstacle_stays_in_map...", end=" ")
+    from agents import MappingAgent
+    from agents.bus import MissionEventMsg
+    bus = MessageBus()
+    m = MappingAgent(bus)
+    m.initialize()
+    bus.publish("mission/event", MissionEventMsg(timestamp=1.0, event_type="ROBOT_STUCK",
+                                                 details={"x": 0.0, "y": 0.0, "contact": True, "yaw": 0.0}))
+    gx, gy = m.grid.world_to_grid(0.25, 0.0)
+    assert m.grid.grid_log_odds[gy, gx] >= m.grid.thresh_occ
+    m.on_pose(PoseMsg(timestamp=1.1, x=-1.0, y=0.0, yaw=0.0))
+    m.on_scan(ScanMsg(timestamp=1.1, points_2d=np.array([[3.0, 0.0]]),
+                      base_points_3d=np.array([[3.0, 0.0, 0.3]]), world_points_3d=np.array([[3.0, 0.0, 0.3]])))
+    for k in range(5):
+        m.step(1.1 + 0.1 * k)
+    assert m.grid.grid_log_odds[gy, gx] >= m.grid.thresh_occ, "camera rays erased the contact obstacle"
+    # a stall that is not a contact (no progress) marks nothing
+    bus.publish("mission/event", MissionEventMsg(timestamp=2.0, event_type="ROBOT_STUCK", details={"x": 2.0, "y": 2.0}))
+    assert len(m.contact_cells) == 1
+    print("PASSED")
+
+
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -783,6 +808,7 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_contact_obstacle_stays_in_map()
     test_recovery_turns_away_and_never_reverses()
     test_turn_walk_dithering_is_not_a_stall()
     test_doorway_ahead_preferred_over_slightly_nearer_one_behind()

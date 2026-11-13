@@ -89,7 +89,8 @@ class LocomotionAgent(BaseAgent):
         self.waypoints = []
         self.wp_idx = 0
         self.bus.publish("mission/event", MissionEventMsg(
-            timestamp=current_time, event_type="ROBOT_STUCK", details={"x": rx, "y": ry}))
+            timestamp=current_time, event_type="ROBOT_STUCK", details={"x": rx, "y": ry, "contact": True,
+                                                                    "yaw": self.latest_pose.yaw}))
 
     def _open_side(self) -> float:
         """+1 to turn left, -1 to turn right: towards the side whose scan returns are farther (more open)."""

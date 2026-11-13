@@ -28,11 +28,16 @@ class MappingAgent(BaseAgent):
         self.room_centroids: Dict[int, Tuple[float, float]] = {}
         self.next_room_id: int = 1
         self._known_entities: List[Tuple[str, str, float, float]] = []
+        # Obstacles the legs ran into but the camera cannot see (too low, or under a table edge): one cell 0.25 m ahead
+        # of each contact stays occupied. Live run 23: five contacts in a row at (3.0, 0.1) because the planner kept
+        # routing back through an obstacle the map never held.
+        self.contact_cells = set()
 
     def initialize(self) -> bool:
         self.bus.subscribe("sensor/scan", self.on_scan)
         self.bus.subscribe("pose/state", self.on_pose)
         self.bus.subscribe("control/actuation", self.on_actuation)
+        self.bus.subscribe("mission/event", self.on_mission_event)
         self.is_running = True
         return True
 
@@ -42,6 +47,16 @@ class MappingAgent(BaseAgent):
     def on_actuation(self, act_msg):
         # Tipped over: the camera faces the floor or ceiling, so its points are not obstacles at the robot's height
         self.tipped = getattr(act_msg, "state_str", "") == "TIPPED"
+
+    def on_mission_event(self, msg):
+        d = getattr(msg, "details", None) or {}
+        if msg.event_type != "ROBOT_STUCK" or not d.get("contact"):
+            return
+        ax, ay = d["x"] + 0.25 * math.cos(d["yaw"]), d["y"] + 0.25 * math.sin(d["yaw"])
+        gx, gy = self.grid.world_to_grid(ax, ay)
+        if 0 <= gx < self.grid.width and 0 <= gy < self.grid.height:
+            self.contact_cells.add((gx, gy))
+            self.grid.grid_log_odds[gy, gx] = self.grid.l_max
 
     def on_pose(self, pose_msg: PoseMsg):
         self.latest_pose = pose_msg
@@ -233,6 +248,8 @@ class MappingAgent(BaseAgent):
                 
                 # Update Bayesian Occupancy Grid via Bresenham raycasting
                 self.grid.update_from_depth_points(pts_w, (rx, ry))
+                for gx, gy in self.contact_cells:  # camera rays pass over these obstacles; keep them
+                    self.grid.grid_log_odds[gy, gx] = self.grid.l_max
 
             # Periodic Room Segmentation & Semantic Entity Extraction
             self.step_counter += 1
