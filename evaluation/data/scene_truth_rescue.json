@@ -1,0 +1,615 @@
+{
+ "objects": [
+  {
+   "alias": "/DefaultCamera",
+   "type": 3,
+   "pos": [
+    -3.1581047243883558,
+    -6.177707610814301,
+    10.911424139227734
+   ]
+  },
+  {
+   "alias": "/XYZCameraProxy",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.75
+   ]
+  },
+  {
+   "alias": "/DefaultLights",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/DefaultLightA",
+   "type": 13,
+   "pos": [
+    -2.5,
+    -3.0,
+    6.0
+   ]
+  },
+  {
+   "alias": "/DefaultLightB",
+   "type": 13,
+   "pos": [
+    3.5,
+    2.5,
+    6.0
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[0]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[1]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[2]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/script[3]",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Floor",
+   "type": 0,
+   "pos": [
+    0.05,
+    -0.07500000000000004,
+    -0.05
+   ],
+   "bbox_size": [
+    16.0,
+    16.0,
+    0.1
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/DamagedBuilding",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Obstacles",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Weapons",
+   "type": 4,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Vehicle",
+   "type": 0,
+   "pos": [
+    1.09359282567527,
+    1.6261657884787866,
+    0.31
+   ],
+   "bbox_size": [
+    4.410627239864229,
+    2.5609800219535845,
+    2.3772779010407636
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Target",
+   "type": 0,
+   "pos": [
+    2.75,
+    2.75,
+    1.28
+   ],
+   "bbox_size": [
+    0.85,
+    0.85,
+    1.46
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/gaitScript",
+   "type": 17,
+   "pos": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base",
+   "type": 0,
+   "pos": [
+    0.0,
+    -1.8,
+    0.055
+   ],
+   "bbox_size": [
+    0.15000000596046448,
+    0.019999999552965164,
+    0.009999999776482582
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/DamagedBuilding/Wall_Left",
+   "type": 0,
+   "pos": [
+    -2.5,
+    3.8,
+    2.55
+   ],
+   "bbox_size": [
+    2.3455478475056726,
+    3.9,
+    3.9
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/DamagedBuilding/Wall_Right",
+   "type": 0,
+   "pos": [
+    1.6912523627281189,
+    4.049999821183337,
+    1.4999998807907104
+   ],
+   "bbox_size": [
+    2.6680604536615777,
+    3.5001446848977578,
+    5.851364758576988
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/DamagedBuilding/Rubble",
+   "type": 0,
+   "pos": [
+    -2.95,
+    1.5500000000000003,
+    0.18
+   ],
+   "bbox_size": [
+    5.866727996142566,
+    3.6116698685214015,
+    1.8572048450771668
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Obstacles/ConcreteBlocks",
+   "type": 0,
+   "pos": [
+    2.8,
+    4.4,
+    0.12
+   ],
+   "bbox_size": [
+    13.82194590254211,
+    12.207893301888099,
+    0.6400000000000001
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Obstacles/WoodenBeam",
+   "type": 0,
+   "pos": [
+    0.09999999999999998,
+    1.15,
+    0.55
+   ],
+   "bbox_size": [
+    3.1,
+    0.24,
+    0.14
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Obstacles/TrafficBarrier",
+   "type": 0,
+   "pos": [
+    -2.15,
+    -0.45,
+    0.95
+   ],
+   "bbox_size": [
+    5.2848697037537,
+    1.1887699168470693,
+    0.99
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Weapons/Knife",
+   "type": 0,
+   "pos": [
+    -1.1691446717414635,
+    -2.5384363742013796,
+    0.28
+   ],
+   "bbox_size": [
+    0.4655850531915616,
+    0.09,
+    0.028
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Weapons/Handgun",
+   "type": 0,
+   "pos": [
+    1.0865584549074345,
+    -2.529583278321849,
+    0.17000000000000004
+   ],
+   "bbox_size": [
+    0.33291128903731526,
+    0.06388387174590748,
+    0.18844725746631535
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Weapons/Rifle",
+   "type": 0,
+   "pos": [
+    -0.16879385241571815,
+    -0.9931595971334867,
+    0.425
+   ],
+   "bbox_size": [
+    0.9793670869535865,
+    0.1767752138289271,
+    0.36687690656411764
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/BackJoint",
+   "type": 1,
+   "pos": [
+    0.07000000029802322,
+    -1.8,
+    0.055
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/FrontJoint",
+   "type": 1,
+   "pos": [
+    -0.07000000029802322,
+    -1.8,
+    0.055
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/Kinect_camera_support",
+   "type": 12,
+   "pos": [
+    -0.05999999865889549,
+    -1.8,
+    0.060000002682209015
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint",
+   "type": 4,
+   "pos": [
+    0.0,
+    -1.8,
+    0.066663019657135
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/BackJoint/BackLink",
+   "type": 0,
+   "pos": [
+    0.06999976187944412,
+    -1.8000003576278687,
+    0.04499981954693794
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.10000000149011612,
+    0.009999999776482582
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/FrontJoint/FrontLink",
+   "type": 0,
+   "pos": [
+    -0.06999976187944412,
+    -1.7999982714653016,
+    0.04499981954693794
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.10000000149011612,
+    0.009999999776482582
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/Kinect_camera_support/kinect",
+   "type": 0,
+   "pos": [
+    -0.05999999865889549,
+    -1.8000000596046448,
+    0.06299998268485069
+   ],
+   "bbox_size": [
+    0.010374998673796654,
+    0.009125000797212124,
+    0.005152632715180516
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint/imu_link",
+   "type": 4,
+   "pos": [
+    0.0,
+    -1.8,
+    0.06666306063532829
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/BackJoint/BackLink/BackLeftJoint",
+   "type": 1,
+   "pos": [
+    0.06999976188014592,
+    -1.8450003594182782,
+    0.03299981945114269
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/BackJoint/BackLink/BackRightJoint",
+   "type": 1,
+   "pos": [
+    0.0699997618801393,
+    -1.7550003558419995,
+    0.032999819434116937
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/FrontJoint/FrontLink/FrontLeftJoint",
+   "type": 1,
+   "pos": [
+    -0.06999976187595276,
+    -1.8449982732527423,
+    0.032999819440010465
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/FrontJoint/FrontLink/FrontRightJoint",
+   "type": 1,
+   "pos": [
+    -0.06999973952420882,
+    -1.7549982585005928,
+    0.033000001984473795
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/Kinect_camera_support/kinect/kinect_joint",
+   "type": 1,
+   "pos": [
+    -0.05999950422936343,
+    -1.800000819898824,
+    0.06417366484530723
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint/imu_link/GyroSensor",
+   "type": 0,
+   "pos": [
+    2.1070536178118695e-07,
+    -1.800000294998615,
+    0.06666266944217338
+   ],
+   "bbox_size": [
+    0.005000054836273193,
+    0.005000054836273193,
+    0.005000054836273193
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint/imu_link/Accelerometer",
+   "type": 0,
+   "pos": [
+    0.0,
+    -1.8,
+    0.06666306063532829
+   ],
+   "bbox_size": [
+    0.005000054836273193,
+    0.005000054836273193,
+    0.005000054836273193
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/BackJoint/BackLink/BackLeftJoint/leg3",
+   "type": 0,
+   "pos": [
+    0.06999962777115619,
+    -1.8450005196105093,
+    0.007899835080970693
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/BackJoint/BackLink/BackRightJoint/leg4",
+   "type": 0,
+   "pos": [
+    0.06999973952985854,
+    -1.75500050858365,
+    0.007899609683881884
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/FrontJoint/FrontLink/FrontLeftJoint/leg1",
+   "type": 0,
+   "pos": [
+    -0.06999990342967904,
+    -1.8449984595157964,
+    0.007899863940838203
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/FrontJoint/FrontLink/FrontRightJoint/leg2",
+   "type": 0,
+   "pos": [
+    -0.06999977676980673,
+    -1.754998433587776,
+    0.007899972910818169
+   ],
+   "bbox_size": [
+    0.019999999552965164,
+    0.019999999552965164,
+    0.004999999888241291
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body",
+   "type": 0,
+   "pos": [
+    -0.05999863908824863,
+    -1.8000026946819414,
+    0.06707628757385395
+   ],
+   "bbox_size": [
+    0.03499923273921013,
+    0.00768810510635376,
+    0.004750004969537258
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint/imu_link/GyroSensor/GyroSensor_reference",
+   "type": 4,
+   "pos": [
+    2.1070536178118695e-07,
+    -1.800000294998615,
+    0.06666266944217338
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint/imu_link/Accelerometer/Accelerometer_reference",
+   "type": 4,
+   "pos": [
+    0.0,
+    -1.8,
+    0.06666306063532829
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint/imu_link/Accelerometer/Accelerometer_forceSensor",
+   "type": 12,
+   "pos": [
+    0.0,
+    -1.8,
+    0.06666306063532829
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body/kinect_depth",
+   "type": 9,
+   "pos": [
+    -0.06365423629360865,
+    -1.8017649314833966,
+    0.06704934607892339
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body/kinect_glass",
+   "type": 0,
+   "pos": [
+    -0.06368681882783736,
+    -1.797065362085529,
+    0.06707111066806501
+   ],
+   "bbox_size": [
+    0.011625003069639206,
+    1.7229467630386353e-08,
+    0.002250010147690773
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/Kinect_camera_support/kinect/kinect_joint/kinect_body/kinect_rgb",
+   "type": 9,
+   "pos": [
+    -0.0636545062441108,
+    -1.8017653578567845,
+    0.06704905953466812
+   ]
+  },
+  {
+   "alias": "/SearchRescueScene/Base/imu_link_joint/imu_link/Accelerometer/Accelerometer_forceSensor/Accelerometer_mass",
+   "type": 0,
+   "pos": [
+    0.0,
+    -1.8,
+    0.06666306063532829
+   ],
+   "bbox_size": [
+    0.005000054836273193,
+    0.005000054836273193,
+    0.005000054836273193
+   ]
+  }
+ ]
+}

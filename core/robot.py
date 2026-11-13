@@ -27,13 +27,17 @@ GAIT_SPEED_CURVE = ((0.0, 0.0), (0.35, 0.0499), (0.75, 0.0790), (1.0, 0.0782))
 GYRO_NOISE_RAD_S = math.radians(0.10)   # white noise on z-rate (MPU-6050 class)
 GYRO_BIAS_RAD_S = math.radians(0.05)    # constant turn-on bias magnitude
 
+ODOM_SCALE = 1.0  # floor calibration: walking speed depends on the floor (scene 1 vs the rescue floor differ ~1.5x at the
+                  # same command). Set per scene from config/scenes/<scene>.json (evaluation/floor_calibration.py).
+
+
 def gait_body_speed(speed_cmd):
     """Calibrated forward body speed for a gait speed command (reverse gait mirrors the forward curve)."""
     s = min(abs(speed_cmd), GAIT_SPEED_CURVE[-1][0])
     for (s0, v0), (s1, v1) in zip(GAIT_SPEED_CURVE, GAIT_SPEED_CURVE[1:]):
         if s <= s1:
-            return math.copysign(v0 + (v1 - v0) * (s - s0) / (s1 - s0), speed_cmd)
-    return math.copysign(GAIT_SPEED_CURVE[-1][1], speed_cmd)
+            return ODOM_SCALE * math.copysign(v0 + (v1 - v0) * (s - s0) / (s1 - s0), speed_cmd)
+    return ODOM_SCALE * math.copysign(GAIT_SPEED_CURVE[-1][1], speed_cmd)
 
 
 def norm_angle(a):

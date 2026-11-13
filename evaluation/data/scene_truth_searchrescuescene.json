@@ -1,0 +1,14 @@
+{
+ "grid": "evaluation/data/scene_truth_searchrescuescene_grid.npy",
+ "area_xyxy": [
+  -5.5,
+  5.550000000000001,
+  -5.5,
+  5.550000000000001
+ ],
+ "band_above_floor_m": [
+  0.04,
+  0.25
+ ],
+ "floor_top_z": 7.450580569168253e-10
+}

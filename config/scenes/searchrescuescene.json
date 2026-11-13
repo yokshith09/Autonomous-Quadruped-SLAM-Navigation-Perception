@@ -1,0 +1,6 @@
+{
+  "odom_scale": 0.754,
+  "narrow_gaps": true,
+  "note": "SearchRescueScene: odom_scale from runs/20261113_213216 (evaluation/floor_calibration.py); rubble needs narrow gaps",
+  "scene_truth": "evaluation/data/scene_truth_searchrescuescene.json"
+}

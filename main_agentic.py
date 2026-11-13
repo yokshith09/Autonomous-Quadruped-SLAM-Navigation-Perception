@@ -34,6 +34,7 @@ from agents import (
 )
 from core import loop_verify
 from core import planner as planner_module
+import core.robot as robot_module
 from core.robot import LizardRobot, patch_coppelasim_scripts, norm_angle
 from core.sensors import initialize_sensors, get_depth_heatmap
 from core.grid import BayesianOccupancyGrid
@@ -48,6 +49,20 @@ except Exception:
     pass
 
 THUMB_EVERY = 3     # a small camera view every 3rd step (0.3 s); the loop-closure camera check uses the latest one
+def scene_profile(sim):
+    """Per-scene settings from config/scenes/<scene>.json, chosen by the loaded scene's file name: floor calibration
+    (odom_scale), narrow-gap planning and the ground-truth file used for scoring. No file: scene-1 defaults."""
+    import re
+    path = sim.getStringParam(sim.stringparam_scene_path_and_name) or ""
+    stem = os.path.splitext(os.path.basename(path))[0]
+    key = re.sub(r"[^a-z0-9]+", "_", re.sub(r"\s*\(\d+\)$", "", stem.lower())).strip("_") or "unknown"
+    prof = {"name": key}
+    f = os.path.join("config", "scenes", key + ".json")
+    if os.path.exists(f):
+        prof.update(json.load(open(f, encoding="utf-8")))
+    return prof
+
+
 MAX_TIME = 3000.0  # owner's mission length (50 min simulated); the robot keeps exploring for all of it
 MAP_X_MIN, MAP_X_MAX = -5.5, 5.5
 MAP_Y_MIN, MAP_Y_MAX = -5.5, 5.5
@@ -150,6 +165,8 @@ def main():
                         help="a loop closure against a keyframe more than 10 m of walking old needs this many agreeing camera features (0 = scan only)")
     parser.add_argument("--narrow-gaps", action="store_true",
                         help="let the planner use a 0.15 m margin (gaps from ~0.35 m) when no route exists at 0.20 m")
+    parser.add_argument("--odom-scale", type=float, default=None,
+                        help="floor calibration factor for leg odometry (default: from config/scenes/<scene>.json, else 1.0)")
     parser.add_argument("--record-3d", action="store_true",
                         help="also record the 3D view per step (about 250 MB per 10 min) for evaluation.icp3d_probe")
     parser.add_argument("--show-estimate", action="store_true",
@@ -172,6 +189,7 @@ def main():
             pass
         client = RemoteAPIClient()
         sim = client.require('sim')
+        scene = scene_profile(sim)
     except Exception as e:
         print(f"  [ERROR] Could not connect to CoppeliaSim (port 23000 not listening): {e}")
         return False
@@ -264,7 +282,9 @@ def main():
     thumb_fh = open(args.record + ".thumbs.u8", "wb") if args.record else None
     cloud_fh = open(args.record + ".cloud.f32", "wb") if args.record and args.record_3d else None
     perception_agent.publish_cloud = bool(args.record_3d)
-    planner_module.NARROW_GAPS = bool(args.narrow_gaps)
+    planner_module.NARROW_GAPS = bool(args.narrow_gaps) or bool(scene.get("narrow_gaps", False))
+    robot_module.ODOM_SCALE = float(args.odom_scale if args.odom_scale is not None else scene.get("odom_scale", 1.0))
+    print(f"  [SCENE] {scene['name']} | odom_scale {robot_module.ODOM_SCALE:.3f} | narrow gaps {planner_module.NARROW_GAPS}", flush=True)
     cloud_offsets = [0]  # 3D view per step, for offline 3D-matching studies
     rec_thumb_steps = []  # step index of every recorded camera view (the loop-closure camera check replays from these)
 
@@ -654,9 +674,10 @@ def main():
                         "accuracy_results/knowledge_graph.json", "accuracy_results/mission_timeline.md"):
                 if os.path.exists(src):
                     shutil.copy(src, art)
-            if os.path.exists(os.path.join("evaluation", "data", "scene_truth.json")):  # scene geometry for scoring only (evaluation/scene_truth.py)
+            truth = scene.get("scene_truth", os.path.join("evaluation", "data", "scene_truth.json"))
+            if truth and os.path.exists(truth):  # scene geometry for scoring only (evaluation/scene_truth.py)
                 from evaluation import truth_eval
-                truth_eval.evaluate(tel.dir)
+                truth_eval.evaluate(tel.dir, scene_json=truth)
             report.build(tel.dir)
             print(f"  Next: python -m evaluation.ablate {tel.dir}   then   python -m evaluation.report {tel.dir}", flush=True)
         except Exception as e:

@@ -65,13 +65,19 @@ def load_truth(scene_json, ref_logodds):
 def evaluate(run_dir, scene_json="evaluation/data/scene_truth.json"):
     art = os.path.join(run_dir, "artifacts")
     slam, ref = np.load(os.path.join(art, "slam_grid.npy")), np.load(os.path.join(art, "true_grid.npy"))
-    walls, objects = load_truth(scene_json, ref)
+    spec = json.load(open(scene_json, encoding="utf-8"))
+    N = ref.shape[0]
+    X, Y = _centres(N)
+    if "grid" in spec:   # mesh-based truth (scene_truth_mesh.py): any scene, compound shapes included
+        walls, objects = np.load(spec["grid"]).astype(bool), {}
+        x0, x1, y0, y1 = spec["area_xyxy"]
+        inside = (X > x0) & (X < x1) & (Y > y0) & (Y < y1)
+    else:                # box-based truth (scene_truth.py): scene 1
+        walls, objects = load_truth(scene_json, ref)
+        inside = (np.abs(X) < ARENA_HALF) & (np.abs(Y) < ARENA_HALF)
     occ = walls.copy()
     for m in objects.values():
         occ |= m
-    N = ref.shape[0]
-    X, Y = _centres(N)
-    inside = (np.abs(X) < ARENA_HALF) & (np.abs(Y) < ARENA_HALF)
     truth = np.zeros((N, N), np.float32)
     truth[inside] = -5.0
     truth[occ] = 5.0
@@ -85,7 +91,7 @@ def evaluate(run_dir, scene_json="evaluation/data/scene_truth.json"):
     out["true_floor_area_m2"] = float(free_truth.sum() * RES ** 2)
     out["floor_mapped_as_free_pct"] = float(100.0 * (slam_free & free_truth).sum() / free_truth.sum())
     out["arena_observed_pct"] = float(100.0 * (slam_known & inside).sum() / inside.sum())
-    outside = (np.abs(X) > 5.05) | (np.abs(Y) > 5.05)
+    outside = ~inside if "grid" in spec else ((np.abs(X) > 5.05) | (np.abs(Y) > 5.05))
     out["free_mapped_outside_arena_m2"] = float((slam_free & outside).sum() * RES ** 2)
 
     kg = json.load(open(os.path.join(art, "knowledge_graph.json"), encoding="utf-8"))
@@ -98,7 +104,7 @@ def evaluate(run_dir, scene_json="evaluation/data/scene_truth.json"):
         for i, p in enumerate(pts):
             dist[i, j] = float(np.min(np.hypot(*(cells - p).T)))
     found = [nm for j, nm in enumerate(names) if len(pts) and dist[:, j].min() <= MATCH_M]
-    real_det = int((dist.min(axis=1) <= MATCH_M).sum()) if len(pts) else 0
+    real_det = int((dist.min(axis=1) <= MATCH_M).sum()) if len(pts) and len(names) else 0
     chair_det = [i for i, e in enumerate(ents) if e["class_name"] == "chair"]
     real_chairs = [j for j, nm in enumerate(names) if "chair" in nm.lower()]
     out["detection"] = {
