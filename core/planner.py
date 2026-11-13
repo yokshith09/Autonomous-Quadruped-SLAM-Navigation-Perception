@@ -10,7 +10,24 @@ from core.grid import bresenham_line
 # reachable up to 4 cells (0.20 m); doorways start to close at 5 (0.25 m). Shared by A*, smoothing and the frontier
 # agent's walking-distance field, which must agree on what is reachable.
 CLEARANCE_CELLS = 4
+ESCAPE_CELLS = 8   # 0.40 m: margin-free radius around the robot's own cell (covers the 0.25 m contact mark + 0.20 m margin, minus overlap)
 CLEARANCE_KERNEL = (2 * CLEARANCE_CELLS + 1, 2 * CLEARANCE_CELLS + 1)
+
+
+def clear_margin_near(inflated, occ, sx, sy):
+    """The robot is standing at (sx, sy), so the clearance margin around its own position must not hold it there:
+    within ESCAPE_CELLS only truly occupied cells block (in place). Live run 30: three remembered contacts (single
+    cells, each with a 0.20 m margin) closed a ring around the robot; it stood idle for the rest of the mission with
+    every target "unreachable"."""
+    h, w = inflated.shape
+    if not (0 <= sx < w and 0 <= sy < h):
+        return
+    y0, y1 = max(0, sy - ESCAPE_CELLS), min(h, sy + ESCAPE_CELLS + 1)
+    x0, x1 = max(0, sx - ESCAPE_CELLS), min(w, sx + ESCAPE_CELLS + 1)
+    yy, xx = np.ogrid[y0:y1, x0:x1]
+    near = (xx - sx) ** 2 + (yy - sy) ** 2 <= ESCAPE_CELLS ** 2
+    inflated[y0:y1, x0:x1][near] = occ[y0:y1, x0:x1][near]
+
 
 def a_star_search(grid, start, goal, smooth=False):
     """
@@ -37,6 +54,8 @@ def a_star_search(grid, start, goal, smooth=False):
     free = (grid.grid_log_odds <= grid.thresh_free).astype(np.uint8)
     traversable = cv2.morphologyEx(free, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8)) > 0
     
+    clear_margin_near(inflated_mask, occ, *start)
+
     def is_inflated(x, y):
         if 0 <= x < grid.width and 0 <= y < grid.height:
             return inflated_mask[y, x] > 0

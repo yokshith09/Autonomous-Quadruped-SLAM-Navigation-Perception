@@ -9,7 +9,7 @@ from .bus import MessageBus, FrontierTargetMsg, GridMapMsg, PoseMsg, MissionEven
 from .spatial_memory import SpatialMemory
 from core.robot import norm_angle
 from core.grid import bresenham_line
-from core.planner import CLEARANCE_KERNEL
+from core.planner import CLEARANCE_KERNEL, clear_margin_near
 
 try:
     from numba import njit
@@ -161,6 +161,7 @@ class FrontierAgent(BaseAgent):
         occ = (self.grid.grid_log_odds > self.grid.thresh_occ).astype(np.uint8)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, CLEARANCE_KERNEL)
         inflated = cv2.dilate(occ, kernel, iterations=1)
+        clear_margin_near(inflated, occ, start_gx, start_gy)  # same rule as the planner: margins do not trap the robot
 
         # Snap start outside inflation margin if robot is close to a wall
         sx, sy = start_gx, start_gy

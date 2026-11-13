@@ -510,6 +510,31 @@ def test_planner_keeps_path_unless_clearly_shorter():
     print("PASSED")
 
 
+def test_planner_escapes_a_ring_of_clearance_margins():
+    """Live run 30: remembered contacts around the robot closed a ring of clearance margins; the robot stood idle with every
+    target unreachable. Margins near the robot's own cell must not block it; occupied cells still do."""
+    print("Running test_planner_escapes_a_ring_of_clearance_margins...", end=" ")
+    from core.grid import BayesianOccupancyGrid
+    from core.planner import a_star_search
+    grid = BayesianOccupancyGrid(-5.5, 5.5, -5.5, 5.5, 0.05)
+    grid.grid_log_odds[:] = grid.l_min
+    sx, sy = grid.world_to_grid(0.0, 0.0)
+    for dx, dy in ((5, 0), (-5, 0), (0, 5), (0, -5)):          # four single cells 0.25 m away: margins form a ring
+        grid.grid_log_odds[sy + dy, sx + dx] = grid.l_max
+    goal = grid.world_to_grid(2.0, 1.0)
+    path = a_star_search(grid, (sx, sy), goal)
+    assert path, "robot inside a ring of clearance margins could not plan out"
+    cells = [grid.world_to_grid(x, y) for x, y in path]
+    assert all(grid.grid_log_odds[cy, cx] < grid.thresh_occ for cx, cy in cells), "path crosses an occupied cell"
+    # a real wall of occupied cells still blocks
+    grid.grid_log_odds[sy - 6:sy + 7, sx + 3] = grid.l_max
+    grid.grid_log_odds[sy - 6:sy + 7, sx - 3] = grid.l_max
+    grid.grid_log_odds[sy + 3, sx - 6:sx + 7] = grid.l_max
+    grid.grid_log_odds[sy - 3, sx - 6:sx + 7] = grid.l_max
+    assert not a_star_search(grid, (sx, sy), goal), "planned through a closed wall"
+    print("PASSED")
+
+
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -837,6 +862,7 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_planner_escapes_a_ring_of_clearance_margins()
     test_planner_keeps_path_unless_clearly_shorter()
     test_contact_obstacle_stays_in_map()
     test_recovery_turns_away_and_never_reverses()
