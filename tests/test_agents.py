@@ -663,6 +663,25 @@ def test_patrol_after_exploration_instead_of_idle():
     print("PASSED")
 
 
+def test_patrol_walks_unwalked_floor_first():
+    """Run 33: the floor under the table was seen from 0.73 m, so it counted as explored and was never walked. Patrol
+    prefers floor the robot has never stood near over floor it walked long ago."""
+    print("Running test_patrol_walks_unwalked_floor_first...", end=" ")
+    grid = _walled_room()
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    hole = (0.4, 0.4)                                   # never stood within 0.35 m of here
+    for x in np.arange(-1.4, 1.41, 0.2):                # the rest of the room walked densely, long ago
+        for y in np.arange(-1.4, 1.41, 0.2):
+            if math.hypot(x - hole[0], y - hole[1]) > 0.45:
+                fa.visits.add("visit", float(x), float(y), t=0.0)
+    for x, y in ((-0.1, 0.4), (0.9, 0.4), (0.4, -0.1), (0.4, 0.9)):   # walked past the hole recently
+        fa.visits.add("visit", x, y, t=490.0)
+    fa.on_pose(PoseMsg(timestamp=500.0, x=-1.2, y=-1.2, yaw=0.0))
+    tgt = fa.select_frontier(current_time=500.0)
+    assert tgt is not None and math.hypot(tgt.target_wx - hole[0], tgt.target_wy - hole[1]) < 0.35,         f"patrol chose walked floor ({tgt.target_wx:.2f}, {tgt.target_wy:.2f}) over the unwalked spot {hole}"
+    print("PASSED")
+
+
 def test_compiled_wavefront_matches_python():
     """The numba geodesic wavefront and the Python loop give a bit-identical distance field."""
     print("Running test_compiled_wavefront_matches_python...", end=" ")
@@ -887,6 +906,7 @@ if __name__ == "__main__":
     test_unobservable_frontier_is_retired_not_revisited()
     test_unfinished_room_is_not_abandoned_on_label_change()
     test_patrol_after_exploration_instead_of_idle()
+    test_patrol_walks_unwalked_floor_first()
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()

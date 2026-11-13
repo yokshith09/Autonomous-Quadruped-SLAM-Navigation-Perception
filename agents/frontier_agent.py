@@ -53,7 +53,9 @@ RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cl
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
 DOOR_MAX_FAILS = 2           # doorway transits ending stuck or unreachable before that doorway is skipped
 DOOR_TURN_COST_M = 1.5      # a doorway straight behind the robot counts this much further than one ahead
-PATROL_STEP = 15            # cells (0.75 m) between candidate patrol points
+PATROL_STEP = 8             # cells (0.40 m) between candidate patrol points
+COVER_RADIUS_M = 0.35       # a patrol point the robot has never been within this distance of counts as unwalked
+COVER_BONUS_S = 900.0       # unwalked floor (under a table, a narrow gap) outranks merely stale floor
 PATROL_SECONDS_PER_M = 20.0  # staleness worth one metre of walking (the robot walks about 12 s per metre)
 EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
@@ -320,7 +322,8 @@ class FrontierAgent(BaseAgent):
         return msg
 
     def _pick_patrol_target(self, current_time, rx, ry, dist_map, inflated) -> Optional[Tuple[int, int]]:
-        """Reachable lattice point maximising (seconds since last seen nearby) - PATROL_SECONDS_PER_M * walk."""
+        """Reachable lattice point maximising (seconds since last walked nearby) - PATROL_SECONDS_PER_M * walk, with a
+        bonus for floor the robot has never stood on."""
         reach = np.isfinite(dist_map) & (inflated == 0)
         ys, xs = np.nonzero(reach[::PATROL_STEP, ::PATROL_STEP])
         best, best_score = None, -float("inf")
@@ -330,6 +333,10 @@ class FrontierAgent(BaseAgent):
                 continue
             last = max((it["t"] for it in self.visits.near("visit", wx, wy, 1.0)), default=-1e9)
             score = min(current_time - last, current_time) - PATROL_SECONDS_PER_M * float(dist_map[gy, gx])
+            # Cover the floor, not only the view: the camera saw under the table from 0.73 m (run 33), so it counted
+            # as explored and was never walked. Floor the robot has never stood near gets a large bonus.
+            if not self.visits.any_near("visit", wx, wy, COVER_RADIUS_M):
+                score += COVER_BONUS_S
             if score > best_score:
                 best, best_score = (int(gx), int(gy)), score
         return best
