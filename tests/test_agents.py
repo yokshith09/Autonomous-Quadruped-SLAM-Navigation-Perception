@@ -481,6 +481,35 @@ def test_contact_obstacle_stays_in_map():
     print("PASSED")
 
 
+def test_planner_keeps_path_unless_clearly_shorter():
+    """Live runs: the blue line flipped between two near-equal routes every 4 s. A re-plan to the same goal keeps the
+    current path unless the new one is at most 85 % as long."""
+    print("Running test_planner_keeps_path_unless_clearly_shorter...", end=" ")
+    import agents.planning_agent as pa
+    from agents.bus import FrontierTargetMsg
+    from core.grid import BayesianOccupancyGrid
+    bus = MessageBus()
+    grid = BayesianOccupancyGrid(-5.5, 5.5, -5.5, 5.5, 0.05)
+    grid.grid_log_odds[:] = grid.l_min
+    agent = pa.PlanningAgent(bus, grid_ref=grid)
+    agent.initialize()
+    paths = [[(0.0, 1.0), (2.0, 1.0), (2.0, 0.0)], [(0.0, -1.0), (2.0, -1.0), (2.0, 0.0)], [(1.0, 0.0), (2.0, 0.0)]]
+    calls = iter(paths)
+    orig_a, orig_s = pa.a_star_search, pa.smooth_path
+    pa.a_star_search, pa.smooth_path = (lambda g, s, e, smooth=False: next(calls)), (lambda g, p: p)
+    try:
+        gx, gy = grid.world_to_grid(2.0, 0.0)
+        agent.on_target(FrontierTargetMsg(timestamp=0.0, target_gx=gx, target_gy=gy, target_wx=2.0, target_wy=0.0,
+                                          room_id=1, area=10, is_doorway=False))
+        agent.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=0.0))
+        first = agent.plan_path(0.0)
+        assert agent.plan_path(5.0) == first, "an equally long route replaced the current path"
+        assert agent.plan_path(10.0) == paths[2], "a clearly shorter route was not taken"
+    finally:
+        pa.a_star_search, pa.smooth_path = orig_a, orig_s
+    print("PASSED")
+
+
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -808,6 +837,7 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_planner_keeps_path_unless_clearly_shorter()
     test_contact_obstacle_stays_in_map()
     test_recovery_turns_away_and_never_reverses()
     test_turn_walk_dithering_is_not_a_stall()

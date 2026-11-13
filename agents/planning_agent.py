@@ -8,6 +8,19 @@ from core.planner import a_star_search, smooth_path
 from core.grid import find_nearest_free
 
 
+PATH_SWITCH_GAIN = 0.85  # a new path to the same goal replaces the current one only if at most 85 % as long
+
+
+def _path_len(path, rx, ry) -> float:
+    pts = [(rx, ry)] + list(path)
+    return sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(pts, pts[1:]))
+
+
+def _remaining_len(path, rx, ry) -> float:
+    i = min(range(len(path)), key=lambda k: math.hypot(path[k][0] - rx, path[k][1] - ry))
+    return _path_len(path[i:], rx, ry)
+
+
 class PlanningAgent(BaseAgent):
     def __init__(self, bus: MessageBus, grid_ref=None, replan_cooldown: float = 1.0, update_rate_hz: float = 5.0):
         super().__init__("PlanningAgent", bus, update_rate_hz)
@@ -109,6 +122,11 @@ class PlanningAgent(BaseAgent):
         self.plan_times_ms.append((time.perf_counter() - t_p0) * 1000.0)
 
         self.last_replan_time = current_time
+        # Periodic re-plan to the same goal: keep the path being followed unless the new one is clearly shorter. Two
+        # routes of almost equal cost (left or right of a chair) made the blue line flip every 4 s and the robot turn.
+        if same_goal and self.current_path and not self._is_path_blocked():
+            if _path_len(world_waypoints, rx, ry) > PATH_SWITCH_GAIN * _remaining_len(self.current_path, rx, ry):
+                return self.current_path
         self.replan_count += 1
         self.current_path = world_waypoints
         self.last_planned_goal = goal_raw
