@@ -74,7 +74,10 @@ class SLAMAgent(BaseAgent):
         self.accum_odom_dyaw = wrap_angle(self.accum_odom_dyaw + gyro_dyaw)
 
     def step(self, current_time: float) -> None:
-        if self.latest_scan is None or len(self.latest_scan.points_2d) == 0 or self.tipped:
+        # An empty scan (facing open floor) still runs the update: with too few points it dead-reckons from gyro and
+        # leg odometry. Skipping it froze the pose while the robot turned, and the controller dithered on the stale
+        # heading for 60 s (rescue run 10).
+        if self.latest_scan is None or self.tipped:
             return  # tipped: the camera faces the floor or ceiling, its scan is not a wall outline
 
         try:

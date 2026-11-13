@@ -528,8 +528,10 @@ class FrontierAgent(BaseAgent):
             self._raw_of[nav_cell] = (gx, gy)
             candidates.append(((nav_cell[0], nav_cell[1], area), geo_dist))
 
-        if not candidates and int(np.count_nonzero(np.isfinite(dist_map))) > 400:
-            # Robot has room to move (>1 m^2 reachable) yet no frontier is reachable: exploration is done.
+        if not candidates and int(np.count_nonzero(np.isfinite(view_map))) > 400:
+            # Robot has room to stand clear of unknown space (>1 m^2 of viewpoints) yet no frontier can be viewed:
+            # exploration is done. (Counting all reachable cells ended rescue run 10 in its first second: a narrow
+            # first view of the floor has no cell STANDOFF_M clear of unknown space.)
             return self._finish(current_time, rx, ry, dist_map, inflated_mask,
                                 f"{len(all_frontiers)} frontier(s) left, none reachable.")
 

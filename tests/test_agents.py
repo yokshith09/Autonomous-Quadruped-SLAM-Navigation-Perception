@@ -1091,6 +1091,45 @@ def test_frontier_is_viewed_from_a_standoff_not_from_the_drop():
     print("PASSED")
 
 
+def test_narrow_first_view_does_not_end_the_mission():
+    """At the start the robot has seen only a narrow strip of floor. No cell of it is STANDOFF_M clear of unknown space,
+    so no frontier has a viewpoint yet; that is not the end of exploration (rescue run 10 declared the mission
+    complete in its first second, which also ends the wasted-walking measurement)."""
+    print("Running test_narrow_first_view_does_not_end_the_mission...", end=" ")
+    grid = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+    lo = grid.grid_log_odds
+    lo[:] = 0.0
+    lo[55:65, 30:100] = -2.0         # a 0.5 m x 3.5 m strip seen, unknown all round (700 reachable cells)
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_pose(PoseMsg(timestamp=1.0, x=-1.0, y=0.0, yaw=0.0))
+    fa.select_frontier(current_time=1.0)
+    assert fa.state != "MISSION_COMPLETE", "mission declared complete with most of the map unknown"
+    print("PASSED")
+
+
+def test_pose_follows_gyro_and_legs_while_the_camera_sees_nothing():
+    """Facing open floor the scan can be empty. SLAM skipped those steps, so the pose froze while the robot turned;
+    the controller kept turning on a stale heading and dithered on the spot for 60 s (rescue run 10, heading error
+    swinging +/-100 deg). With no scan the pose must still dead-reckon from gyro and leg odometry."""
+    print("Running test_pose_follows_gyro_and_legs_while_the_camera_sees_nothing...", end=" ")
+    from agents import SLAMAgent
+    from agents.bus import ActuationMsg
+    bus = MessageBus()
+    slam = SLAMAgent(bus, initial_x=0.0, initial_y=0.0, initial_yaw=0.0)
+    slam.initialize()
+    for k in range(40):                                  # 2 s turning at 45 deg/s and walking 4 mm per step
+        t = k * 0.05
+        slam.on_actuation(ActuationMsg(timestamp=t, joint_targets={}, heading_error=0.0, speed=0.75, state_str="WALK",
+                                       odom_forward=0.004, odom_lateral=0.0, gyro_dyaw=math.radians(45.0) * 0.05))
+        slam.on_scan(ScanMsg(timestamp=t, points_2d=np.empty((0, 2))))
+        slam.step(t)
+    p = bus.get_latest("pose/slam")
+    assert p is not None, "no pose published while the camera saw nothing"
+    assert abs(math.degrees(p.yaw) - 90.0) < 3.0, f"heading {math.degrees(p.yaw):.1f} deg, gyro says 90"
+    assert math.hypot(p.x, p.y) > 0.10, f"position did not follow leg odometry ({math.hypot(p.x, p.y):.3f} m)"
+    print("PASSED")
+
+
 def load_tests(loader, standard_tests, pattern):
     import unittest
     suite = unittest.TestSuite()
@@ -1146,6 +1185,8 @@ if __name__ == "__main__":
     test_near_frontier_behind_beats_far_one_ahead()
     test_floor_calibration_uses_net_progress_not_swaying_path()
     test_frontier_is_viewed_from_a_standoff_not_from_the_drop()
+    test_narrow_first_view_does_not_end_the_mission()
+    test_pose_follows_gyro_and_legs_while_the_camera_sees_nothing()
     print("=== ALL TESTS PASSED SUCCESSFULLY! ===")
 
 
