@@ -5,6 +5,7 @@ import numpy as np
 from typing import List, Tuple, Optional
 from .base import BaseAgent
 from .bus import MessageBus, ActuationMsg, PathMsg, PoseMsg, ScanMsg, MissionEventMsg
+import core.robot as robot_module
 from core.robot import LizardRobot, gait_body_speed, norm_angle
 
 TURN_IN_PLACE_RAD = 0.45  # heading error above which the robot stops and turns before walking on
@@ -23,6 +24,9 @@ STALL_MIN_CMD = 0.3       # below this command the load is too small to judge
 # about 0.027 normalised) it crosses on the 5th blocked step, so the 4 steps before it reported motion that did not
 # happen and are taken back.
 STALL_DELAY_STEPS = 4
+STALL_MOVE_M = 0.05        # a walking robot that moves less than this in a second (scaled by the floor calibration) is
+                           # stalled. Rescue floor: true speed 0.060 m/s vs 0.090 m/s in scene 1, so ordinary walking
+                           # dipped under a fixed 5 cm and raised three false stalls in 150 s (rescue run 1).
 RECOVERY_TURN_RAD = 1.2    # recovery turns the body this far towards the open side (about 70 deg)
 TIPPED_UP_Z = 0.7071      # body tilted more than 45 deg from upright
 
@@ -287,7 +291,7 @@ class LocomotionAgent(BaseAgent):
                     # robot that walked most of the window can be stalled (live runs 13/14: false stall -> flip).
                     walked_window = self._walk_steps >= 0.8 * max(1, self._window_steps)
                     self._walk_steps = self._window_steps = 0
-                    if walked_window and dist_moved < 0.05:
+                    if walked_window and dist_moved < STALL_MOVE_M * robot_module.ODOM_SCALE:
                         self.stuck_ticks += 1
                     else:
                         self.stuck_ticks = 0

@@ -226,3 +226,8 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - Waste metric: exploration now ends at the first MISSION_COMPLETE (the floor-coverage patrol can reopen exploration later; that walking is coverage, not waste). Unchanged for runs 19, 24, 31, 34.
 - F65 `--narrow-gaps` (off by default, so scene-1 results reproduce): planner retries at 0.15 m margin when no route exists at 0.20 m (gaps from ~0.35 m); the frontier field uses the narrow margin for reachability. Test: a 0.35 m gap is closed without the flag and passed with it.
 - Map scores re-scored on the 0.25 m band for the baseline and runs 19, 24, 31, 34 so comparisons use one band (baseline F1 77.7 -> 77.9 %, run 34 95.9 %).
+
+### Rescue scene (SearchRescueScene), 2026-11-14
+- Floor calibration: true/odometry distance at command 0.75 is 1.14 in scene 1 and 0.754 on the rescue floor (evaluation/floor_calibration.py). Per-scene profile config/scenes/searchrescuescene.json (odom_scale 0.754, narrow_gaps, mesh truth), loaded by scene name in main_agentic; scene 1 has no profile and runs unchanged.
+- Ground truth for any scene: evaluation/scene_truth_mesh.py samples every shape's triangles; the rescue scene's compound shapes (ConcreteBlocks one 13.8 x 12.2 m box) make bounding-box truth useless. truth_eval accepts the grid truth.
+- Rescue run 1 (20261114_010909, stopped at 159 s): odometry error 25 % -> 1.4 %, ATE 4-10 cm, F1 98 % (uncalibrated trial: 54 cm, F1 55 % at 90 s). Three "stalls" were false: the robot truly moved 6-13 cm in the 2.5 s before each; the 5 cm/s stall threshold was set for scene 1's 0.09 m/s, the rescue floor walks 0.06 m/s. F66: threshold scales with odom_scale (scene 1 unchanged). Test fails on the old code.

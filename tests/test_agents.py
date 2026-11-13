@@ -598,6 +598,34 @@ def test_narrow_gap_opens_only_with_the_narrow_setting():
     print("PASSED")
 
 
+def test_stall_threshold_follows_the_floor_calibration():
+    """Rescue run 1: on a slow floor (true speed 0.060 m/s) ordinary walking moved under the fixed 5 cm per second and
+    raised false stalls. The threshold scales with the floor calibration; a robot really standing still is still caught."""
+    print("Running test_stall_threshold_follows_the_floor_calibration...", end=" ")
+    from agents import LocomotionAgent
+    import core.robot as cr
+
+    def run(speed_mps):
+        bus = MessageBus()
+        events = []
+        bus.subscribe("mission/event", lambda e: events.append(e.event_type))
+        loco = LocomotionAgent(bus, robot_driver=_FakeRobot())
+        loco.initialize()
+        loco.on_path(PathMsg(timestamp=0.0, waypoints=[(0.1 * i, 0.0) for i in range(1, 200)]))
+        for k in range(100):  # 5 s
+            loco.on_pose(PoseMsg(timestamp=k * 0.05, x=speed_mps * k * 0.05, y=0.0, yaw=0.0))
+            loco.step(k * 0.05)
+        return events
+    old = cr.ODOM_SCALE
+    try:
+        cr.ODOM_SCALE = 0.754
+        assert "ROBOT_STUCK" not in run(0.045), "normal walking on the slow floor called a stall"
+        assert "ROBOT_STUCK" in run(0.0), "a robot standing still was not called a stall"
+    finally:
+        cr.ODOM_SCALE = old
+    print("PASSED")
+
+
 def test_tipped_robot_stops_and_map_ignores_camera():
     """A tipped robot (seen upside down in live run 11) stops its legs, reports it once, reports no motion, and mapping
     stops using its camera, which then faces the floor or ceiling."""
@@ -970,6 +998,7 @@ if __name__ == "__main__":
     test_blocked_legs_are_felt_and_phantom_odometry_stops()
     test_doorway_given_up_after_repeated_failures()
     test_tipped_robot_stops_and_map_ignores_camera()
+    test_stall_threshold_follows_the_floor_calibration()
     test_narrow_gap_opens_only_with_the_narrow_setting()
     test_tabletop_is_scan_structure_but_not_an_obstacle()
     test_planner_escapes_a_ring_of_clearance_margins()
