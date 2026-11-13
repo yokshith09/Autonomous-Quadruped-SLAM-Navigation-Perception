@@ -295,7 +295,8 @@ class KeyframeLoopManager:
                  loop_gate_per_m: float = 0.03, max_loop_correction_cap: float = 0.50, max_loop_yaw_deg: float = 5.0,
                  visual_min_inliers: int = 0, visual_min_age_m: float = 10.0,
                  degeneracy_ratio: float = 0.0, confirm_above_m: float = 0.0, confirm_window_s: float = 6.0,
-                 confirm_tol_m: float = 0.12, confirm_other_kf: bool = True):
+                 confirm_tol_m: float = 0.12, confirm_other_kf: bool = True, map_consistency: bool = False,
+                 consistency_radius: float = 3.0, consistency_tol: float = 0.06):
         # A closure can only remove drift that can have built up on the path walked between the matched keyframe and
         # now: largest accepted correction = max_loop_correction + loop_gate_per_m * that path length (capped).
         # A fixed gate both rejects the closures that would repair a large drift and accepts impossible ones (a
@@ -328,6 +329,13 @@ class KeyframeLoopManager:
         self.confirm_tol_m = confirm_tol_m
         self.confirm_other_kf = confirm_other_kf
         self._pending = None  # (time, dx, dy, keyframe_id)
+        # A closure must not make the current scan fit the surrounding old keyframes worse. Audit of 799 closures
+        # (runs 19, 24, 29, 30, 31): genuine ones raise the fit (0.47 -> 0.95); wrong ones start from a scan that
+        # already fits (0.94-1.00) and leave it equal or worse (the 49 cm jump of run 31: 1.00 -> 0.95). Refusing
+        # those kept 689 closures (+718 cm) and refused 110 (-368 cm).
+        self.map_consistency = map_consistency
+        self.consistency_radius = consistency_radius
+        self.consistency_tol = consistency_tol
         self.current_thumb = None
         self.visual_log: List[Dict[str, Any]] = []
         # Closures correct position only; heading stays with the gyro and the Manhattan prior (mean error under
@@ -433,6 +441,21 @@ class KeyframeLoopManager:
                                         "correction": (err_dx, err_dy), "accepted": inl >= self.visual_min_inliers})
                 if inl < self.visual_min_inliers:
                     return None
+
+            if self.map_consistency and cKDTree is not None:
+                cx, cy = current_x + err_dx, current_y + err_dy
+                near = [k for k in self.keyframes[:-2] if (current_time - k.timestamp) >= self.min_loop_time_diff
+                        and math.hypot(k.x - cx, k.y - cy) <= self.consistency_radius]
+                if near:
+                    def _world(pts, x, y, yaw):
+                        c, s_ = math.cos(yaw), math.sin(yaw)
+                        return pts @ np.array([[c, s_], [-s_, c]]) + (x, y)
+                    tree = cKDTree(np.vstack([_world(k.scan_points, k.x, k.y, k.yaw) for k in near]))
+                    def _fit(x, y, yaw):
+                        d, _ = tree.query(_world(current_scan, x, y, yaw), distance_upper_bound=self.consistency_tol)
+                        return float(np.isfinite(d).mean())
+                    if _fit(cx, cy, current_yaw + err_dyaw) < _fit(current_x, current_y, current_yaw):
+                        return None
 
             if self.confirm_above_m > 0.0 and math.hypot(err_dx, err_dy) > self.confirm_above_m:
                 p = self._pending
