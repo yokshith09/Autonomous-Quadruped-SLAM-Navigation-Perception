@@ -285,3 +285,8 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - Rescue run folders (runs 9–18) committed without recordings; tag `rescue-best-v1` marks the current code. Scene 1 best stays at tag `best-sim-v3`.
 - Run 19 (12 min, submap 16 + F81) started.
 - Run 19 (20261114_171629, 12 min, submap 16 + F81): ATE 12.3 cm (run 18: 22.2), precision 95.8 %, recall 38.8 %, F1 55.2 %, 59 % of floor mapped, route waypoint 14/28, 1 watchdog stall at (-2.01, 5.33) recovered by turn-away, 0 collisions. Combined with scene 1 run 34: mean ATE 12.0 cm, mean precision 97.8 %. Backed up to E:\project_phase1\best_results_backup.
+
+## 2026-11-14 — Current results frozen as final (tag final-multi-env-v1)
+- User decision: stop here for now; the current results are the final results. Scene 1 run 34 (ATE 11.7 cm, F1 95.9 %) + rescue run 19 (ATE 12.3 cm, precision 95.8 %, F1 55.2 %, 0 collisions): mean ATE 12.0 cm, mean precision 97.8 %. See docs/results/BEST_RESULTS_ALL_ENVIRONMENTS.md.
+- Rescue goal NOT met: the building gap was not passed, coverage 59 %, F1 below 95 %, ATE above 11 cm. Deferred as a task: docs/project/TODO_RESCUE_ROUTE.md (with the user's new route drawing).
+- Benchmark plan (PLAN_BENCHMARKS.md): T1 done; T2 noise stage, T3 Cartographer, T4 TUM RGB-D, T5 exploration baseline, T6 write-up not done.
