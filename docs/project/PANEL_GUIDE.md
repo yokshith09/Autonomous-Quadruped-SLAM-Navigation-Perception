@@ -276,8 +276,20 @@ completely on a sequence (OpenVSLAM 122 cm on slam2, RTABMap 72 cm on slam3).
 are only slightly better than wheel odometry alone (and worse on two sequences). Our scan matcher was tuned on clean
 simulated depth; real depth is noisier.
 
-### 9.4 Exploration comparison
-Nearest-frontier baseline in both scenes: planned, not done yet.
+### 9.4 Exploration comparison (nearest-frontier, Yamauchi 1997)
+Same robot, SLAM, planner and time limit; only the rule for where to go next differs.
+
+| Measure | Ours (scene 1 / 2) | Nearest-frontier (scene 1 / 2) |
+|---|---|---|
+| Floor covered | 94.2 / 85.8 % | 84.9 / 72.4 % |
+| Map F1 | 88.8 / 67.1 % | 89.1 / 52.1 % |
+| Stuck events | 1 / 5 | 18 / 7 |
+| Position error | 14.8 / 28.8 cm | 17.5 / 36.2 cm |
+| Through the building | - / yes | - / no |
+
+Why ours wins: it picks viewpoints that see the most unknown space and keeps a safe standoff, so it wastes less
+walking and gets stuck less; the operator route takes it through the building. Honest note: in the building (scene 1)
+the final map quality is the same - the gain there is coverage and reliability (1 vs 18 stuck events).
 
 ---
 
@@ -392,8 +404,8 @@ baselines, TUM benchmark, report draft with diagrams.
 
 Done since: Cartographer on our recordings (Table above); scene 1 verification on current code (14.8 cm, 0 collisions).
 
-Next: scene 2 full run on the new operator route (needs the rescue scene loaded in CoppeliaSim); nearest-frontier
-baseline in both scenes; Cartographer final numbers; improve scan matching on real depth data; then hardware.
+Next: reduce heading drift on long open stretches (periodic stand-still gyro re-calibration); improve scan matching on
+real depth data (TUM); then hardware and the evidence-detection stage.
 
 Where the details live: `docs/report_phase2/Phase2_Report.pdf`, `docs/results/` (each benchmark), `docs/project/
 PROGRESS.md` (decision log), `FIXES.md` (every fix).

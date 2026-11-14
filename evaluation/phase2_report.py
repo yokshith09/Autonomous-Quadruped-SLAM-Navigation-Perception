@@ -278,7 +278,6 @@ def build():
         ["<b>Ours</b>", "11.7 cm", "12.3 cm", "12.0 cm"],
         ["Cartographer [2], defaults", "585.8 cm", "216.5 cm", "401.2 cm"],
         ["Cartographer [2], best of 8 settings", "341.5 cm", "85.2 cm", "213.4 cm"],
-        ["Nearest-frontier exploration [1] (coverage, time)", ph("pending"), ph("pending"), ph("pending")],
     ], raw_cols=(0, 1, 2, 3)))
     h.append(cap(8, "Table", "Position error of other methods on identical data from our two scenes"))
     h.append(para(
@@ -299,6 +298,24 @@ def build():
         "trust, stricter loop closure, no loop closure, smaller submaps); the best, used on both scenes, still ends "
         "worse than odometry alone. Ours cuts the odometry error by 96 % in scene 1 and 22 % in scene 2."))
 
+    h.append(para("<b>Exploration against nearest-frontier.</b> The classic nearest-frontier rule [1] (always walk to "
+                  "the closest frontier) ran in both scenes with the same robot, SLAM, planner and time limit; only the "
+                  "choice of where to go next differs (ours: viewpoints, room sweep, and in scene 2 the operator route)."))
+    h.append(tbl(["Measure", "Scene 1: ours", "Scene 1: nearest", "Scene 2: ours", "Scene 2: nearest", "Average: ours / nearest"], [
+        ["Floor covered", "94.2 %", "84.9 %", "85.8 %", "72.4 %", "90.0 / 78.7 %"],
+        ["Map recall / F1", "84.9 / 88.8 %", "85.9 / 89.1 %", "66.4 / 67.1 %", "44.7 / 52.1 %", "75.7 / 78.0 vs 65.3 / 70.6 %"],
+        ["Position error (ATE)", "14.8 cm", "17.5 cm", "28.8 cm", "36.2 cm", "21.8 / 26.9 cm"],
+        ["Stuck events (recovered)", "1", "18", "5", "7", "3 / 12.5"],
+        ["Collisions", "0", "0", "0", "0", "0 / 0"],
+        ["Through the damaged building", "-", "-", "yes", "no", "-"],
+    ]))
+    h.append(cap(9, "Table", "Exploration: our method against nearest-frontier exploration, same scenes and time"))
+    h.append("<p><img src='explore_compare_scene1.png' width='255'/> <img src='explore_compare_scene2.png' width='255'/></p>")
+    h.append(cap(3, "Figure", "Explored share of the map window over time, ours against nearest-frontier (left scene 1, right scene 2)"))
+    h.append(para("Ours covers 9-13 points more floor, gets stuck far less (1 vs 18 in scene 1) and is the only one to pass "
+                  "through the building. In scene 1 the map scores are equal (F1 88.8 vs 89.1 %): in a building every "
+                  "method eventually sees the same walls; the gain is coverage and reliability."))
+
     # 5.5 TUM
     h.append("<h3>5.5 Public Benchmark: TUM RGB-D Pioneer Sequences</h3>")
     h.append(para(
@@ -310,13 +327,13 @@ def build():
     h.append(para(
         "<b>Why it fits our comparison.</b> It is the closest public match to our robot: a ground robot, planar "
         "motion, a depth camera of the same kind and field of view as ours, and odometry from the robot itself. "
-        "Every system in Table 9 is scored on the same sequences with the same alignment-based ATE, so it shows "
+        "Every system in Table 10 is scored on the same sequences with the same alignment-based ATE, so it shows "
         "where our SLAM stands against published systems on real sensor data. Ours runs with our existing scene "
         "profiles, without TUM-specific tuning. Differences: ours estimates position in the plane (x-y), the others "
         "in 3D (on a flat floor nearly the same); ours uses the wheel odometry, the visual systems do not."))
     h.append(tbl(["System (TUM fr2/pioneer)", "Input", "360", "slam", "slam2", "slam3", "Average"],
                  TUM_ROWS, raw_cols=(0, 2, 3, 4, 5, 6)))
-    h.append(cap(9, "Table", "ATE RMSE on the TUM Pioneer sequences; published values from [4]"))
+    h.append(cap(10, "Table", "ATE RMSE on the TUM Pioneer sequences; published values from [4]"))
     h.append(para(
         "<b>Result.</b> With the scene-2 settings (made for open floor without right-angle walls) ours averages "
         "25.9 cm over the four sequences: ahead of RTABMap (28.7 cm), OpenVSLAM (39.2 cm) and ORB-SLAM3 (172.0 cm) on "
@@ -337,16 +354,17 @@ def build():
         "odometry alone (28.7); 40.5 cm with the scene-1 settings.",
         "<b>Across environments:</b> 21.8 cm average error, 80.4 % map precision, 78.0 % map F1, 90.0 % floor "
         "covered, no collisions, through the damaged building in scene 2, with one code base.",
-        "<b>Exploration against nearest-frontier:</b> " + ph("Table 7 row after the baseline runs")]))
+        "<b>Exploration against nearest-frontier (same scenes, same time):</b> 90.0 against 78.7 % of the floor, "
+        "3 against 12.5 stuck events per run, and only ours passed through the building."]))
 
     # 5.7 prototype
     h.append("<h3>5.7 Working Prototype Demonstration</h3>")
     h.append(para(ph("Insert CoppeliaSim screenshots of the robot in scene 1 and scene 2")))
     h.append("<p><img src='scene1.png' width='520'/></p>")
-    h.append(cap(3, "Figure", "Scene 1 (building), 30-minute run on the current code: (a) layout from the scene model, "
+    h.append(cap(4, "Figure", "Scene 1 (building), 30-minute run on the current code: (a) layout from the scene model, "
                  "(b) map built by the robot with the true path (blue) and estimated path (orange)"))
     h.append("<p><img src='scene2_full.png' width='520'/></p>")
-    h.append(cap(4, "Figure", "Scene 2 (rescue field), 40-minute run on the operator route: (a) layout, (b) map and paths; "
+    h.append(cap(5, "Figure", "Scene 2 (rescue field), 40-minute run on the operator route: (a) layout, (b) map and paths; "
                  "the path enters the damaged building from the south, visits its east room and leaves by the north doorway"))
     h.append(para(
         "<b>Evaluation &amp; Usability Summary:</b> the control loop runs in real time on a PC CPU (median 25 ms per "
@@ -405,7 +423,7 @@ def build():
         ["Group TEA Deliverable 2", ph("title and details"), ph("status")],
         ["Group TEA Deliverable 3", ph("title and details"), ph("status")],
     ], raw_cols=(1, 2)))
-    h.append(cap(10, "Table", "Summary of Completed Project and Technical Enrichment Deliverables"))
+    h.append(cap(11, "Table", "Summary of Completed Project and Technical Enrichment Deliverables"))
 
     h.append("<h2>References</h2>")
     refs = [
