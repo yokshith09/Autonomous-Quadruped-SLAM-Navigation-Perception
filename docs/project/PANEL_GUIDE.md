@@ -17,10 +17,12 @@ out where it is at every moment, draws an accurate map, avoids hitting anything,
 - The software is split into **seven agents**, each with one job, talking over a message bus.
 - We test it in a robot simulator (**CoppeliaSim**) in two very different places: a 10 x 10 m building with rooms,
   and a 16 x 16 m rescue field full of rubble. Same code in both.
-- Result so far: about **12-14 cm** position error, **96-99 %** of the mapped walls are correct, **no collisions**
-  measured. On the same data it is about 12 times more accurate than step-counting alone and than the BreezySLAM
-  baseline. On a public real-robot dataset (TUM Pioneer) it averages 25.9 cm, slightly better than the published
-  RTABMap (28.7 cm).
+- Result (measured, same code in both scenes): 14.8 cm position error in the building and 28.8 cm over a 40-minute
+  run in the rubble field (21.8 cm average), 90 % of the floor covered, map F1 78 %, **no collisions**, and the robot
+  passes **through a damaged building** in the rubble field. On the same data it is about 10x more accurate than
+  step-counting alone, BreezySLAM and Google Cartographer; it explores 11 points more floor than classic
+  nearest-frontier exploration with 4x fewer stuck events. On a public real-robot dataset (TUM Pioneer) it averages
+  25.9 cm, slightly better than the published RTABMap (28.7 cm).
 
 ---
 
@@ -301,7 +303,7 @@ the final map quality is the same - the gain there is coverage and reliability (
 4. **Gyro bias** not removed by calibration goes straight into the heading in scene 2.
 5. **On real data (TUM) the scan matcher adds little over good wheel odometry.**
 6. **Scene 2 run-to-run variation** of several cm; we use averaged replays to decide changes.
-7. **Building gap in scene 2** was crossed only once (run 14); not reliably yet.
+7. **Error in scene 2 grows after ~17 minutes** (11 cm -> 29 cm RMSE over 40 min) from about 2 degrees of gyro heading drift.
 8. **Later stages** (evidence detection, trigger, secure logs) are not integrated.
 
 ---
