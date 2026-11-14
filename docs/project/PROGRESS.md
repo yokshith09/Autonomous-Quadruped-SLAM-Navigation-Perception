@@ -293,3 +293,4 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - T4 check: TUM Pioneer ROS bags include wheel odometry and laser scan (tgz do not); 4 bags ~4.6 GB. See PLAN_BENCHMARKS.md.
 - Final average table added to BEST_RESULTS_ALL_ENVIRONMENTS.md. Next (user): full rescue run, scene 1 verification run.
 - Published-numbers comparison of the cross-environment averages: docs/results/benchmarks_published.md (context only, not same-data).
+- Plan set: docs/project/PLAN_NEXT.md (scene 1 verification -> scene 2 full route run -> benchmarks 3a-3g -> write-up).
