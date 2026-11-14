@@ -102,11 +102,12 @@ class PlanningAgent(BaseAgent):
         # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
         t_p0 = time.perf_counter()
         cells = planner.CLEARANCE_CELLS
-        world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False)
+        opt = bool(getattr(self.latest_target, "optimistic", False))
+        world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False, allow_unknown=opt)
         if not world_path and planner.NARROW_GAPS:  # only through a gap the normal margin closes
             cells = planner.NARROW_CLEARANCE_CELLS
             world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False,
-                                       clearance_cells=cells)
+                                       clearance_cells=cells, allow_unknown=opt)
         if not world_path:
             print(f"  [PLANNER] Target ({self.latest_target.target_wx:.2f}, {self.latest_target.target_wy:.2f}) unreachable! Blacklisting & replanning...")
             self.bus.publish("mission/event", MissionEventMsg(

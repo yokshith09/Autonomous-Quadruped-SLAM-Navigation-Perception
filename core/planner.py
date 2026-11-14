@@ -35,7 +35,7 @@ def clear_margin_near(inflated, occ, sx, sy):
     inflated[y0:y1, x0:x1][near] = occ[y0:y1, x0:x1][near]
 
 
-def a_star_search(grid, start, goal, smooth=False, clearance_cells: int = CLEARANCE_CELLS):
+def a_star_search(grid, start, goal, smooth=False, clearance_cells: int = CLEARANCE_CELLS, allow_unknown: bool = False):
     """
     A* search algorithm for grid path planning with obstacle clearance margin.
     start: (gx, gy) grid coordinates
@@ -58,6 +58,8 @@ def a_star_search(grid, start, goal, smooth=False, clearance_cells: int = CLEARA
     # Traversable = known free space with 1-cell raycasting pinholes closed. Large unknown regions (e.g. behind a
     # wall the camera has not seen) stay blocked, so paths cannot cut through unexplored space.
     free = (grid.grid_log_odds <= grid.thresh_free).astype(np.uint8)
+    if allow_unknown:   # optimistic: unseen floor counts as passable (operator-route targets only, F83)
+        free = (grid.grid_log_odds < grid.thresh_occ).astype(np.uint8)
     traversable = cv2.morphologyEx(free, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8)) > 0
     
     clear_margin_near(inflated_mask, occ, *start)

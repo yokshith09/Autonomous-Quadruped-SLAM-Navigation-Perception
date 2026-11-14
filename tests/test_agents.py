@@ -1377,6 +1377,33 @@ def test_route_waypoint_in_unseen_floor_is_approached_not_skipped():
     print("PASSED")
 
 
+def test_route_waypoint_behind_an_unseen_gap_is_not_skipped():
+    """F83: the waypoint is in seen floor beyond a wall and the only way there is a gap the camera has not seen yet:
+    the planner finds a way, so the robot heads for the waypoint instead of skipping it as blocked."""
+    print("Running test_route_waypoint_behind_an_unseen_gap_is_not_skipped...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[11:70, 39:42] = 2.0           # wall at x = 0 ...
+    grid.grid_log_odds[30:51, 39:42] = 0.0           # ... with a 1 m gap the camera has not seen
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.route = [(0.8, 0.0)]                          # seen floor beyond the wall
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=None, doorways=[], doorway_rooms=[]))
+    hit = None
+    for x in np.arange(-0.2, -1.3, -0.05):           # stand on the nearest reachable spot, wherever the field puts it
+        fa.route_i = 0
+        fa.on_pose(PoseMsg(timestamp=0.0, x=float(x), y=0.0, yaw=0.0))
+        tgt = fa.select_frontier(current_time=1.0)
+        if tgt is not None and abs(tgt.target_wx - 0.8) < 0.1:
+            hit = x
+            break
+    assert fa.route_i == 0 and hit is not None, "waypoint behind an unseen gap was skipped or not targeted"
+    assert tgt.optimistic, "the planner must be allowed to cross the unseen gap"
+    fa.on_pose(PoseMsg(timestamp=2.0, x=0.0, y=0.05, yaw=0.0))   # walking into the gap: the target must not flip back
+    tgt2 = fa.select_frontier(current_time=2.0)
+    assert fa.route_i == 0 and tgt2 is not None and abs(tgt2.target_wx - 0.8) < 0.1 and tgt2.optimistic
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()

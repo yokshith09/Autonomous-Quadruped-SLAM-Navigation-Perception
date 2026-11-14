@@ -62,6 +62,7 @@ class FrontierTargetMsg:
     room_id: int
     area: int
     is_doorway: bool = False
+    optimistic: bool = False   # operator-route target: the planner may cross floor not seen yet (F83)
 
 
 @dataclass

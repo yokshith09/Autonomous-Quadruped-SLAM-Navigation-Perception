@@ -103,6 +103,7 @@ class FrontierAgent(BaseAgent):
         self.route: List[Tuple[float, float]] = []
         self.route_i = 0
         self._route_best = (float("inf"), 0.0)
+        self._route_opt = None          # route index being approached optimistically through unseen floor (F83)
         self.route_after = 0.0  # the stall clock starts after the stand-still gyro calibration
         self.visits = SpatialMemory(bucket=1.0)
         self.patrol_failed = SpatialMemory(bucket=1.0)
@@ -780,6 +781,24 @@ class FrontierAgent(BaseAgent):
             # A waypoint in unseen floor is approached over the known floor nearest to it, right up to the unknown edge,
             # so the camera sees past it; only a waypoint in seen floor can be "blocked" (F82: route v3 started facing
             # away from the building and skipped all 70 waypoints in seconds, the floor behind the robot being unknown).
+            if self._route_opt == self.route_i:
+                # Keep heading for the waypoint through floor not seen yet until it is reached or stops getting closer;
+                # re-deciding from the seen floor every second would send the robot back to where it started looking.
+                if d < self._route_best[0] - 0.2:
+                    self._route_best = (d, current_time)
+                if d > ROUTE_REACHED_M and current_time - self._route_best[1] <= ROUTE_STALL_S:
+                    gx, gy = self.grid.world_to_grid(wx, wy)
+                    self.state, self.committed_target = "ROUTE", None
+                    msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx,
+                                            target_wy=wy, room_id=-1, area=50, is_doorway=False, optimistic=True)
+                    self.bus.publish("frontier/target", msg)
+                    return msg
+                why = "reached" if d <= ROUTE_REACHED_M else f"skipped (no progress through unseen floor, {d:.2f} m away)"
+                print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}) {why}")
+                self.route_i += 1
+                self._route_best = (float("inf"), current_time)
+                self._route_opt = None
+                continue
             unseen = self._waypoint_unseen(wx, wy)
             field = dist_map if unseen or not np.isfinite(view_map).any() else view_map
             ys, xs = np.nonzero(np.isfinite(field))
@@ -798,9 +817,27 @@ class FrontierAgent(BaseAgent):
             # from here. Waiting for the stall clock left run 18 idle for 60 s at waypoint 6.
             at_nearest = (i is not None and current_time >= self.route_after and d > ROUTE_REACHED_M
                           and math.hypot(float(cx[i]) - rx, float(cy[i]) - ry) < 0.4)
-            blocked = at_nearest and not unseen
             if at_nearest and unseen and current_time - self._route_best[1] <= ROUTE_STALL_S:
                 return None      # nothing closer is known yet: explore this step, keep the waypoint
+            # Seen waypoint, nearest seen floor reached: blocked only if an optimistic plan (unseen floor counted as
+            # passable, e.g. a gap into a building not yet seen from outside) finds no way either. Then the robot walks
+            # that way, sees the gap and replans (F83: route v3 skipped the building interior that A* on the scene
+            # model reaches with 0.25 m clearance).
+            if at_nearest and not unseen and current_time - self._route_best[1] <= ROUTE_STALL_S:
+                path = planner.a_star_search(self.grid, self.grid.world_to_grid(rx, ry), self.grid.world_to_grid(wx, wy),
+                                             clearance_cells=planner.NARROW_CLEARANCE_CELLS if planner.NARROW_GAPS
+                                             else planner.CLEARANCE_CELLS, allow_unknown=True)
+                if path:
+                    print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}): no seen way, "
+                          "heading through floor not seen yet")
+                    self._route_opt, self._route_best = self.route_i, (d, current_time)
+                    gx, gy = self.grid.world_to_grid(wx, wy)
+                    self.state, self.committed_target = "ROUTE", None
+                    msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx,
+                                            target_wy=wy, room_id=-1, area=50, is_doorway=False, optimistic=True)
+                    self.bus.publish("frontier/target", msg)
+                    return msg
+            blocked = at_nearest and not unseen
             if d <= ROUTE_REACHED_M or blocked or current_time - self._route_best[1] > ROUTE_STALL_S:
                 why = "reached" if d <= ROUTE_REACHED_M else ("skipped (blocked, nearest reachable spot reached, "
                       f"{d:.2f} m away)" if blocked else f"skipped (no progress, {d:.2f} m away)")
