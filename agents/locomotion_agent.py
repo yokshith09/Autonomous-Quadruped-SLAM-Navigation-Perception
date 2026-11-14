@@ -67,10 +67,17 @@ class LocomotionAgent(BaseAgent):
         return True
 
     def on_path(self, path_msg: PathMsg):
-        if not self.waypoints or not path_msg.waypoints or                 math.hypot(path_msg.waypoints[-1][0] - self.waypoints[-1][0],
-                           path_msg.waypoints[-1][1] - self.waypoints[-1][1]) > 0.3:
+        new = path_msg.waypoints
+        # Progress is measured along the path, so it restarts with a new goal, and also when a re-plan to the same
+        # goal is a longer route (a detour): its remaining length can not beat the short route's best for a long
+        # time. Rescue run 16: a 16-waypoint path into the building gap was re-planned as a 98-waypoint detour and the
+        # robot gave up after 15 s of "no progress" (both stuck events of that run).
+        length = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(new, new[1:])) if new else 0.0
+        if (not self.waypoints or not new
+                or math.hypot(new[-1][0] - self.waypoints[-1][0], new[-1][1] - self.waypoints[-1][1]) > 0.3
+                or length > self._goal_best_dist + 0.5):
             self._goal_best_dist, self._goal_best_time = float("inf"), None
-        self.waypoints = path_msg.waypoints
+        self.waypoints = new
         self.wp_idx = 0
 
     def _leg_blocked(self) -> bool:

@@ -1,3 +1,4 @@
+import cv2
 """Runnable verification tests for the Multi-Agent Robotics Stack."""
 import math
 import numpy as np
@@ -939,6 +940,31 @@ def test_detour_is_progress_not_stuck():
         loco.on_pose(PoseMsg(timestamp=k * 0.5, x=x, y=y, yaw=0.0))
         loco.step(k * 0.5)
     assert "ROBOT_STUCK" not in events, "detour along the path was reported as a stall"
+    print("PASSED")
+
+
+def test_replanned_longer_route_to_the_same_goal_restarts_progress():
+    """The planner replaces a short path by a long detour to the same goal (the short way closed in the map). The detour's
+    remaining length cannot beat the short path's best for a long time; that is not a stall (rescue run 16: both
+    stuck events, and the building gap abandoned after 15 s)."""
+    print("Running test_replanned_longer_route_to_the_same_goal_restarts_progress...", end=" ")
+    from agents import LocomotionAgent
+    bus = MessageBus()
+    events = []
+    bus.subscribe("mission/event", lambda e: events.append(e.event_type))
+    loco = LocomotionAgent(bus)
+    loco.initialize()
+    loco.on_path(PathMsg(timestamp=0.0, waypoints=[(0.0, 0.0), (0.6, 0.0)], active_idx=0, replan_count=1))
+    loco.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=0.0))
+    loco.step(0.0)
+    detour = [(0.0, 0.0), (0.0, -4.0), (0.6, -4.0), (0.6, 0.0)]   # 8.6 m to the same goal
+    dense = [(x0 + (x1 - x0) * s / 80, y0 + (y1 - y0) * s / 80) for (x0, y0), (x1, y1) in zip(detour, detour[1:]) for s in range(80)]
+    for k, (x, y) in enumerate(dense[:60]):   # 30 s at 2 Hz, 3 m along the detour, re-planned every 5 s as live
+        if k % 10 == 0:
+            loco.on_path(PathMsg(timestamp=k * 0.5, waypoints=[(x, y)] + detour[1:], active_idx=0, replan_count=2 + k))
+        loco.on_pose(PoseMsg(timestamp=k * 0.5, x=x, y=y, yaw=0.0))
+        loco.step(k * 0.5)
+    assert "ROBOT_STUCK" not in events, "a longer re-planned route was reported as a stall"
     print("PASSED")
 
 
