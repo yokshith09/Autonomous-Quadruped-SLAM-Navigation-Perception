@@ -295,3 +295,6 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - Published-numbers comparison of the cross-environment averages: docs/results/benchmarks_published.md (context only, not same-data).
 - Plan set: docs/project/PLAN_NEXT.md (scene 1 verification -> scene 2 full route run -> benchmarks 3a-3g -> write-up).
 - 3a done: odometry-only and BreezySLAM on our recordings (docs/results/benchmarks_slam_baselines.md). Average ATE: ours 12.0 cm, odometry 153.6 cm, BreezySLAM best-tuned 149.6 cm. TUM Pioneer bags downloading to E:\project_phase1\datasets\tum (~0.25 MB/s).
+- 3b ablation + 3c robustness done: docs/results/benchmarks_ablation_robustness.md (evaluation/noise_stage.py). Main sim-to-real risk: uncorrected gyro bias (rescue heading relies on gyro). Open question: submap 8 vs 16 and robust vs plain pose graph mixed on run 19 recording; re-decide on all 4 rescue recordings before the next rescue run.
+- Phase II report draft: docs/report_phase2/Phase2_Report.pdf (evaluation/phase2_report.py, phase2_diagrams.py); scene 2 values are expected full-run values marked (E), to be replaced.
+- TUM Pioneer: 4 bags downloaded and verified (E:\project_phase1\datasets\tum). Converter + run next (3g).
