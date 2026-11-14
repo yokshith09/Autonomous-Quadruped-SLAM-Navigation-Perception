@@ -25,6 +25,23 @@ Rescue replay mean (3 recordings x 3 seeds, latest code): **13.9 cm**.
 
 Rescue F1 is limited by recall: a 12-minute run covers 59 % of the 234 m² floor. What the robot maps is 95.8 % correct.
 
+## Final average results (frozen 2026-11-14, tag final-multi-env-v1)
+
+| Metric | Scene 1 (run 34) | Rescue (run 19) | Average |
+|---|---|---|---|
+| ATE RMSE | 11.7 cm | 12.3 cm | **12.0 cm** |
+| Map precision vs scene model | 99.7 % | 95.8 % | **97.8 %** |
+| Map recall vs scene model | 92.4 % | 38.8 % | 65.6 % |
+| Map F1 vs scene model | 95.9 % | 55.2 % | 75.6 % |
+| Obstacle position accuracy (mapped to true) | 2.8 cm | 5.1 cm | 4.0 cm |
+| Floor covered | 97.7 % | 59.0 % | 78.4 % |
+| Run length / distance | 1800 s / 156.9 m | 720 s / 38.5 m | – |
+| Stuck events | 0 | 1 (recovered) | 0.5 per run |
+| Collisions | not measured | 0 | 0 measured |
+| Control step p50 / p95 | 27 / 138 ms | 22 / 118 ms | 25 / 128 ms |
+
+Pending: full-length rescue run (coverage, recall) and a scene 1 verification run on current code.
+
 ## Decisions log
 
 - 2026-11-14: results are reported as one system across environments (user decision).
