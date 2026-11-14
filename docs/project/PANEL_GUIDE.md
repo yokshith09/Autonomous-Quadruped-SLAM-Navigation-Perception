@@ -194,7 +194,7 @@ memory, evaluation tools.
 | Narrow-gap mode | off | on | Rubble gaps |
 | Room-by-room sweep | on | off | Open field has no rooms |
 | Map window | 11 x 11 m | 16.5 x 16.5 m | Scene size |
-| Operator route | none | 71 waypoints from the drawn route | Operator's search plan |
+| Operator route | none | route v3: 70 waypoints, building crossing first (in through the south, interior, east room, out of the north doorway), then the drawn route | Main aim: pass through the building; then cover the field |
 
 Everything else is identical code. The per-scene file is `config/scenes/<scene>.json`.
 

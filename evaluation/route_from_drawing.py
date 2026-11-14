@@ -34,6 +34,8 @@ def main():
     ap.add_argument("--clear-m", type=float, default=0.35)
     ap.add_argument("--edge-m", type=float, default=0.7)
     ap.add_argument("--start", type=float, nargs=2, default=(0.0, -1.8))
+    ap.add_argument("--prefix", action="append", default=[], help="x,y waypoints visited first, in this order")
+    ap.add_argument("--extra", action="append", default=[], help="x,y waypoints added to the drawn ones")
     a = ap.parse_args()
 
     img = np.asarray(Image.open(a.drawing).convert("RGB")).astype(int)
@@ -68,14 +70,20 @@ def main():
         if np.hypot(sx_[k] - gx, sy_[k] - gy) * RES <= 0.8:
             snapped.append((round(X0 + (sx_[k] + 0.5) * RES, 2), round(X0 + (sy_[k] + 0.5) * RES, 2)))
     pts = np.unique(np.array(snapped), axis=0)
+    prefix = [np.array(list(map(float, q.split(",")))) for q in a.prefix]
+    extra = [list(map(float, q.split(","))) for q in a.extra]
+    if extra:
+        pts = np.vstack([pts, extra])
+    if prefix:   # drawn points already covered by the prefix are dropped
+        pts = np.array([q for q in pts if min(np.hypot(*(q - p)) for p in prefix) > 1.0])
 
     # order: greedy nearest neighbour from the start, then 2-opt
     order, left_ = [], list(range(len(pts)))
-    cur = np.array(a.start)
+    cur = prefix[-1] if prefix else np.array(a.start)
     while left_:
         k = min(left_, key=lambda i: np.hypot(*(pts[i] - cur)))
         order.append(k); left_.remove(k); cur = pts[k]
-    route = [np.array(a.start)] + [pts[i] for i in order]
+    route = [cur] + [pts[i] for i in order]
     improved = True
     while improved:
         improved = False
@@ -86,7 +94,7 @@ def main():
                 if d1 < d0 - 1e-6:
                     route[i:j + 1] = route[i:j + 1][::-1]
                     improved = True
-    route = [[float(p[0]), float(p[1])] for p in route[1:]]
+    route = [[float(p[0]), float(p[1])] for p in prefix + route[1:]]
 
     import matplotlib
     matplotlib.use("Agg")
