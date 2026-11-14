@@ -1360,6 +1360,23 @@ def test_nearest_frontier_baseline_goes_to_the_closest_frontier():
     print("PASSED")
 
 
+def test_route_waypoint_in_unseen_floor_is_approached_not_skipped():
+    """F82: a waypoint in floor the camera has not seen yet is not 'blocked': the robot walks to the known floor
+    nearest to it (up to the unknown edge) instead of skipping it (route v3 skipped all 70 waypoints at the start)."""
+    print("Running test_route_waypoint_in_unseen_floor_is_approached_not_skipped...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[30:50, 15:30] = 0.0           # unseen patch in the west of the room
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.route = [(-0.9, 0.0)]                         # waypoint inside the unseen patch
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=None, doorways=[], doorway_rooms=[]))
+    fa.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=0.0))
+    tgt = fa.select_frontier(current_time=1.0)
+    assert fa.route_i == 0, "waypoint in unseen floor was skipped"
+    assert tgt is not None and tgt.target_wx < -0.3, f"expected a target at the unknown edge, got {tgt and tgt.target_wx}"
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()

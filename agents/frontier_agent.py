@@ -759,12 +759,30 @@ class FrontierAgent(BaseAgent):
         self.bus.publish("frontier/target", msg)
         return msg
 
+    def _waypoint_unseen(self, wx, wy, r_m: float = 0.3) -> bool:
+        """Most of the floor around the waypoint is still unknown. Off the map counts as seen: it can never be reached."""
+        g = self.grid
+        if not (g.x_min <= wx < g.x_min + g.width * g.res and g.y_min <= wy < g.y_min + g.height * g.res):
+            return False
+        gx, gy = g.world_to_grid(wx, wy)
+        r = int(r_m / g.res)
+        lo = g.grid_log_odds
+        h, w = lo.shape
+        y0, y1, x0, x1 = max(gy - r, 0), min(gy + r + 1, h), max(gx - r, 0), min(gx + r + 1, w)
+        patch = lo[y0:y1, x0:x1]
+        unknown = (patch > self.grid.thresh_free) & (patch < self.grid.thresh_occ)
+        return float(unknown.mean()) > 0.5
+
     def _route_target(self, current_time, rx, ry, dist_map, view_map) -> Optional[FrontierTargetMsg]:
-        field = view_map if np.isfinite(view_map).any() else dist_map
-        ys, xs = np.nonzero(np.isfinite(field))
         while self.route_i < len(self.route):
             wx, wy = self.route[self.route_i]
             d = math.hypot(wx - rx, wy - ry)
+            # A waypoint in unseen floor is approached over the known floor nearest to it, right up to the unknown edge,
+            # so the camera sees past it; only a waypoint in seen floor can be "blocked" (F82: route v3 started facing
+            # away from the building and skipped all 70 waypoints in seconds, the floor behind the robot being unknown).
+            unseen = self._waypoint_unseen(wx, wy)
+            field = dist_map if unseen or not np.isfinite(view_map).any() else view_map
+            ys, xs = np.nonzero(np.isfinite(field))
             # Approach through the reachable cell nearest the waypoint (standing clear of unknown space where possible).
             # Progress = walking distance to that cell + what is left from it: a detour round the building is
             # progress, a straight-line measure called it a stall (run 16 skipped waypoints 25 and 26 that way).
@@ -778,8 +796,11 @@ class FrontierAgent(BaseAgent):
                 self._route_best = (min(left, self._route_best[0]), current_time)
             # Already standing on the nearest reachable cell and still not there: the waypoint lies behind an obstacle
             # from here. Waiting for the stall clock left run 18 idle for 60 s at waypoint 6.
-            blocked = (i is not None and current_time >= self.route_after and d > ROUTE_REACHED_M
-                       and math.hypot(float(cx[i]) - rx, float(cy[i]) - ry) < 0.4)
+            at_nearest = (i is not None and current_time >= self.route_after and d > ROUTE_REACHED_M
+                          and math.hypot(float(cx[i]) - rx, float(cy[i]) - ry) < 0.4)
+            blocked = at_nearest and not unseen
+            if at_nearest and unseen and current_time - self._route_best[1] <= ROUTE_STALL_S:
+                return None      # nothing closer is known yet: explore this step, keep the waypoint
             if d <= ROUTE_REACHED_M or blocked or current_time - self._route_best[1] > ROUTE_STALL_S:
                 why = "reached" if d <= ROUTE_REACHED_M else ("skipped (blocked, nearest reachable spot reached, "
                       f"{d:.2f} m away)" if blocked else f"skipped (no progress, {d:.2f} m away)")
