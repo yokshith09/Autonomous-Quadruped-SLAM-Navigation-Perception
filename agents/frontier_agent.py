@@ -749,9 +749,14 @@ class FrontierAgent(BaseAgent):
                 left = float(field[ys[i], xs[i]] + gap[i])
             if left < self._route_best[0] - 0.2 or current_time < self.route_after:
                 self._route_best = (min(left, self._route_best[0]), current_time)
-            if d <= ROUTE_REACHED_M or current_time - self._route_best[1] > ROUTE_STALL_S:
-                print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}) "
-                      f"{'reached' if d <= ROUTE_REACHED_M else f'skipped (no progress, {d:.2f} m away)'}")
+            # Already standing on the nearest reachable cell and still not there: the waypoint lies behind an obstacle
+            # from here. Waiting for the stall clock left run 18 idle for 60 s at waypoint 6.
+            blocked = (i is not None and current_time >= self.route_after and d > ROUTE_REACHED_M
+                       and math.hypot(float(cx[i]) - rx, float(cy[i]) - ry) < 0.4)
+            if d <= ROUTE_REACHED_M or blocked or current_time - self._route_best[1] > ROUTE_STALL_S:
+                why = "reached" if d <= ROUTE_REACHED_M else ("skipped (blocked, nearest reachable spot reached, "
+                      f"{d:.2f} m away)" if blocked else f"skipped (no progress, {d:.2f} m away)")
+                print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}) {why}")
                 self.route_i += 1
                 self._route_best = (float("inf"), current_time)
                 continue

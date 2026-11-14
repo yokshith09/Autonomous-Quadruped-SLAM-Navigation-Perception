@@ -272,3 +272,10 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - **Operator route** (scene profile `route`, drawn by the user; `docs/results/rescue_route_plan.png`): waypoints in order, then free exploration; skipped after 60 s without progress measured in walking distance (run 16 skipped waypoints 25-26 on a detour with a straight-line measure); stall clock starts after gyro calibration; reached within 0.6 m.
 - **Run 16** (20261114_115832, stopped at 2380 s): route 23/28 reached, 5 skipped (gap through the building not passed: drift 26 cm closed it in the robot's map); reachable floor seen **96.6 %** (run 15: 76 %), floor observed 90.8 %; 0 collisions, 2 stuck events; ATE 27.4 cm (10 cm until ~960 s), precision 72.8 %, observable recall 60.9 %, F1 66.4 %. Coverage goal met; accuracy goals not.
 - Diagnosis: replay ATE is unstable (0.0006 deg/step gyro perturbation: run 12 13.1-19.1 cm, run 14 14.5-16.4 cm) -> single-run numbers are not comparable; gyro calibration absorbs 0.04-0.08 deg of body creep as bias; leg odometry has no lateral term (true 0.07-0.31 m/run).
+
+## 2026-11-14 — Rescue: stuck watchdog, submap size, blocked route waypoints
+- **F80** a longer re-planned route to the same goal restarts the no-progress watchdog (run 16: both stuck events). Run 18 (12 min, 20261114_142725): 0 stuck, 0 collisions.
+- **submap_keyframes 16** (rescue profile only; scene 1 keeps 8): 9 seeded replays mean ATE 16.3 -> 13.9 cm, all three recordings better; run 18 replay 22.2 -> 14.4 cm. (4: 14.8, 32: 13.8.)
+- **F81** a route waypoint is skipped at once when the robot already stands on the nearest reachable cell (run 18 idled 60 s at waypoint 6 behind rubble).
+- Rejected on 9 seeded replays: gyro-calibration creep removal (16.5 vs 16.3 cm), wall compass (16.4).
+- Run 19 not done: CoppeliaSim stopped running after run 18.

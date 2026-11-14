@@ -233,6 +233,8 @@ def main():
     locomotion_agent_cal = float(scene.get("gyro_calibration_s", 0.0))
     if "manhattan_gain" in scene:  # right-angle wall prior: right for buildings, wrong for scattered rubble
         slam_agent.pose_estimator.manhattan_gain = float(scene["manhattan_gain"])
+    if "submap_keyframes" in scene:  # keyframes in the scan-matching submap: more structure in view in sparse rubble
+        slam_agent.pose_estimator.submap_keyframes = int(scene["submap_keyframes"])
     if "icp_yaw_weight" in scene:  # scan-based heading pull: helps in buildings, pulls the wrong way in rubble
         slam_agent.pose_estimator.icp_yaw_weight = float(scene["icp_yaw_weight"])
     mapping_agent = MappingAgent(bus, MAP_X_MIN, MAP_X_MAX, MAP_Y_MIN, MAP_Y_MAX, resolution=GRID_RES, update_rate_hz=10.0)

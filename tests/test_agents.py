@@ -788,14 +788,28 @@ def test_operator_route_is_followed_in_order_then_exploration_resumes():
     t1 = fa.select_frontier(current_time=1.0)
     assert fa.state == "ROUTE" and math.hypot(t1.target_wx - 1.0, t1.target_wy - 1.0) < 0.6, f"first target {t1}"
     fa.on_pose(PoseMsg(timestamp=2.0, x=1.0, y=1.0, yaw=0.0))
-    t2 = fa.select_frontier(current_time=2.0)
-    assert fa.route_i == 1 and t2.target_wx > 1.0 and t2.target_wy > 1.0, "did not head for the next waypoint"
-    t3 = fa.select_frontier(current_time=3.0 + ROUTE_STALL_S)
-    assert fa.route_i == 2 and t3.target_wx < 0.0, "a waypoint it cannot approach was not skipped"
+    t2 = fa.select_frontier(current_time=2.0)   # the off-map waypoint: the robot already stands as close as it can get
+    assert fa.route_i == 2 and t2.target_wx < 0.0, "a waypoint it cannot approach was not skipped"
     fa.on_pose(PoseMsg(timestamp=70.0, x=-1.0, y=1.0, yaw=0.0))
     fa.select_frontier(current_time=70.0)
     assert fa.route_i == 3 and fa.state != "ROUTE", f"exploration did not resume ({fa.state})"
     grid.grid_log_odds[38:41, 20:23] = -2.0
+    print("PASSED")
+
+
+def test_route_waypoint_behind_an_obstacle_is_skipped_at_once():
+    """The robot stands on the reachable cell nearest the waypoint and the waypoint is still behind rubble: skip it now
+    instead of idling until the stall clock runs out (run 18 stood 60 s at waypoint 6)."""
+    print("Running test_route_waypoint_behind_an_obstacle_is_skipped_at_once...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[11:70, 39:42] = 2.0            # full wall at x = 0: the east half cannot be reached
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.route = [(1.0, -1.0), (-1.0, 1.0)]
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-1.0, y=-1.0, yaw=0.0))
+    tgt = fa.select_frontier(current_time=1.0)
+    fa.on_pose(PoseMsg(timestamp=10.0, x=tgt.target_wx, y=tgt.target_wy, yaw=0.0))
+    fa.select_frontier(current_time=10.0)
+    assert fa.route_i == 1, "idled at the nearest reachable spot of a blocked waypoint"
     print("PASSED")
 
 
