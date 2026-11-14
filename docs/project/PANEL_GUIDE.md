@@ -233,15 +233,19 @@ there; in the rubble field it misses the hidden sides of rubble blocks, so recal
 |---|---|---|---|
 | Odometry only | 291 cm | 15.7 cm | 154 cm |
 | BreezySLAM (best of 11 settings) | 190 cm | 110 cm | 150 cm |
-| Cartographer (Google) | in progress | in progress | |
+| Cartographer (Google), best of 3 settings | 344 cm | 95 cm | 220 cm |
 | **Ours** | **11.7 cm** | **12.3 cm** | **12.0 cm** |
 
 **BreezySLAM** is an open-source version of CoreSLAM/tinySLAM, a classic lightweight 2D laser SLAM. It searches for
 the best scan position by random small changes (hill climbing), has no loop closure, and is built for 360-degree
 laser scanners. With our 60-degree camera slice it has too little to match against and drifts.
 
-**Cartographer** is Google's open-source SLAM, an industry standard for 2D laser SLAM. First run on our scene 2
-data with one non-default option diverged (6 m error); a fair default-settings sweep is running.
+**Cartographer** is Google's open-source SLAM, an industry standard for 2D laser SLAM: it matches each scan to small
+local maps (submaps) and closes loops in a pose graph, much like ours. We ran it in Docker (ROS 2) on exactly our scan
+and odometry. It starts correctly (1 cm error at 90 s) and then drifts, because it is designed for dense 360-degree
+laser scans and accepts wrong loop closures on our 58-degree camera slice. Best of 3 settings: 344 cm in scene 1,
+95 cm in scene 2 - worse than odometry alone. This is the strongest argument for our design: standard laser SLAM
+does not work with a single narrow depth camera; ours does.
 
 ### 9.3 Public benchmark: TUM RGB-D Pioneer
 TUM (Technical University of Munich) RGB-D is a standard public dataset: a Kinect on a Pioneer wheeled robot in a
@@ -377,7 +381,7 @@ measured gain.
 Done: both scenes running, scene 1 best result, scene 2 runs, ablation, robustness, odometry and BreezySLAM
 baselines, TUM benchmark, report draft with diagrams.
 
-Running now: scene 1 verification run on current code; Cartographer on our recordings.
+Done since: Cartographer on our recordings (Table above); scene 1 verification on current code (14.8 cm, 0 collisions).
 
 Next: scene 2 full run on the new operator route (needs the rescue scene loaded in CoppeliaSim); nearest-frontier
 baseline in both scenes; Cartographer final numbers; improve scan matching on real depth data; then hardware.

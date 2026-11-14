@@ -261,7 +261,8 @@ def build():
         ["BreezySLAM [6], default settings", "1791.9 cm", "568.4 cm", "1180.2 cm"],
         ["BreezySLAM [6], best of 11 settings", "189.7 cm", "109.5 cm", "149.6 cm"],
         ["<b>Ours</b>", "11.7 cm", "12.3 cm", "12.0 cm"],
-        ["Cartographer [2]", ph("pending"), ph("pending"), ph("pending")],
+        ["Cartographer [2], defaults", "585.8 cm", "216.5 cm", "401.2 cm"],
+        ["Cartographer [2], trusting odometry 10x", "343.8 cm", "95.1 cm", "219.5 cm"],
         ["Nearest-frontier exploration [1] (coverage, time)", ph("pending"), ph("pending"), ph("pending")],
     ], raw_cols=(0, 1, 2, 3)))
     h.append(cap(7, "Table", "Position error of other methods on identical data from our two scenes"))
@@ -276,8 +277,11 @@ def build():
         "same scan, forward odometry and gyro as ours. Its defaults suit 360-degree laser scanners, so 11 settings "
         "were tried and the best is reported; with scan matching off it reproduces the odometry row to 0.1 cm, "
         "which confirms the data conversion. On our 60-degree depth-camera scan BreezySLAM helps a little in "
-        "scene 1 (291 -> 190 cm) and drifts in scene 2 (16 -> 110 cm); ours cuts the odometry error by 96 % in "
-        "scene 1 and 22 % in scene 2."))
+        "scene 1 (291 -> 190 cm) and drifts in scene 2 (16 -> 110 cm). <i>Cartographer</i> [2] is Google's open-source "
+        "SLAM, the industry reference for 2D laser SLAM (scan-to-submap matching plus loop closure in a pose graph). It "
+        "ran in Docker (ROS 2) on the same scan and odometry; its pose starts within 1 cm of the truth and then drifts, "
+        "because its matcher and loop closures expect dense 360-degree laser scans: 3 settings were tried and all end "
+        "worse than odometry alone. Ours cuts the odometry error by 96 % in scene 1 and 22 % in scene 2."))
 
     # 5.5 TUM
     h.append("<h3>5.5 Public Benchmark: TUM RGB-D Pioneer Sequences</h3>")
@@ -338,7 +342,7 @@ def build():
         "Scene 2 full exploration run on the operator route; replaces every (E) value, Figure 4 and the averages.",
         "Scene 1 verification run on the current code, with a measured collision count.",
         "Improve scan matching on real Kinect data so it gains clearly over wheel odometry on TUM.",
-        "Cartographer on our recordings and nearest-frontier exploration in both scenes (Table 7).",
+        "Nearest-frontier exploration in both scenes (Table 7).",
         "Runtime breakdown per agent (CPU and memory)."]))
 
     # 6
