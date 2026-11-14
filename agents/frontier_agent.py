@@ -96,6 +96,7 @@ class FrontierAgent(BaseAgent):
         # segmenting an open field gives arbitrary rooms that re-label as the map grows, and rescue run 14 swept
         # 150 s of already-explored floor under a new label. Off = best frontier over the whole map.
         self.room_sweep = True
+        self.strategy = "ours"          # "nearest": Yamauchi nearest-frontier baseline (benchmark only)
         # Operator search route (scene profile "route"): waypoints visited in order before free exploration. Each is
         # approached through the reachable cell nearest to it (it may still be unknown); a waypoint that gets no closer
         # for ROUTE_STALL_S is skipped, so a blocked route never holds the robot.
@@ -404,6 +405,8 @@ class FrontierAgent(BaseAgent):
         clear_of_unknown = cv2.distanceTransform(known, cv2.DIST_L2, 3) * self.grid.res >= STANDOFF_M
         view_map = np.where(clear_of_unknown, dist_map, np.inf).astype(np.float32)
         standoff_cells = int(math.ceil(STANDOFF_M / self.grid.res))
+        if self.strategy == "nearest":
+            return self._nearest_frontier(current_time, rx, ry, dist_map, inflated_mask)
         if self.route_i < len(self.route):
             tgt = self._route_target(current_time, rx, ry, dist_map, view_map)
             if tgt is not None:
@@ -731,6 +734,30 @@ class FrontierAgent(BaseAgent):
             return target_msg
 
         return self._finish(current_time, rx, ry, dist_map, inflated_mask, "No candidate left.")
+
+    def _nearest_frontier(self, current_time, rx, ry, dist_map, inflated) -> Optional[FrontierTargetMsg]:
+        """Benchmark baseline (Yamauchi 1997): drive to the frontier cell with the shortest walking distance. No viewpoint
+        standoff, scoring, room sweep or operator route; failed places are skipped like in our method."""
+        best = None
+        for gx, gy, _ in self.grid.detect_frontiers():
+            if self._is_blacklisted(gx, gy):
+                continue
+            d, cell = self._query_geodesic_dist(dist_map, gx, gy, search_radius=6)
+            wx, wy = self.grid.grid_to_world(*cell) if np.isfinite(d) else (0.0, 0.0)
+            if np.isfinite(d) and math.hypot(wx - rx, wy - ry) >= 0.38 and (best is None or d < best[0]):
+                best = (d, cell)
+        if best is None:
+            return self._finish(current_time, rx, ry, dist_map, inflated, "No reachable frontier left (nearest-frontier).")
+        self.state = "NEAREST_FRONTIER"
+        gx, gy = best[1]
+        wx, wy = self.grid.grid_to_world(gx, gy)
+        if self.committed_target != (gx, gy):
+            self.committed_target = (gx, gy)
+            self._start_commitment(current_time)
+        msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx, target_wy=wy,
+                                room_id=-1, area=0, is_doorway=False)
+        self.bus.publish("frontier/target", msg)
+        return msg
 
     def _route_target(self, current_time, rx, ry, dist_map, view_map) -> Optional[FrontierTargetMsg]:
         field = view_map if np.isfinite(view_map).any() else dist_map

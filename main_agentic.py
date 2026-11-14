@@ -163,6 +163,8 @@ def main():
                         help="End the run as soon as no reachable frontier is left (default: run the full --max-time)")
     parser.add_argument("--loop-camera-inliers", type=int, default=0,
                         help="a loop closure against a keyframe more than 10 m of walking old needs this many agreeing camera features (0 = scan only)")
+    parser.add_argument("--frontier-strategy", choices=["ours", "nearest"], default="ours",
+                        help="exploration rule; 'nearest' = Yamauchi nearest-frontier baseline for benchmarking (ignores the route)")
     parser.add_argument("--narrow-gaps", action="store_true",
                         help="let the planner use a 0.15 m margin (gaps from ~0.35 m) when no route exists at 0.20 m")
     parser.add_argument("--odom-scale", type=float, default=None,
@@ -297,7 +299,8 @@ def main():
     perception_agent.publish_cloud = bool(args.record_3d)
     planner_module.NARROW_GAPS = bool(args.narrow_gaps) or bool(scene.get("narrow_gaps", False))
     frontier_agent.room_sweep = bool(scene.get("room_sweep", True))
-    frontier_agent.route = [tuple(map(float, p)) for p in scene.get("route", [])]
+    frontier_agent.strategy = args.frontier_strategy
+    frontier_agent.route = [] if args.frontier_strategy == "nearest" else [tuple(map(float, p)) for p in scene.get("route", [])]
     frontier_agent.route_after = float(scene.get("gyro_calibration_s", 0.0))
     robot_module.ODOM_SCALE = float(args.odom_scale if args.odom_scale is not None else scene.get("odom_scale", 1.0))
     print(f"  [SCENE] {scene['name']} | odom_scale {robot_module.ODOM_SCALE:.3f} | narrow gaps {planner_module.NARROW_GAPS} | room sweep {frontier_agent.room_sweep}", flush=True)

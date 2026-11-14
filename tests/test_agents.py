@@ -1342,6 +1342,24 @@ def load_tests(loader, standard_tests, pattern):
     return suite
 
 
+def test_nearest_frontier_baseline_goes_to_the_closest_frontier():
+    """Benchmark baseline (Yamauchi): the closest reachable frontier wins, even right next to unknown space where our
+    method would keep a 0.5 m standoff; the operator route is not used."""
+    print("Running test_nearest_frontier_baseline_goes_to_the_closest_frontier...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[38:41, 20:23] = 0.0           # near frontier: a gap in the west part of the room
+    grid.grid_log_odds[38:41, 60:63] = 0.0           # far frontier: east part
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.strategy = "nearest"
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=None, doorways=[], doorway_rooms=[]))
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-0.4, y=0.0, yaw=0.0))
+    tgt = fa.select_frontier(current_time=1.0)
+    assert tgt is not None and tgt.target_wx < 0.0, f"expected the west frontier, got {tgt and (tgt.target_wx, tgt.target_wy)}"
+    assert fa.state == "NEAREST_FRONTIER"
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()
