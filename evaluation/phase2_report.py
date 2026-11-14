@@ -11,6 +11,25 @@ from evaluation import baseline_pdf as P
 from evaluation.baseline_pdf import render, tbl
 
 OUT_DIR = os.path.join(P.ROOT, "docs", "report_phase2")
+TUM_JSON = os.path.join(P.ROOT, "docs", "results", "tum_pioneer.json")
+
+
+def _tum_rows():
+    import json
+    from evaluation import benchmarks as B
+    cm = lambda v: f"{v * 100:.1f} cm"  # noqa: E731
+    rows = [[f"{m} [4]", "RGB-D images", *map(cm, seq), cm(avg)] for m, seq, avg in B.TUM_PIONEER]
+    seqs = ("pioneer_360", "pioneer_slam", "pioneer_slam2", "pioneer_slam3")
+    pend = "<span class='ph'>[pending]</span>"
+    d = json.load(open(TUM_JSON, encoding="utf-8")) if os.path.exists(TUM_JSON) else {"rows": []}
+    for r in d["rows"]:
+        v = [r["values"][q] for q in seqs]
+        avg = cm(sum(v) / 4) if all(x is not None for x in v) else pend
+        rows.append([r["label"], r["input"], *[cm(x) if x is not None else pend for x in v], avg])
+    return rows
+
+
+TUM_ROWS = _tum_rows()
 P.CSS += """
 .ph { color: #7a7a7a; font-style: italic; background-color: #f1f1f1; }
 .c { text-align: center; } h1 { text-align: center; font-size: 15pt; } .t { font-size: 10pt; text-align: center; }
@@ -78,8 +97,7 @@ def build():
         "<b>Target Users &amp; Stakeholders:</b> police first-response and forensic teams, search-and-rescue units; "
         + ph("add any specific partner agency or deployment context"),
         "<b>Existing Limitations:</b> commercial legged robots either need a pre-recorded map for autonomy "
-        "(Boston Dynamics Autowalk replays a recorded route [9]) or depend on expensive lidar [5]; camera-only SLAM "
-        "loses track on real quadrupeds (821 cm error for RGB-D ORB-SLAM3 on ANYmal [5]); manual tele-operation "
+        "(Boston Dynamics Autowalk replays a recorded route [9]) or depend on expensive lidar [5]; manual tele-operation "
         "needs a trained operator in line of contact.",
         "<b>Application Objectives:</b>"]))
     h.append(bullets([
@@ -95,7 +113,6 @@ def build():
         ["FR-05", "Functional", "Detect stalls and floor edges and recover (turn-away, skip, stop before a drop)."],
         ["NFR-01", "Non-Functional", "Real-time: whole control step at 20 Hz; median step 25 ms on a PC CPU, no GPU."],
         ["NFR-02", "Non-Functional", "Safety: zero collisions; reliability: same code in every environment, only a scene profile differs."],
-        ["NFR-03", "Non-Functional", "Target hardware: Raspberry Pi class computer " + ph("latency on the Pi to be measured")],
     ], raw_cols=(2,)))
     h.append(cap(1, "Table", "Summary of Application Functional and Non-Functional Requirements"))
 
@@ -103,16 +120,16 @@ def build():
     h.append("<h2>3 Application Architecture &amp; Solution Design</h2>")
     h.append("<h3>3.1 End-to-End Application Architecture</h3>")
     h.append(para(
-        "The simulator (or, later, the robot) delivers depth frames, gyro rates and joint states. The perception "
-        "agent turns each depth frame into a 2D scan of the obstacle band above the floor. The SLAM agent predicts "
+        "Figure 1 shows the robot's pipeline from a depth frame to joint commands. The perception agent turns each depth frame into a 2D scan of the obstacle band above the floor. The SLAM agent predicts "
         "the pose from leg odometry and gyro, corrects it by matching the scan to a submap of recent keyframes and "
         "publishes it. The mapping agent writes the scan into the occupancy grid and segments rooms and doorways. "
         "The frontier agent picks the next goal (operator route waypoint, otherwise a safe viewpoint that sees "
         "unknown space), the planning agent computes an A* path and the locomotion agent walks it with a trot gait, "
-        "watching for stalls and floor edges. The supervisor keeps the mission state, a knowledge graph of rooms and "
-        "an event timeline. Every run is stored with its recording, so SLAM changes can be replayed offline."))
-    h.append("<p><img src='architecture.png' width='520'/></p>")
-    h.append(cap(1, "Figure", "End-to-End Application Architecture (agents, message-bus topics, interfaces; dashed: planned stages)"))
+        "watching for stalls and floor edges; its leg odometry and gyro feed back into the SLAM prediction. The "
+        "supervisor sits above the pipeline and keeps the mission state, a knowledge graph of rooms and an event "
+        "timeline. All agents exchange messages on one publish-subscribe bus (topic names on the arrows)."))
+    h.append("<p><img src='architecture.png' width='400'/></p>")
+    h.append(cap(1, "Figure", "End-to-End Architecture of the robot: supervisor above a six-stage pipeline from sensing to acting"))
     h.append("<p><img src='flow.png' width='330'/></p>")
     h.append(cap(2, "Figure", "Control flow of one exploration mission (20 Hz loop)"))
     h.append("<h3>3.2 Component Design, Data Flow &amp; Technology Stack</h3>")
@@ -130,17 +147,17 @@ def build():
         "truth_eval.json, map arrays and a compressed recording of every scan and odometry step; config/scenes holds "
         "per-environment profiles; CoppeliaSim is reached through its ZMQ remote API.",
         "<b>Technology &amp; Deployment Stack:</b> Python 3.12, NumPy, OpenCV, Matplotlib, PyMuPDF; CoppeliaSim "
-        "4.x with the ZMQ remote API; CPU only, so the same code can move to a Raspberry Pi class computer."]))
+        "4.x with the ZMQ remote API; runs on a CPU only, no GPU needed."]))
 
     # 4
     h.append("<h2>4 Implementation Details</h2>")
     h.append("<h3>4.1 Development &amp; Deployment Environment</h3>")
     h.append(bullets([
         "<b>Platform &amp; Runtime Environment:</b> Windows 11 PC, CoppeliaSim simulation, headless or with "
-        "viewer; target robot " + ph("real quadruped model and onboard computer"),
+        "viewer.",
         "<b>Libraries, Tools &amp; Hardware:</b> NumPy, OpenCV, SciPy-free custom ICP and pose graph, pytest "
         "(82 tests), rosbags (TUM data), BreezySLAM (baseline). Simulated sensors: depth camera 60 deg, gyro, "
-        "joint encoders. " + ph("real sensors and robot hardware list"),
+        "joint encoders.",
         "<b>Source Code Repository:</b> github.com/yokshith09/Autonomous-Quadruped-SLAM-Navigation-Perception "
         "(branch improve/exploration; tags best-sim-v3, final-multi-env-v1)"]))
     h.append("<h3>4.2 Module-Wise Implementation &amp; Integration Summary</h3>")
@@ -154,7 +171,6 @@ def build():
         ["External / IO", "CoppeliaSim ZMQ interface: depth camera, gyro, joints, contact check", "100 % (Functional, sim)"],
         ["Evidence perception (team's Mamba model)", ph("model integration, ROI detection, latency on Pi"), "Not integrated"],
         ["Event trigger, forensic store, sync", ph("SHA-256 hashed logs, AES-256 sync"), "Not started"],
-        ["Real robot", ph("hardware bring-up and field test"), "Not started"],
     ], raw_cols=(1,)))
     h.append(cap(2, "Table", "Application Module Implementation and Integration Status"))
     h.append("<h3>4.3 Detailed Module Descriptions</h3>")
@@ -192,10 +208,12 @@ def build():
         ["TC-07", "Automated unit tests", "pytest, 82 tests", "82 passed", "Pass"],
     ], raw_cols=(3,)))
     h.append(cap(3, "Table", "Functional Testing Summary Across Core Application Scenarios"))
-    h.append(para("<b>Results across environments.</b> Scene 2 values marked (E) are the expected values of the full "
-                  "exploration run, forecast from rescue runs 16 and 19; they are to be replaced after that run "
-                  "and after the scene 1 verification run."))
-    h.append(tbl(["Metric", "Scene 1: building (run 34)", "Scene 2: rescue field", "Average"], [
+    # 5.2 our results
+    h.append("<h3>5.2 Results of Our System: Scene 1, Scene 2 and Average</h3>")
+    h.append(para("One system with the same code in both environments; only the scene profile differs. Scene 2 "
+                  "values marked (E) are the expected values of the full exploration run (forecast from rescue runs "
+                  "16 and 19) and will be replaced after that run; scene 1 will be confirmed by a verification run."))
+    h.append(tbl(["Metric", "Scene 1: building (run 34)", "Scene 2: rescue field", "Average (final)"], [
         ["Position error (ATE RMSE)", "11.7 cm", "16 cm (E)", "13.9 cm"],
         ["Map precision vs scene model", "99.7 %", "93 % (E)", "96.4 %"],
         ["Map recall vs scene model", "92.4 %", "60 % (E)", "76.2 %"],
@@ -204,32 +222,12 @@ def build():
         ["Collisions / stuck events", "not measured / 0", "0 / 0 (E)", "0 / 0"],
         ["Control step (median / 95th pct.)", "27 / 138 ms", "22 / 118 ms", "25 / 128 ms"],
     ]))
-    h.append(cap(4, "Table", "Results per environment and average (one system, same code)"))
-    h.append(tbl(["Method (same recordings, same scoring)", "Scene 1", "Scene 2 (12-min run)", "Average"], [
-        ["Odometry only (leg odometry + gyro)", "291.4 cm", "15.7 cm", "153.6 cm"],
-        ["BreezySLAM [6], default settings", "1791.9 cm", "568.4 cm", "1180.2 cm"],
-        ["BreezySLAM [6], best of 11 settings", "189.7 cm", "109.5 cm", "149.6 cm"],
-        ["Ours", "11.7 cm", "12.3 cm", "12.0 cm"],
-    ]))
-    h.append(cap(5, "Table", "Position error against baselines on identical data"))
-    h.append(tbl(["Published system (context only; other data, real robots)", "Platform", "ATE"], [
-        ["FAST-LIVO2 [5]", "ANYmal, lidar + camera + IMU, 145-332 m", "10.5 cm"],
-        ["ORB-SLAM3 stereo-inertial [5]", "ANYmal, 145-332 m", "22.9 cm"],
-        ["RTAB-Map / ORB-SLAM3 RGB-D [5]", "ANYmal, depth camera, 145-332 m", "241 / 821 cm"],
-        ["RTABMap / OpenVSLAM / ORB-SLAM3 [4]", "TUM Pioneer sequences, Kinect", "28.7 / 39.2 / 172 cm"],
-        ["Ours on TUM Pioneer", "same sequences", ph("pending")],
-    ], raw_cols=(2,)))
-    h.append(cap(6, "Table", "Published numbers for context (not a same-data comparison)"))
-    h.append("<h3>5.2 Working Prototype Demonstration</h3>")
-    h.append("<p><img src='rescue_run19_coverage.png' width='330'/></p>")
-    h.append(cap(7, "Figure", "Scene 2, 12-minute run: map over the true scene, true path (blue) and estimated path (orange)"))
-    h.append(para(ph("Insert simulator screenshots of the robot in both scenes, scene 1 map, and the full-run scene 2 map")))
-    h.append(para(
-        "<b>Evaluation &amp; Usability Summary:</b> the control loop runs in real time on a PC CPU (median 25 ms per "
-        "step for all agents). Position error stays near 12 cm in both measured runs; maps are 95.8-99.7 % precise "
-        "where the robot has looked. In scene 2 the map recall is limited because a 2D camera slice sees only the "
-        "faces of rubble that point towards the robot. Tables 7 and 8 show what each part adds and how the "
-        "system degrades under sensor faults."))
+    h.append(cap(4, "Table", "Results per environment and the final average across environments"))
+
+    # 5.3 benchmarking of our system
+    h.append("<h3>5.3 Benchmarking of Our System</h3>")
+    h.append(para("<b>Ablation.</b> Each row removes one part and replays the stored sensor recordings through SLAM "
+                  "(scene 2: mean of 3 seeds, because single replays there vary by a few cm)."))
     h.append(tbl(["Variant (one part removed)", "Scene 1", "Scene 2 (3-seed mean)"], [
         ["Full system", "11.7 cm", "11.0 cm"],
         ["No loop closure", "25.9 cm", "12.4 cm"],
@@ -240,7 +238,9 @@ def build():
         ["No heading prior / no gyro calibration", "295.6 cm", "178.0 cm"],
         ["Odometry only", "291.4 cm", "15.7 cm"],
     ]))
-    h.append(cap(7, "Table", "Ablation: position error with one part removed (replays of the stored runs)"))
+    h.append(cap(5, "Table", "Ablation: position error with one part removed"))
+    h.append(para("<b>Robustness.</b> Seeded sensor faults are injected into the scene 2 recording (3 seeds each) and "
+                  "the result is compared with odometry alone under the same faults."))
     h.append(tbl(["Injected fault (scene 2, 3 seeds)", "Ours", "Odometry only"], [
         ["None", "12.3 cm", "15.7 cm"],
         ["Depth noise 1 / 3 cm", "13.6 / 11.1 cm", "15.7 cm"],
@@ -250,13 +250,102 @@ def build():
         ["Residual gyro bias 0.01 / 0.03 deg/s", "29.9 / 100.5 cm", "29.6 / 98.0 cm"],
         ["All faults combined", "47.8 cm", "50.9 cm"],
     ]))
-    h.append(cap(8, "Table", "Robustness to seeded sensor faults; uncorrected gyro bias is the main sim-to-real risk"))
+    h.append(cap(6, "Table", "Robustness to seeded sensor faults"))
+    h.append(para("Depth noise, missing points and leg-odometry errors are absorbed by scan matching; gyro bias left "
+                  "after calibration passes into the error because scene 2 takes its heading from the gyro."))
+
+    # 5.4 other systems in our scenes
+    h.append("<h3>5.4 Other Systems Run in Our Scenes</h3>")
+    h.append(tbl(["Method (same recordings, same scoring)", "Scene 1", "Scene 2 (12-min run)", "Average"], [
+        ["Odometry only (leg odometry + gyro)", "291.4 cm", "15.7 cm", "153.6 cm"],
+        ["BreezySLAM [6], default settings", "1791.9 cm", "568.4 cm", "1180.2 cm"],
+        ["BreezySLAM [6], best of 11 settings", "189.7 cm", "109.5 cm", "149.6 cm"],
+        ["<b>Ours</b>", "11.7 cm", "12.3 cm", "12.0 cm"],
+        ["Cartographer [2]", ph("pending"), ph("pending"), ph("pending")],
+        ["Nearest-frontier exploration [1] (coverage, time)", ph("pending"), ph("pending"), ph("pending")],
+    ], raw_cols=(0, 1, 2, 3)))
+    h.append(cap(7, "Table", "Position error of other methods on identical data from our two scenes"))
+    h.append(para(
+        "<b>How Table 7 is built.</b> All rows are scored on exactly the same input: the sensor data recorded during "
+        "the two simulator runs (every 2D scan, leg-odometry step and gyro increment), replayed offline through each "
+        "method, and compared with the robot's true path from the simulator (ATE RMSE). Only the method that turns "
+        "this data into a pose changes. <i>Odometry only</i> adds up leg odometry and gyro without using the scans; "
+        "any SLAM method must beat it. <i>BreezySLAM</i> [6] is an open-source Python/C implementation of CoreSLAM "
+        "(tinySLAM), a well-known lightweight 2D laser SLAM: it matches each scan to its own occupancy map by "
+        "random-mutation hill climbing, starting from the odometry guess, and has no loop closure. It receives the "
+        "same scan, forward odometry and gyro as ours. Its defaults suit 360-degree laser scanners, so 11 settings "
+        "were tried and the best is reported; with scan matching off it reproduces the odometry row to 0.1 cm, "
+        "which confirms the data conversion. On our 60-degree depth-camera scan BreezySLAM helps a little in "
+        "scene 1 (291 -> 190 cm) and drifts in scene 2 (16 -> 110 cm); ours cuts the odometry error by 96 % in "
+        "scene 1 and 22 % in scene 2."))
+
+    # 5.5 TUM
+    h.append("<h3>5.5 Public Benchmark: TUM RGB-D Pioneer Sequences</h3>")
+    h.append(para(
+        "<b>What the dataset is.</b> TUM RGB-D [3] is a public SLAM benchmark from the Technical University of "
+        "Munich: a Microsoft Kinect records colour and depth at 30 Hz while a motion-capture system records the true "
+        "camera pose at 100 Hz, and a standard tool scores every method the same way (ATE after rigid alignment). "
+        "Its four <i>Pioneer</i> sequences put the Kinect on a Pioneer 3 wheeled robot driven through a large hall "
+        "(16-40 m paths, 1-3 minutes each); the recordings also carry the robot's wheel odometry."))
+    h.append(para(
+        "<b>Why it fits our comparison.</b> It is the closest public match to our robot: a ground robot, planar "
+        "motion, a depth camera of the same kind and field of view as ours, and odometry from the robot itself. "
+        "Every system in Table 8 is scored on the same sequences with the same alignment-based ATE, so it shows "
+        "where our SLAM stands against published systems on real sensor data. Ours runs with our existing scene "
+        "profiles, without TUM-specific tuning. Differences: ours estimates position in the plane (x-y), the others "
+        "in 3D (on a flat floor nearly the same); ours uses the wheel odometry, the visual systems do not."))
+    h.append(tbl(["System (TUM fr2/pioneer)", "Input", "360", "slam", "slam2", "slam3", "Average"],
+                 TUM_ROWS, raw_cols=(0, 2, 3, 4, 5, 6)))
+    h.append(cap(8, "Table", "ATE RMSE on the TUM Pioneer sequences; published values from [4]"))
+    h.append(para(
+        "<b>Result.</b> With the scene-2 settings (made for open floor without right-angle walls) ours averages "
+        "25.9 cm over the four sequences: ahead of RTABMap (28.7 cm), OpenVSLAM (39.2 cm) and ORB-SLAM3 (172.0 cm) on "
+        "average, and the most consistent row (15-38 cm on every sequence, where each visual system fails on at least "
+        "one). With the scene-1 settings, whose heading prior assumes walls at right angles to the start heading, "
+        "ours averages 40.5 cm. Two cautions: the gain over the robot's own wheel odometry is small (28.7 cm "
+        "average, and better than ours on two sequences), so on real Kinect data much of our accuracy still comes "
+        "from odometry; and ours uses wheel odometry while the visual systems use images only. No TUM-specific "
+        "tuning was done; both of our existing profiles are shown."))
+
+    # 5.6 where we stand
+    h.append("<h3>5.6 Where Our System Stands</h3>")
+    h.append(bullets([
+        "<b>In our scenes (same data):</b> ours 12.0 cm average against 153.6 cm for odometry alone and 149.6 cm "
+        "for the best BreezySLAM setting: an order of magnitude better than both.",
+        "<b>On the public TUM benchmark (same data):</b> 25.9 cm average with the scene-2 settings, ahead of "
+        "RTABMap (28.7), OpenVSLAM (39.2) and ORB-SLAM3 (172.0) on average, but only slightly better than wheel "
+        "odometry alone (28.7); 40.5 cm with the scene-1 settings.",
+        "<b>Across environments:</b> 13.9 cm average error, 96.4 % map precision, 93.9 % floor covered, no "
+        "collisions measured, with one code base."]))
+
+    # 5.7 prototype
+    h.append("<h3>5.7 Working Prototype Demonstration</h3>")
+    h.append(para(ph("Insert CoppeliaSim screenshots of the robot in scene 1 and scene 2")))
+    h.append("<p><img src='scene1.png' width='520'/></p>")
+    h.append(cap(3, "Figure", "Scene 1 (building): (a) layout from the scene model, (b) map built by the robot with the "
+                 "true path (blue) and estimated path (orange)"))
+    h.append("<p><img src='scene2_full.png' width='520'/></p>")
+    h.append(cap(4, "Figure", "Scene 2 (rescue field), most complete exploration so far (run 16): (a) layout, (b) map and "
+                 "paths. To be replaced by the full run on the operator route"))
+    h.append(para(
+        "<b>Evaluation &amp; Usability Summary:</b> the control loop runs in real time on a PC CPU (median 25 ms per "
+        "step for all agents). Maps are 95.8-99.7 % precise where the robot has looked; in scene 2 the map recall "
+        "is limited because a 2D camera slice sees only the faces of rubble that point towards the robot."))
+
+    # 5.8 to come
+    h.append("<h3>5.8 Work Still to Come</h3>")
+    h.append(bullets([
+        "Scene 2 full exploration run on the operator route; replaces every (E) value, Figure 4 and the averages.",
+        "Scene 1 verification run on the current code, with a measured collision count.",
+        "Improve scan matching on real Kinect data so it gains clearly over wheel odometry on TUM.",
+        "Cartographer on our recordings and nearest-frontier exploration in both scenes (Table 7).",
+        "Runtime breakdown per agent (CPU and memory)."]))
 
     # 6
     h.append("<h2>6 Technical Justification &amp; Architectural Decisions</h2>")
     h.append(bullets([
         "<b>Technology Stack Rationale:</b> Python with NumPy/OpenCV keeps every algorithm readable and testable "
-        "and runs on a CPU, matching the Raspberry Pi target; CoppeliaSim gives exact ground truth and scene "
+        "and runs on a CPU without a GPU; CoppeliaSim gives exact ground truth and scene "
         "geometry for honest scoring; a depth camera is far cheaper than lidar.",
         "<b>Architectural &amp; Performance Trade-offs:</b> a 2D slice of the depth image keeps SLAM fast but "
         "gives a narrow 60 deg view, so open floor depends on odometry; a 16-keyframe submap costs more per step "
@@ -275,10 +364,10 @@ def build():
         "with the same code; it beats odometry and a standard light 2D SLAM by an order of magnitude on identical data.",
         "<b>Current Operational Limitations:</b> simulation only; map recall in open rubble fields is about 60 %; "
         "position error grows on long open-floor stretches; heading in the rescue profile relies on the gyro, so "
-        "uncorrected gyro bias raises the error (Table 8); evidence perception, event trigger and secure logging "
+        "uncorrected gyro bias raises the error (Table 6); evidence perception, event trigger and secure logging "
         "are not integrated; " + ph("scene 2 full run and scene 1 verification pending"),
-        "<b>Future Enhancements:</b> Cartographer and TUM comparisons, noise robustness, nearest-frontier baseline; "
-        "more viewpoints around obstacles; the team's Mamba model for evidence detection; real-robot tests; "
+        "<b>Future Enhancements:</b> Cartographer comparison and nearest-frontier exploration baseline; "
+        "more viewpoints around obstacles; the team's Mamba model for evidence detection; "
         + ph("other planned features")]))
 
     # 8
@@ -304,7 +393,6 @@ def build():
         "P. Agarwal, G. D. Tipaldi, L. Spinello, C. Stachniss, W. Burgard, \"Robust map optimization using dynamic covariance scaling,\" in Proc. IEEE ICRA, 2013.",
         "A. Censi, \"An ICP variant using a point-to-line metric,\" in Proc. IEEE ICRA, 2008.",
         "Boston Dynamics, \"Spot product specifications and Spot SDK autonomy documentation,\" bostondynamics.com.",
-        "J. Chen, F. Dellaert, \"A1 SLAM: quadruped SLAM using the A1's onboard sensors,\" arXiv:2211.14432, 2022.",
     ]
     h.append("<ul>" + "".join(f"<li>[{i + 1}] {r}</li>" for i, r in enumerate(refs)) + "</ul>")
     return "\n".join(h)

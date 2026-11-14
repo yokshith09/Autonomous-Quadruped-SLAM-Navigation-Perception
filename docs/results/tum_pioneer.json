@@ -1,0 +1,6 @@
+{"note": "ATE RMSE (m) after rigid 2D alignment (python -m evaluation.tum_pioneer). Scene-1 / scene-2 settings are our existing scene profiles, no TUM-specific tuning; both are shown.",
+ "rows": [
+  {"label": "Wheel odometry only (Pioneer)", "input": "wheel odometry", "values": {"pioneer_360": 0.163, "pioneer_slam": 0.190, "pioneer_slam2": 0.585, "pioneer_slam3": 0.210}},
+  {"label": "<b>Ours</b>, scene-1 settings", "input": "depth scan + wheel odometry", "values": {"pioneer_360": 0.148, "pioneer_slam": 0.695, "pioneer_slam2": 0.338, "pioneer_slam3": 0.441}},
+  {"label": "<b>Ours</b>, scene-2 settings", "input": "depth scan + wheel odometry", "values": {"pioneer_360": 0.152, "pioneer_slam": 0.229, "pioneer_slam2": 0.383, "pioneer_slam3": 0.273}}
+ ]}

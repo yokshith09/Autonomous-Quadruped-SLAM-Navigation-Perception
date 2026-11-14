@@ -27,49 +27,38 @@ def arrow(ax, a, b, label="", rad=0.0, lx=0.0, ly=0.0):
 
 
 def architecture(path):
-    fig, ax = plt.subplots(figsize=(12, 8.2))
-    ax.set_xlim(0, 12); ax.set_ylim(0, 8.2); ax.axis("off")
-    # layer bands
-    for y, h, name, col in ((6.7, 1.38, "Simulation / hardware interface", C["sim"]),
-                            (2.0, 4.5, "Agents on a publish-subscribe message bus (one process, 20 Hz control loop)", "#f7fbf6"),
-                            (0.1, 1.7, "Evaluation, storage and planned stages", "#fbf7fc")):
-        ax.add_patch(FancyBboxPatch((0.1, y), 11.8, h, boxstyle="round,pad=0.02,rounding_size=0.15", fc=col, ec="#c8ccd2",
-                                    lw=0.8))
-        ax.text(0.25, y + h - 0.05, name, fontsize=8.5, style="italic", color="#555555", va="top")
-    box(ax, 0.4, 6.85, 3.2, 0.85, "Actuators", "12 joints, trot gait (core/robot.py)", "#ffffff")
-    box(ax, 4.2, 6.85, 3.6, 0.85, "Sensors", "depth camera 60 deg, gyro, leg odometry", "#ffffff")
-    box(ax, 8.4, 6.85, 3.2, 0.85, "CoppeliaSim quadruped", "ZMQ remote API, scene loaded per environment", "#ffffff")
-
-    box(ax, 0.8, 4.75, 2.4, 1.05, "Perception agent", "depth -> 2D scan, thumbnails", C["agent"])
-    box(ax, 3.5, 4.75, 2.6, 1.05, "SLAM agent", "scan-to-submap ICP, gyro calib.,\nloop closure, robust pose graph", C["agent"])
-    box(ax, 6.5, 4.75, 2.4, 1.05, "Mapping agent", "occupancy grid 5 cm,\nrooms, doorways", C["agent"])
-    box(ax, 9.3, 4.75, 2.3, 1.05, "Supervisor agent", "mission state, knowledge\ngraph, episodic memory", C["agent"])
-    box(ax, 6.5, 2.35, 2.4, 1.05, "Frontier agent", "viewpoints, operator route,\nnarrow gaps, completion", C["agent"])
-    box(ax, 3.5, 2.35, 2.6, 1.05, "Planning agent", "A* on inflated grid,\npath smoothing", C["agent"])
-    box(ax, 0.8, 2.35, 2.4, 1.05, "Locomotion agent", "path following, watchdog,\nstuck recovery, drop check", C["agent"])
-    box(ax, 9.3, 2.35, 2.3, 1.05, "Safety monitor", "contact check (collisions),\ntip-over detection", C["core"])
-
-    arrow(ax, (5.2, 6.85), (2.0, 5.8), "sensor/rgbd", lx=-0.3, ly=0.12)
-    arrow(ax, (3.2, 5.27), (3.5, 5.27), "sensor/scan", ly=0.22)
-    arrow(ax, (6.1, 5.27), (6.5, 5.27), "pose/slam", ly=0.22)
-    arrow(ax, (8.9, 5.27), (9.3, 5.27), "map/grid", ly=0.22)
-    arrow(ax, (7.7, 4.75), (7.7, 3.4), "map/grid", lx=0.42)
-    arrow(ax, (6.5, 2.87), (6.1, 2.87), "frontier/target", ly=0.22)
-    arrow(ax, (3.5, 2.87), (3.2, 2.87), "plan/path", ly=0.22)
-    ax.plot([0.8, 0.45, 0.45], [2.87, 2.87, 6.5], color=C["edge"], lw=1.1)
-    arrow(ax, (0.45, 6.5), (0.45, 6.85))
-    ax.text(0.52, 4.1, "joint\ntargets", fontsize=6.8, color="#1f3b73", ha="left")
-    arrow(ax, (2.6, 3.4), (4.2, 4.75), "control/actuation\n(odometry, gyro)", rad=-0.1, lx=0.75, ly=-0.05)
-    arrow(ax, (10.45, 4.75), (8.9, 3.15), "mission/event", rad=0.1, lx=0.3)
-    arrow(ax, (10.45, 3.4), (10.45, 4.75), "events", lx=0.35)
-
-    box(ax, 0.4, 0.3, 2.7, 1.1, "Run storage", "runs/<id>: metrics, trajectory,\nmaps, recording, REPORT.md", C["eval"])
-    box(ax, 3.4, 0.3, 2.9, 1.1, "Evaluation", "ATE vs ground truth, map F1 vs\nscene model, replay, baselines", C["eval"])
-    box(ax, 6.6, 0.3, 2.5, 1.1, "Event trigger +\nteam's Mamba model", "[planned, not integrated]", C["todo"],
-        dashed=True)
-    box(ax, 9.4, 0.3, 2.3, 1.1, "Forensic store + sync", "SHA-256 logs, AES-256\n[planned, not integrated]", C["todo"],
-        dashed=True)
-    arrow(ax, (3.1, 0.85), (3.4, 0.85))
+    """Top-down hierarchy of the robot's own pipeline: supervisor above, six agents from sensing to acting."""
+    fig, ax = plt.subplots(figsize=(10, 9.4))
+    ax.set_xlim(0, 10); ax.set_ylim(0, 9.4); ax.axis("off")
+    box(ax, 0.6, 8.25, 8.8, 0.9, "Supervisor agent  (mission level)",
+        "mission state, knowledge graph of rooms, event timeline, completion", C["core"])
+    tiers = [("1  Sense", "Perception agent", "depth frame -> 2D obstacle scan of the band above the floor"),
+             ("2  Localise", "SLAM agent", "odometry + gyro prediction, scan-to-submap ICP,\nloop closure in a robust pose graph -> pose"),
+             ("3  Map", "Mapping agent", "occupancy grid (5 cm), rooms and doorways"),
+             ("4  Decide", "Frontier agent", "next operator-route waypoint, else the best\nfrontier viewpoint 0.5 m from unknown space"),
+             ("5  Plan", "Planning agent", "A* path on the inflated grid, narrow-gap mode"),
+             ("6  Act", "Locomotion agent", "trot gait follows the path; stall watchdog,\nfloor-edge and collision checks")]
+    topics = ["sensor/scan", "pose/slam", "map/grid", "frontier/target", "plan/path"]
+    y = 7.35
+    for i, (tier, name, sub) in enumerate(tiers):
+        ax.text(0.6, y - 0.36, tier, fontsize=10, weight="bold", color="#1f3b73", va="center")
+        box(ax, 2.3, y - 0.8, 6.0, 0.8, name, sub, C["agent"])
+        if i < len(tiers) - 1:
+            arrow(ax, (5.3, y - 0.8), (5.3, y - 1.12))
+            ax.text(5.45, y - 0.96, topics[i], fontsize=7.5, color="#1f3b73", va="center")
+        y -= 1.12
+    # inputs / outputs
+    ax.text(5.3, 7.75, "depth frame", fontsize=7.5, ha="center", color="#555555")
+    arrow(ax, (5.3, 7.65), (5.3, 7.37))
+    arrow(ax, (5.3, 0.95), (5.3, 0.6))
+    ax.text(5.3, 0.38, "joint commands to the legs", fontsize=7.5, ha="center", color="#555555")
+    # feedback: odometry from Act to Localise
+    ax.plot([8.3, 9.2, 9.2], [1.35, 1.35, 5.83], color=C["edge"], lw=1.1)
+    arrow(ax, (9.2, 5.83), (8.3, 5.83))
+    ax.text(9.3, 3.7, "leg odometry\n+ gyro", fontsize=7.5, color="#1f3b73", va="center")
+    # supervisor link
+    ax.plot([1.9, 1.9], [8.25, 0.95], color="#8a8a8a", lw=1.0, ls="--")
+    ax.text(1.75, 4.7, "mission events (all agents)", fontsize=7.5, color="#555555", rotation=90, va="center", ha="center")
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
