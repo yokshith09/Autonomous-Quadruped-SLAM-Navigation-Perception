@@ -70,6 +70,7 @@ PATROL_SECONDS_PER_M = 20.0  # staleness worth one metre of walking (the robot w
 EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
 ROUTE_REACHED_M = 0.6     # a route waypoint counts as visited within this distance
 ROUTE_STALL_S = 60.0      # ... and is skipped when the robot gets no closer to it (by 0.2 m) for this long
+REQUIRED_NARROW_M = 2.0   # narrow-gap clearance only on the final approach (it touched a vehicle 2.9 m out)
 ROUTE_REQUIRED_STALL_S = 300.0  # required waypoints (scene profile route_required): never skipped as blocked, only after this
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
 
@@ -816,7 +817,7 @@ class FrontierAgent(BaseAgent):
                     self.state, self.committed_target = "ROUTE", None
                     msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx,
                                             target_wy=wy, room_id=-1, area=50, is_doorway=False, optimistic=True,
-                                            narrow_first=required)
+                                            narrow_first=required and d <= REQUIRED_NARROW_M)
                     self.bus.publish("frontier/target", msg)
                     return msg
                 why = ("reached" if d <= ROUTE_REACHED_M else f"skipped (no way even through unseen floor, {d:.2f} m away)"

@@ -1446,6 +1446,9 @@ def test_required_route_waypoint_is_not_skipped_as_blocked():
     for t in (1.0, 100.0):
         tgt = fa.select_frontier(current_time=t)
         assert fa.route_i == 0 and tgt is not None and tgt.narrow_first, f"required waypoint dropped at t={t}"
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-1.3, y=-1.3, yaw=0.0))   # far from it: normal clearance (no scraping past rubble)
+    tgt = fa.select_frontier(current_time=120.0)
+    assert tgt is not None and not tgt.narrow_first, "narrow-gap clearance must be kept for the final approach"
     fa.select_frontier(current_time=ROUTE_REQUIRED_STALL_S + 10.0)
     assert fa.route_i == 1, "a required waypoint must still be given up after the long patience"
     print("PASSED")
