@@ -1404,6 +1404,33 @@ def test_route_waypoint_behind_an_unseen_gap_is_not_skipped():
     print("PASSED")
 
 
+def test_optimistic_route_detour_is_progress():
+    """F83: on the way to a waypoint through unseen floor, a detour moves the robot away in a straight line while the
+    path gets shorter; that is progress, not a stall (route v3 skipped the building interior mid-detour)."""
+    print("Running test_optimistic_route_detour_is_progress...", end=" ")
+    from agents.frontier_agent import ROUTE_STALL_S
+    grid = _walled_room()
+    grid.grid_log_odds[11:70, 39:42] = 2.0           # wall at x = 0 ...
+    grid.grid_log_odds[56:69, 39:42] = 0.0           # ... with an unseen gap at its north end (y ~ 0.8 .. 1.45)
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.route = [(0.8, -1.0)]
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=None, doorways=[], doorway_rooms=[]))
+    tgt = None
+    for x in np.arange(-0.2, -1.3, -0.05):
+        fa.route_i, fa._route_opt = 0, None
+        fa.on_pose(PoseMsg(timestamp=0.0, x=float(x), y=-1.0, yaw=0.0))
+        tgt = fa.select_frontier(current_time=1.0)
+        if tgt is not None and tgt.optimistic:
+            break
+    assert tgt is not None and tgt.optimistic, "no optimistic target"
+    for t, (x, y) in ((40.0, (-0.3, 0.3)), (40.0 + ROUTE_STALL_S - 5, (0.2, 1.1)), (40.0 + 2 * ROUTE_STALL_S - 10, (0.6, 0.0))):
+        fa.on_pose(PoseMsg(timestamp=t, x=x, y=y, yaw=0.0))
+        tgt = fa.select_frontier(current_time=t)
+        assert fa.route_i == 0 and tgt is not None and tgt.optimistic, f"skipped mid-detour at t={t}"
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()

@@ -73,6 +73,11 @@ ROUTE_STALL_S = 60.0      # ... and is skipped when the robot gets no closer to 
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
 
 
+def _path_len(path) -> float:
+    p = np.asarray(path, dtype=float)
+    return float(np.sum(np.hypot(*np.diff(p, axis=0).T))) if len(p) > 1 else 0.0
+
+
 class FrontierAgent(BaseAgent):
     def __init__(self, bus: MessageBus, grid_ref=None, min_dist: float = 0.45, max_dist: float = 6.0, update_rate_hz: float = 1.0):
         super().__init__("FrontierAgent", bus, update_rate_hz)
@@ -760,6 +765,13 @@ class FrontierAgent(BaseAgent):
         self.bus.publish("frontier/target", msg)
         return msg
 
+    def _optimistic_path_len(self, rx, ry, wx, wy) -> Optional[float]:
+        """Length of the A* path to the waypoint with floor not seen yet counted as passable; None if there is none."""
+        path = planner.a_star_search(self.grid, self.grid.world_to_grid(rx, ry), self.grid.world_to_grid(wx, wy),
+                                     clearance_cells=planner.NARROW_CLEARANCE_CELLS if planner.NARROW_GAPS
+                                     else planner.CLEARANCE_CELLS, allow_unknown=True)
+        return _path_len(path) if path else None
+
     def _waypoint_unseen(self, wx, wy, r_m: float = 0.3) -> bool:
         """Most of the floor around the waypoint is still unknown. Off the map counts as seen: it can never be reached."""
         g = self.grid
@@ -784,16 +796,21 @@ class FrontierAgent(BaseAgent):
             if self._route_opt == self.route_i:
                 # Keep heading for the waypoint through floor not seen yet until it is reached or stops getting closer;
                 # re-deciding from the seen floor every second would send the robot back to where it started looking.
-                if d < self._route_best[0] - 0.2:
-                    self._route_best = (d, current_time)
-                if d > ROUTE_REACHED_M and current_time - self._route_best[1] <= ROUTE_STALL_S:
+                # Progress = length of the optimistic path, not the straight line: the way into the building is a
+                # detour once rubble shows up, and a straight-line measure skipped waypoint 3 of route v3 mid-detour.
+                plen = self._optimistic_path_len(rx, ry, wx, wy) if d > ROUTE_REACHED_M else 0.0
+                if plen is not None and plen < self._route_best[0] - 0.2:
+                    self._route_best = (plen, current_time)
+                if (d > ROUTE_REACHED_M and plen is not None
+                        and current_time - self._route_best[1] <= ROUTE_STALL_S):
                     gx, gy = self.grid.world_to_grid(wx, wy)
                     self.state, self.committed_target = "ROUTE", None
                     msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx,
                                             target_wy=wy, room_id=-1, area=50, is_doorway=False, optimistic=True)
                     self.bus.publish("frontier/target", msg)
                     return msg
-                why = "reached" if d <= ROUTE_REACHED_M else f"skipped (no progress through unseen floor, {d:.2f} m away)"
+                why = ("reached" if d <= ROUTE_REACHED_M else f"skipped (no way even through unseen floor, {d:.2f} m away)"
+                       if plen is None else f"skipped (no progress through unseen floor, {d:.2f} m away)")
                 print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}) {why}")
                 self.route_i += 1
                 self._route_best = (float("inf"), current_time)
@@ -830,7 +847,7 @@ class FrontierAgent(BaseAgent):
                 if path:
                     print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}): no seen way, "
                           "heading through floor not seen yet")
-                    self._route_opt, self._route_best = self.route_i, (d, current_time)
+                    self._route_opt, self._route_best = self.route_i, (_path_len(path), current_time)
                     gx, gy = self.grid.world_to_grid(wx, wy)
                     self.state, self.committed_target = "ROUTE", None
                     msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx,
