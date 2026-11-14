@@ -70,6 +70,7 @@ PATROL_SECONDS_PER_M = 20.0  # staleness worth one metre of walking (the robot w
 EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
 ROUTE_REACHED_M = 0.6     # a route waypoint counts as visited within this distance
 ROUTE_STALL_S = 60.0      # ... and is skipped when the robot gets no closer to it (by 0.2 m) for this long
+ROUTE_REQUIRED_STALL_S = 300.0  # required waypoints (scene profile route_required): never skipped as blocked, only after this
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
 
 
@@ -109,6 +110,7 @@ class FrontierAgent(BaseAgent):
         self.route_i = 0
         self._route_best = (float("inf"), 0.0)
         self._route_opt = None          # route index being approached optimistically through unseen floor (F83)
+        self.route_required = set()     # route indices that must not be skipped as blocked (the building passage)
         self.route_after = 0.0  # the stall clock starts after the stand-still gyro calibration
         self.visits = SpatialMemory(bucket=1.0)
         self.patrol_failed = SpatialMemory(bucket=1.0)
@@ -793,6 +795,12 @@ class FrontierAgent(BaseAgent):
             # A waypoint in unseen floor is approached over the known floor nearest to it, right up to the unknown edge,
             # so the camera sees past it; only a waypoint in seen floor can be "blocked" (F82: route v3 started facing
             # away from the building and skipped all 70 waypoints in seconds, the floor behind the robot being unknown).
+            required = self.route_i in self.route_required
+            if required and self._route_opt != self.route_i:
+                # Required waypoint (the passage through the building): head for it at once over the optimistic,
+                # narrow-gap plan; the gap is only 0.25 m wider than the robot and the map draws walls a little thick.
+                self._route_opt, self._route_best = self.route_i, (float("inf"), current_time)
+                print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}) is required: narrow-gap plan")
             if self._route_opt == self.route_i:
                 # Keep heading for the waypoint through floor not seen yet until it is reached or stops getting closer;
                 # re-deciding from the seen floor every second would send the robot back to where it started looking.
@@ -801,12 +809,14 @@ class FrontierAgent(BaseAgent):
                 plen = self._optimistic_path_len(rx, ry, wx, wy) if d > ROUTE_REACHED_M else 0.0
                 if plen is not None and plen < self._route_best[0] - 0.2:
                     self._route_best = (plen, current_time)
-                if (d > ROUTE_REACHED_M and plen is not None
-                        and current_time - self._route_best[1] <= ROUTE_STALL_S):
+                patience = ROUTE_REQUIRED_STALL_S if required else ROUTE_STALL_S
+                if (d > ROUTE_REACHED_M and (plen is not None or required)
+                        and current_time - self._route_best[1] <= patience):
                     gx, gy = self.grid.world_to_grid(wx, wy)
                     self.state, self.committed_target = "ROUTE", None
                     msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx,
-                                            target_wy=wy, room_id=-1, area=50, is_doorway=False, optimistic=True)
+                                            target_wy=wy, room_id=-1, area=50, is_doorway=False, optimistic=True,
+                                            narrow_first=required)
                     self.bus.publish("frontier/target", msg)
                     return msg
                 why = ("reached" if d <= ROUTE_REACHED_M else f"skipped (no way even through unseen floor, {d:.2f} m away)"

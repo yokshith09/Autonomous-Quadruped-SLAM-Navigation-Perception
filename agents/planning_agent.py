@@ -101,10 +101,12 @@ class PlanningAgent(BaseAgent):
 
         # a_star_search takes (grid, (start_gx, start_gy), (goal_gx, goal_gy)) and returns world waypoints [(x, y), ...]
         t_p0 = time.perf_counter()
-        cells = planner.CLEARANCE_CELLS
         opt = bool(getattr(self.latest_target, "optimistic", False))
-        world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False, allow_unknown=opt)
-        if not world_path and planner.NARROW_GAPS:  # only through a gap the normal margin closes
+        narrow_first = bool(getattr(self.latest_target, "narrow_first", False)) and planner.NARROW_GAPS
+        cells = planner.NARROW_CLEARANCE_CELLS if narrow_first else planner.CLEARANCE_CELLS
+        world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False, allow_unknown=opt,
+                                   clearance_cells=cells)
+        if not world_path and planner.NARROW_GAPS and not narrow_first:  # only through a gap the normal margin closes
             cells = planner.NARROW_CLEARANCE_CELLS
             world_path = a_star_search(self.grid, (start_gx, start_gy), (goal_gx, goal_gy), smooth=False,
                                        clearance_cells=cells, allow_unknown=opt)

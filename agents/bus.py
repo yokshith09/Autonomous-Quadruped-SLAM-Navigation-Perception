@@ -63,6 +63,7 @@ class FrontierTargetMsg:
     area: int
     is_doorway: bool = False
     optimistic: bool = False   # operator-route target: the planner may cross floor not seen yet (F83)
+    narrow_first: bool = False # required route waypoint: plan with the narrow-gap clearance first
 
 
 @dataclass

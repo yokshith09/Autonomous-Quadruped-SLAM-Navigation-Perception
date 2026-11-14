@@ -1431,6 +1431,26 @@ def test_optimistic_route_detour_is_progress():
     print("PASSED")
 
 
+def test_required_route_waypoint_is_not_skipped_as_blocked():
+    """Owner's rule (2026-11-15): the building passage waypoints are required. One the robot cannot reach yet is kept
+    (narrow-gap plan first) instead of skipped as blocked; it is given up only after ROUTE_REQUIRED_STALL_S."""
+    print("Running test_required_route_waypoint_is_not_skipped_as_blocked...", end=" ")
+    from agents.frontier_agent import ROUTE_REQUIRED_STALL_S
+    grid = _walled_room()
+    grid.grid_log_odds[11:70, 39:42] = 2.0            # full wall at x = 0: the east half cannot be reached
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.route, fa.route_required = [(0.8, 0.0)], {0}
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=None, doorways=[], doorway_rooms=[]))
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-0.3, y=0.0, yaw=0.0))
+    for t in (1.0, 100.0):
+        tgt = fa.select_frontier(current_time=t)
+        assert fa.route_i == 0 and tgt is not None and tgt.narrow_first, f"required waypoint dropped at t={t}"
+    fa.select_frontier(current_time=ROUTE_REQUIRED_STALL_S + 10.0)
+    assert fa.route_i == 1, "a required waypoint must still be given up after the long patience"
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()
