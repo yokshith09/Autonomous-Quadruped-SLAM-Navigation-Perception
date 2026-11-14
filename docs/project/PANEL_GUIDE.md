@@ -233,7 +233,7 @@ there; in the rubble field it misses the hidden sides of rubble blocks, so recal
 |---|---|---|---|
 | Odometry only | 291 cm | 15.7 cm | 154 cm |
 | BreezySLAM (best of 11 settings) | 190 cm | 110 cm | 150 cm |
-| Cartographer (Google), best of 3 settings | 344 cm | 95 cm | 220 cm |
+| Cartographer (Google), best of 8 settings | 342 cm | 85 cm | 213 cm |
 | **Ours** | **11.7 cm** | **12.3 cm** | **12.0 cm** |
 
 **BreezySLAM** is an open-source version of CoreSLAM/tinySLAM, a classic lightweight 2D laser SLAM. It searches for
@@ -243,8 +243,8 @@ laser scanners. With our 60-degree camera slice it has too little to match again
 **Cartographer** is Google's open-source SLAM, an industry standard for 2D laser SLAM: it matches each scan to small
 local maps (submaps) and closes loops in a pose graph, much like ours. We ran it in Docker (ROS 2) on exactly our scan
 and odometry. It starts correctly (1 cm error at 90 s) and then drifts, because it is designed for dense 360-degree
-laser scans and accepts wrong loop closures on our 58-degree camera slice. Best of 3 settings: 344 cm in scene 1,
-95 cm in scene 2 - worse than odometry alone. This is the strongest argument for our design: standard laser SLAM
+laser scans and accepts wrong loop closures on our 58-degree camera slice. Best of 8 settings: 342 cm in scene 1,
+85 cm in scene 2 - worse than odometry alone. This is the strongest argument for our design: standard laser SLAM
 does not work with a single narrow depth camera; ours does.
 
 ### 9.3 Public benchmark: TUM RGB-D Pioneer

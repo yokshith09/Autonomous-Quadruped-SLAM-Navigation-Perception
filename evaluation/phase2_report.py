@@ -262,7 +262,7 @@ def build():
         ["BreezySLAM [6], best of 11 settings", "189.7 cm", "109.5 cm", "149.6 cm"],
         ["<b>Ours</b>", "11.7 cm", "12.3 cm", "12.0 cm"],
         ["Cartographer [2], defaults", "585.8 cm", "216.5 cm", "401.2 cm"],
-        ["Cartographer [2], trusting odometry 10x", "343.8 cm", "95.1 cm", "219.5 cm"],
+        ["Cartographer [2], best of 8 settings", "341.5 cm", "85.2 cm", "213.4 cm"],
         ["Nearest-frontier exploration [1] (coverage, time)", ph("pending"), ph("pending"), ph("pending")],
     ], raw_cols=(0, 1, 2, 3)))
     h.append(cap(7, "Table", "Position error of other methods on identical data from our two scenes"))
@@ -280,7 +280,8 @@ def build():
         "scene 1 (291 -> 190 cm) and drifts in scene 2 (16 -> 110 cm). <i>Cartographer</i> [2] is Google's open-source "
         "SLAM, the industry reference for 2D laser SLAM (scan-to-submap matching plus loop closure in a pose graph). It "
         "ran in Docker (ROS 2) on the same scan and odometry; its pose starts within 1 cm of the truth and then drifts, "
-        "because its matcher and loop closures expect dense 360-degree laser scans: 3 settings were tried and all end "
+        "because its matcher and loop closures expect dense 360-degree laser scans: 8 settings were tried (odometry "
+        "trust, stricter loop closure, no loop closure, smaller submaps); the best, used on both scenes, still ends "
         "worse than odometry alone. Ours cuts the odometry error by 96 % in scene 1 and 22 % in scene 2."))
 
     # 5.5 TUM
