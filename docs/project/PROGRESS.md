@@ -279,3 +279,8 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - **F81** a route waypoint is skipped at once when the robot already stands on the nearest reachable cell (run 18 idled 60 s at waypoint 6 behind rubble).
 - Rejected on 9 seeded replays: gyro-calibration creep removal (16.5 vs 16.3 cm), wall compass (16.4).
 - Run 19 not done: CoppeliaSim stopped running after run 18.
+
+## 2026-11-14 — Results preserved; evaluation is across environments
+- Decision: final results are one system's performance across all environments (scene 1 + rescue), see docs/results/BEST_RESULTS_ALL_ENVIRONMENTS.md.
+- Rescue run folders (runs 9–18) committed without recordings; tag `rescue-best-v1` marks the current code. Scene 1 best stays at tag `best-sim-v3`.
+- Run 19 (12 min, submap 16 + F81) started.

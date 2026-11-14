@@ -1,0 +1,80 @@
+{
+ "scene": "evaluation/data/scene_truth_searchrescuescene.json",
+ "objects_in_band": [],
+ "match_radius_m": 0.5,
+ "map_vs_scene": {
+  "f1_score": 0.337574456748175,
+  "precision": 0.8007915567282322,
+  "recall": 0.21386465456260315,
+  "obstacle_iou": 0.03633916554508748,
+  "tolerant_iou": 0.1357671601615074,
+  "free_space_iou": 0.3740892108902512,
+  "overall_grid_accuracy": 0.38238971896934126,
+  "accuracy_meters": 0.08708118422101613,
+  "completion_meters": 1.4735740384890395,
+  "completion_ratio_5cm": 0.0824098090073096,
+  "chamfer_distance_meters": 0.7803276113550278,
+  "hausdorff_95_meters": 4.450280890011326,
+  "total_true_obstacle_cells": 8482,
+  "total_slam_obstacle_cells": 758,
+  "total_free_cells": 39543,
+  "total_unknown_cells": 69260,
+  "tolerance_margin_meters": 0.15
+ },
+ "reference_vs_scene": {
+  "f1_score": 0.38176094629399987,
+  "precision": 1.0,
+  "recall": 0.23591134166470173,
+  "obstacle_iou": 0.059449970743124636,
+  "tolerant_iou": 0.1504973668812171,
+  "free_space_iou": 0.3896211913836306,
+  "overall_grid_accuracy": 0.40446874343972766,
+  "accuracy_meters": 0.00551663747810855,
+  "completion_meters": 1.5730610624289614,
+  "completion_ratio_5cm": 0.11400613062956849,
+  "chamfer_distance_meters": 0.789288849953535,
+  "hausdorff_95_meters": 4.712536455883696,
+  "total_true_obstacle_cells": 8482,
+  "total_slam_obstacle_cells": 571,
+  "total_free_cells": 38391,
+  "total_unknown_cells": 70599,
+  "tolerance_margin_meters": 0.15
+ },
+ "map_vs_observable_scene": {
+  "precision": 0.8007915567282322,
+  "recall": 0.24183174684846925,
+  "f1_score": 0.37147993980329624,
+  "observable_obstacle_cells": 3887,
+  "all_obstacle_cells": 8482
+ },
+ "reference_vs_observable_scene": {
+  "precision": 1.0,
+  "recall": 0.2678157962438899,
+  "f1_score": 0.42248376623376627,
+  "observable_obstacle_cells": 3887,
+  "all_obstacle_cells": 8482
+ },
+ "true_floor_area_m2": 233.99500000000003,
+ "floor_mapped_as_free_pct": 38.72625483450501,
+ "arena_observed_pct": 37.36677115987461,
+ "free_mapped_outside_arena_m2": 5.392500000000001,
+ "detection": {
+  "real_objects": 0,
+  "objects_found": 0,
+  "objects_found_names": [],
+  "object_recall_pct": 0.0,
+  "detections": 36,
+  "detections_on_a_real_object": 0,
+  "detection_precision_pct": 0.0,
+  "labelled_chair": 36,
+  "real_chairs": 0,
+  "chair_labels_on_the_real_chair": 0,
+  "wall_entities": 1
+ },
+ "knowledge_graph": {
+  "rooms": 7,
+  "doorways": 18,
+  "rooms_with_centroid_set": 0,
+  "doorways_connecting_rooms_other_than_1_2": 17
+ }
+}
