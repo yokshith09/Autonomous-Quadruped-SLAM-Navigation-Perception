@@ -290,3 +290,4 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - User decision: stop here for now; the current results are the final results. Scene 1 run 34 (ATE 11.7 cm, F1 95.9 %) + rescue run 19 (ATE 12.3 cm, precision 95.8 %, F1 55.2 %, 0 collisions): mean ATE 12.0 cm, mean precision 97.8 %. See docs/results/BEST_RESULTS_ALL_ENVIRONMENTS.md.
 - Rescue goal NOT met: the building gap was not passed, coverage 59 %, F1 below 95 %, ATE above 11 cm. Deferred as a task: docs/project/TODO_RESCUE_ROUTE.md (with the user's new route drawing).
 - Benchmark plan (PLAN_BENCHMARKS.md): T1 done; T2 noise stage, T3 Cartographer, T4 TUM RGB-D, T5 exploration baseline, T6 write-up not done.
+- T4 check: TUM Pioneer ROS bags include wheel odometry and laser scan (tgz do not); 4 bags ~4.6 GB. See PLAN_BENCHMARKS.md.

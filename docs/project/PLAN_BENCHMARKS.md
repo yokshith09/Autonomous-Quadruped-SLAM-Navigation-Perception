@@ -46,3 +46,17 @@ I listed these from memory. Check each one before citing it.
 - Mur-Artal & Tardós 2017, ORB-SLAM2.
 - Sturm et al. 2012, TUM RGB-D.
 - Kümmerle et al. 2009, "On measuring the accuracy of SLAM algorithms" (the evaluation method).
+
+## T4 check (2026-11-14): TUM Pioneer sequences have wheel odometry
+Source: TUM RGB-D download page (cvg.cit.tum.de/data/datasets/rgbd-dataset/download), read 2026-11-14:
+"The bag files contain additionally the laser scan and the odometry data of the robot."
+Only the ROS bag versions carry odometry and laser; the tgz versions do not.
+
+| Sequence | Bag size | Length | Duration |
+|---|---|---|---|
+| fr2/pioneer_360 | ~0.62 GB | 16.1 m | 72.8 s |
+| fr2/pioneer_slam | ~1.51 GB | 40.4 m | 155.7 s |
+| fr2/pioneer_slam2 | ~1.10 GB | 21.7 m | 115.6 s |
+| fr2/pioneer_slam3 | ~1.34 GB | 18.1 m | 111.9 s |
+
+Total ~4.6 GB (bags). Bags are ROS1; readable on Windows without ROS via the `rosbags` Python package.
