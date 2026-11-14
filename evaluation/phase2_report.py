@@ -256,6 +256,18 @@ def build():
     h.append(cap(6, "Table", "Robustness to seeded sensor faults"))
     h.append(para("Depth noise, missing points and leg-odometry errors are absorbed by scan matching; gyro bias left "
                   "after calibration passes into the error because scene 2 takes its heading from the gyro."))
+    h.append(para("<b>Runtime.</b> Time per call of each agent in the two final runs (PC CPU, AMD Ryzen 7 7735HS, no GPU)."))
+    h.append(tbl(["Agent", "Rate", "Scene 1 median / 95th pct.", "Scene 2 median / 95th pct.", "Share of agent time"], [
+        ["Perception (depth -> scan)", "10 Hz", "5.6 / 14.3 ms", "4.0 / 8.4 ms", "21 %"],
+        ["SLAM", "10 Hz", "9.9 / 27.4 ms", "5.9 / 14.4 ms", "26-38 %"],
+        ["Mapping", "10 Hz", "0.5 / 4.4 ms", "0.5 / 3.8 ms", "3-6 %"],
+        ["Frontier", "1 Hz", "16.4 / 33.0 ms", "5.3 / 47.8 ms", "5-6 %"],
+        ["Planning", "5 Hz", "0.3 / 4.4 ms", "0.3 / 11.0 ms", "1-11 %"],
+        ["Locomotion", "20 Hz", "9.3 / 18.1 ms", "7.3 / 10.1 ms", "31 %"],
+        ["Supervisor", "2 Hz", "0.1 / 0.2 ms", "0.1 / 0.1 ms", "0 %"],
+        ["Whole process", "-", "CPU 52 % of one core; memory 110 MB mean", "CPU 66 % of one core; memory 239 MB mean", "-"],
+    ]))
+    h.append(cap(7, "Table", "Runtime per agent (simulator not included)"))
 
     # 5.4 other systems in our scenes
     h.append("<h3>5.4 Other Systems Run in Our Scenes</h3>")
@@ -268,9 +280,9 @@ def build():
         ["Cartographer [2], best of 8 settings", "341.5 cm", "85.2 cm", "213.4 cm"],
         ["Nearest-frontier exploration [1] (coverage, time)", ph("pending"), ph("pending"), ph("pending")],
     ], raw_cols=(0, 1, 2, 3)))
-    h.append(cap(7, "Table", "Position error of other methods on identical data from our two scenes"))
+    h.append(cap(8, "Table", "Position error of other methods on identical data from our two scenes"))
     h.append(para(
-        "<b>How Table 7 is built.</b> All rows are scored on exactly the same input: the sensor data recorded during "
+        "<b>How Table 8 is built.</b> All rows are scored on exactly the same input: the sensor data recorded during "
         "the two simulator runs (every 2D scan, leg-odometry step and gyro increment), replayed offline through each "
         "method, and compared with the robot's true path from the simulator (ATE RMSE). Only the method that turns "
         "this data into a pose changes. <i>Odometry only</i> adds up leg odometry and gyro without using the scans; "
@@ -298,13 +310,13 @@ def build():
     h.append(para(
         "<b>Why it fits our comparison.</b> It is the closest public match to our robot: a ground robot, planar "
         "motion, a depth camera of the same kind and field of view as ours, and odometry from the robot itself. "
-        "Every system in Table 8 is scored on the same sequences with the same alignment-based ATE, so it shows "
+        "Every system in Table 9 is scored on the same sequences with the same alignment-based ATE, so it shows "
         "where our SLAM stands against published systems on real sensor data. Ours runs with our existing scene "
         "profiles, without TUM-specific tuning. Differences: ours estimates position in the plane (x-y), the others "
         "in 3D (on a flat floor nearly the same); ours uses the wheel odometry, the visual systems do not."))
     h.append(tbl(["System (TUM fr2/pioneer)", "Input", "360", "slam", "slam2", "slam3", "Average"],
                  TUM_ROWS, raw_cols=(0, 2, 3, 4, 5, 6)))
-    h.append(cap(8, "Table", "ATE RMSE on the TUM Pioneer sequences; published values from [4]"))
+    h.append(cap(9, "Table", "ATE RMSE on the TUM Pioneer sequences; published values from [4]"))
     h.append(para(
         "<b>Result.</b> With the scene-2 settings (made for open floor without right-angle walls) ours averages "
         "25.9 cm over the four sequences: ahead of RTABMap (28.7 cm), OpenVSLAM (39.2 cm) and ORB-SLAM3 (172.0 cm) on "
@@ -350,8 +362,8 @@ def build():
         "Reduce heading drift on long open stretches (periodic stand-still gyro re-calibration, or a heading "
         "reference that does not need right-angle walls).",
         "Improve scan matching on real Kinect data so it gains clearly over wheel odometry on TUM.",
-        "Nearest-frontier exploration in both scenes (Table 7).",
-        "Runtime breakdown per agent (CPU and memory)."]))
+        
+        "Runtime on the target robot computer once hardware is chosen."]))
 
     # 6
     h.append("<h2>6 Technical Justification &amp; Architectural Decisions</h2>")
@@ -393,7 +405,7 @@ def build():
         ["Group TEA Deliverable 2", ph("title and details"), ph("status")],
         ["Group TEA Deliverable 3", ph("title and details"), ph("status")],
     ], raw_cols=(1, 2)))
-    h.append(cap(9, "Table", "Summary of Completed Project and Technical Enrichment Deliverables"))
+    h.append(cap(10, "Table", "Summary of Completed Project and Technical Enrichment Deliverables"))
 
     h.append("<h2>References</h2>")
     refs = [
