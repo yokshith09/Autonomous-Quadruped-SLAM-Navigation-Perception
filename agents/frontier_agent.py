@@ -89,6 +89,10 @@ class FrontierAgent(BaseAgent):
         self.explored_floor = None  # free cells of finished rooms (bool grid), kept by place across re-labelling
         # Post-exploration patrol (the mission runs to its time limit): where and when the robot has been, in metres
         self.patrol = True
+        # Room-by-room sweep with doorway transits (scene 1). Off (scene profile room_sweep false) for open floor:
+        # segmenting an open field gives arbitrary rooms that re-label as the map grows, and rescue run 14 swept
+        # 150 s of already-explored floor under a new label. Off = best frontier over the whole map.
+        self.room_sweep = True
         self.visits = SpatialMemory(bucket=1.0)
         self.patrol_failed = SpatialMemory(bucket=1.0)
         self.failed_doorways = SpatialMemory(bucket=1.0)  # doorway transits that ended stuck or unreachable
@@ -573,7 +577,8 @@ class FrontierAgent(BaseAgent):
         for f, geo_dist in dist_candidates:
             gx, gy, area = f
             f_room = self._get_room_at(gx, gy, room_labels)
-            if self.active_room_id > 0 and self.active_room_id not in self.explored_rooms and f_room == self.active_room_id:
+            if (self.room_sweep and self.active_room_id > 0 and self.active_room_id not in self.explored_rooms
+                    and f_room == self.active_room_id):
                 room_frontiers.append((f, geo_dist))
             else:
                 other_frontiers.append((f, geo_dist))
@@ -582,7 +587,7 @@ class FrontierAgent(BaseAgent):
         doorways = self.latest_grid_msg.doorways if self.latest_grid_msg else []
         door_rooms = self.latest_grid_msg.doorway_rooms if self.latest_grid_msg else []
         valid_doorways = []
-        for i, d in enumerate(doorways):
+        for i, d in enumerate(doorways if self.room_sweep else []):
             if self._is_doorway_visited(d):
                 continue
             if sum(1 for _ in self.failed_doorways.near("fail", d[0], d[1], 0.6)) >= DOOR_MAX_FAILS:

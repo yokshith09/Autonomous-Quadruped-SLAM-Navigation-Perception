@@ -753,6 +753,26 @@ def test_doorway_ahead_preferred_over_slightly_nearer_one_behind():
     print("PASSED")
 
 
+def test_open_floor_skips_doorway_transits():
+    """Open floor (room_sweep off): no doorway transit, the frontier itself is the target (rescue run 14 crossed
+    re-labelled 'rooms' and swept explored floor for 150 s)."""
+    print("Running test_open_floor_skips_doorway_transits...", end=" ")
+    grid = _walled_room()
+    labels = np.full((grid.height, grid.width), 4, dtype=np.int32)
+    for sweep in (True, False):
+        fa = FrontierAgent(MessageBus(), grid_ref=grid)
+        fa.room_sweep = sweep
+        fa.explored_rooms, fa.active_room_id = {4}, 4
+        fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                              explored_pct=0.0, room_labels=labels, doorways=[(1.2, 0.0)], doorway_rooms=[(4, 8)]))
+        fa.on_pose(PoseMsg(timestamp=0.0, x=0.0, y=0.0, yaw=0.0))
+        grid.grid_log_odds[38:41, 20:23] = 0.0
+        tgt = fa.select_frontier(current_time=1.0)
+        grid.grid_log_odds[38:41, 20:23] = -2.0
+        assert tgt is not None and tgt.is_doorway == sweep, f"room_sweep {sweep}: doorway {tgt and tgt.is_doorway}"
+    print("PASSED")
+
+
 def test_patrol_after_exploration_instead_of_idle():
     """Live run 7 stood idle from 1736 s to the 3000 s mission end: every completion exit returned no target. Now the
     robot patrols to the reachable place it has not seen for longest, keeps that target until reached, then moves on;

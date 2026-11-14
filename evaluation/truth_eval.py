@@ -62,6 +62,36 @@ def load_truth(scene_json, ref_logodds):
     return walls, objects
 
 
+def observable(occ, x0, area, start_xy, clearance_m=0.15, range_m=8.0, step_cells=4, n_rays=1440):
+    """Truth obstacle cells a robot on this floor can ever see: those the depth camera's rays first hit from some
+    reachable spot (clearance_m from every obstacle, connected to the start). Mesh truth also holds cells inside solid
+    rubble that no sensor reaches; against the raw truth recall cannot pass ~89 % on the rescue floor even with
+    ground-truth pose and every reachable spot visited. Scene geometry only: the run is not used."""
+    from scipy import ndimage as nd
+    N = occ.shape[0]
+    X, Y = _centres(N, x0)
+    inside = (X > area[0]) & (X < area[1]) & (Y > area[2]) & (Y < area[3])
+    trav = inside & (nd.distance_transform_edt(~occ) * RES >= clearance_m)
+    lab, _ = nd.label(trav)
+    sx, sy = int((start_xy[0] - x0) / RES), int((start_xy[1] - x0) / RES)
+    reach = lab == lab[sy, sx]
+    ys, xs = np.nonzero(reach)
+    keep = (ys % step_cells == 0) & (xs % step_cells == 0)
+    ang = np.linspace(0.0, 2 * np.pi, n_rays, endpoint=False)
+    steps = np.arange(1, int(range_m / RES), dtype=np.float64)
+    cos_s, sin_s = np.outer(np.cos(ang), steps), np.outer(np.sin(ang), steps)
+    seen = np.zeros_like(occ)
+    for gy, gx in zip(ys[keep], xs[keep]):
+        px, py = np.rint(gx + cos_s).astype(int), np.rint(gy + sin_s).astype(int)
+        ok = (px >= 0) & (px < N) & (py >= 0) & (py < N)
+        o = np.zeros(px.shape, bool)
+        o[ok] = occ[py[ok], px[ok]]
+        has = o.any(axis=1)
+        first = np.argmax(o, axis=1)
+        seen[py[has, first[has]], px[has, first[has]]] = True
+    return seen
+
+
 def evaluate(run_dir, scene_json="evaluation/data/scene_truth.json"):
     art = os.path.join(run_dir, "artifacts")
     slam, ref = np.load(os.path.join(art, "slam_grid.npy")), np.load(os.path.join(art, "true_grid.npy"))
@@ -86,6 +116,23 @@ def evaluate(run_dir, scene_json="evaluation/data/scene_truth.json"):
     out = {"scene": scene_json, "objects_in_band": sorted(objects), "match_radius_m": MATCH_M}
     out["map_vs_scene"] = evaluate_grid_accuracy(truth, slam, resolution=RES, tolerance_m=0.15, save_plots=False)
     out["reference_vs_scene"] = evaluate_grid_accuracy(truth, ref, resolution=RES, tolerance_m=0.15, save_plots=False)
+    if "grid" in spec:
+        # Recall against the cells a robot on this floor can see at all (observable()); precision stays against the
+        # full truth. The raw scores above are kept unchanged.
+        cache = spec["grid"].replace(".npy", "_observable.npy")
+        if os.path.exists(cache):
+            vis = np.load(cache)
+        else:
+            traj = np.genfromtxt(os.path.join(run_dir, "trajectory.csv"), delimiter=",", names=True, max_rows=1)
+            vis = observable(occ, spec.get("x0", X0), spec["area_xyxy"], (float(traj["gt_x_m"]), float(traj["gt_y_m"])))
+            np.save(cache, vis)
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))   # same 0.15 m tolerance as evaluate_grid_accuracy
+        for name, grid in (("map_vs_observable_scene", slam), ("reference_vs_observable_scene", ref)):
+            g_occ = (grid >= 1.0).astype(np.uint8)
+            p = out[name.replace("observable_", "")]["precision"]
+            r = float((vis & cv2.dilate(g_occ, k).astype(bool)).sum() / max(1, vis.sum()))
+            out[name] = {"precision": p, "recall": r, "f1_score": 2 * p * r / (p + r) if p + r else 0.0,
+                         "observable_obstacle_cells": int(vis.sum()), "all_obstacle_cells": int(occ.sum())}
 
     free_truth = inside & ~occ
     slam_free, slam_known = slam <= -0.5, (slam <= -0.5) | (slam >= 1.0)
@@ -131,6 +178,10 @@ if __name__ == "__main__":
     print(f"  map vs real scene: accuracy {g['accuracy_meters'] * 100:.1f} cm, completion {g['completion_meters'] * 100:.1f} cm, "
           f"precision {g['precision'] * 100:.1f} %, recall {g['recall'] * 100:.1f} %, F1 {g['f1_score'] * 100:.1f} %")
     print(f"  sensor reference vs real scene: accuracy {f['accuracy_meters'] * 100:.1f} cm, recall {f['recall'] * 100:.1f} %")
+    if "map_vs_observable_scene" in r:
+        o = r["map_vs_observable_scene"]
+        print(f"  map vs observable scene ({o['observable_obstacle_cells']} of {o['all_obstacle_cells']} cells): precision "
+              f"{o['precision'] * 100:.1f} %, recall {o['recall'] * 100:.1f} %, F1 {o['f1_score'] * 100:.1f} %")
     print(f"  floor mapped as free {r['floor_mapped_as_free_pct']:.1f} % of {r['true_floor_area_m2']:.1f} m2 | free outside arena "
           f"{r['free_mapped_outside_arena_m2']:.2f} m2")
     print("  detection:", r["detection"])

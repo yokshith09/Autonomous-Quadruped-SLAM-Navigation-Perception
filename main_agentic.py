@@ -294,11 +294,14 @@ def main():
     cloud_fh = open(args.record + ".cloud.f32", "wb") if args.record and args.record_3d else None
     perception_agent.publish_cloud = bool(args.record_3d)
     planner_module.NARROW_GAPS = bool(args.narrow_gaps) or bool(scene.get("narrow_gaps", False))
+    frontier_agent.room_sweep = bool(scene.get("room_sweep", True))
     robot_module.ODOM_SCALE = float(args.odom_scale if args.odom_scale is not None else scene.get("odom_scale", 1.0))
-    print(f"  [SCENE] {scene['name']} | odom_scale {robot_module.ODOM_SCALE:.3f} | narrow gaps {planner_module.NARROW_GAPS}", flush=True)
+    print(f"  [SCENE] {scene['name']} | odom_scale {robot_module.ODOM_SCALE:.3f} | narrow gaps {planner_module.NARROW_GAPS} | room sweep {frontier_agent.room_sweep}", flush=True)
     cloud_offsets = [0]  # 3D view per step, for offline 3D-matching studies
     rec_thumb_steps = []  # step index of every recorded camera view (the loop-closure camera check replays from these)
 
+    robot.setup_contact_check()
+    collisions, in_contact, contact_s = [], False, 0.0
     print("  [OK] Multi-Agent System operational. Commencing systematic exploration.\n")
 
     try:
@@ -324,6 +327,12 @@ def main():
             loop_t0 = time.perf_counter()
             # A. Sample Ground Truth Pose
             true_x, true_y, true_heading, _ = robot.get_pose()
+            touched = robot.contact()   # scoring only
+            if touched and not in_contact:
+                collisions.append({"t_s": round(t, 2), "x": round(true_x, 2), "y": round(true_y, 2), "object": touched})
+                print(f"  [COLLISION] t={t:.0f}s at ({true_x:.2f}, {true_y:.2f}) with {touched}", flush=True)
+            contact_s += 0.05 if touched else 0.0
+            in_contact = bool(touched)
             bus.publish("pose/ground_truth", PoseMsg(timestamp=t, x=true_x, y=true_y, yaw=true_heading, is_ground_truth=True))
 
             true_trajectory_poses.append((true_x, true_y, true_heading))
@@ -656,6 +665,7 @@ def main():
             grid_metrics=grid_metrics,
             ctx={
                 "end_reason": end_reason, "closed_loop_slam": not bool(args.ground_truth_nav),
+                "collisions": {"value": len(collisions), "contact_time_s": round(contact_s, 2), "events": collisions},
                 "explored_complete_at_s": complete_at,
                 "rooms_discovered": n_rooms, "doorways_detected": len(supervisor_agent.knowledge_graph.doorways), "rooms_completed": len(frontier_agent.explored_rooms),
                 "free_area_m2": float(free_cells) * GRID_RES ** 2, "explored_pct": float(explored_pct),

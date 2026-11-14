@@ -263,7 +263,7 @@ class RunTelemetry:
             "stuck_events": ev.get("ROBOT_STUCK", 0),
             "unreachable_targets": ev.get("PATH_UNREACHABLE", 0),
             "human_interventions": na("no intervention channel exists in the stack; only the 'q' key / external stop, recorded in end_reason"),
-            "collisions": na("CoppeliaSim contact sensing is not wired into the stack"),
+            "collisions": ctx.get("collisions", na("CoppeliaSim contact sensing is not wired into the stack")),
         }
 
         # ---- agents

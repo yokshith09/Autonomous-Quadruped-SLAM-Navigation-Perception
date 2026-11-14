@@ -22,6 +22,8 @@ from evaluation.run_telemetry import extra_warnings, overhead_per_step_ms
 def fmt(v, d=1, unit=""):
     if isinstance(v, dict) and "reason" in v:
         return f"n/a ({v['reason']})"
+    if isinstance(v, dict) and "value" in v:
+        v = v["value"]
     if v is None:
         return "n/a"
     if isinstance(v, bool):

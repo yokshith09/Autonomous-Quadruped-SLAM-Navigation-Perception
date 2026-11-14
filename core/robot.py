@@ -101,6 +101,23 @@ class LizardRobot:
         noise = (self._gyro_bias + self._rng.gauss(0.0, GYRO_NOISE_RAD_S)) * dt
         return d_fwd, true_dyaw + noise
 
+    def setup_contact_check(self):
+        """Scoring only (the robot never reads it): geometric contact between any robot part and any scene shape other
+        than the floor, through CoppeliaSim's collision check (~1 ms)."""
+        sim = self.sim
+        parts = set(sim.getObjectsInTree(self.base, sim.handle_all, 0))
+        self._robot_coll = sim.createCollection(0)
+        sim.addItemToCollection(self._robot_coll, sim.handle_tree, self.base, 0)
+        self._env_coll = sim.createCollection(0)
+        for h in sim.getObjectsInTree(sim.handle_scene, sim.object_shape_type, 0):
+            if h not in parts and "floor" not in sim.getObjectAlias(h, 2).lower():
+                sim.addItemToCollection(self._env_coll, sim.handle_single, h, 0)
+
+    def contact(self):
+        """Alias of the scene shape the robot touches now, else None."""
+        hit, pair = self.sim.checkCollision(self._robot_coll, self._env_coll)
+        return self.sim.getObjectAlias(pair[1], 2) if hit else None
+
     def get_pose(self):
         p = self.sim.getObjectPosition(self.base, self.sim.handle_world)
         o = self.sim.getObjectOrientation(self.base, self.sim.handle_world)
