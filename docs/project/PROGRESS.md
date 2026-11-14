@@ -292,3 +292,4 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - Benchmark plan (PLAN_BENCHMARKS.md): T1 done; T2 noise stage, T3 Cartographer, T4 TUM RGB-D, T5 exploration baseline, T6 write-up not done.
 - T4 check: TUM Pioneer ROS bags include wheel odometry and laser scan (tgz do not); 4 bags ~4.6 GB. See PLAN_BENCHMARKS.md.
 - Final average table added to BEST_RESULTS_ALL_ENVIRONMENTS.md. Next (user): full rescue run, scene 1 verification run.
+- Published-numbers comparison of the cross-environment averages: docs/results/benchmarks_published.md (context only, not same-data).
