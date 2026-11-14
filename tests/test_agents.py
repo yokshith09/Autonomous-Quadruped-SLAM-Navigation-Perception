@@ -773,6 +773,46 @@ def test_open_floor_skips_doorway_transits():
     print("PASSED")
 
 
+def test_operator_route_is_followed_in_order_then_exploration_resumes():
+    """The operator draws a search route (scene profile "route"): the robot heads for each waypoint in order (through
+    the reachable cell nearest to it), moves on when within ROUTE_REACHED_M, skips one it cannot get closer to, then
+    explores freely."""
+    print("Running test_operator_route_is_followed_in_order_then_exploration_resumes...", end=" ")
+    from agents.frontier_agent import ROUTE_STALL_S
+    grid = _walled_room()
+    grid.grid_log_odds[38:41, 20:23] = 0.0           # a frontier exists all along
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.route = [(1.0, 1.0), (9.0, 9.0), (-1.0, 1.0)]  # the second is off the map: never reachable
+    fa.on_pose(PoseMsg(timestamp=0.0, x=-1.0, y=-1.0, yaw=0.0))
+    t1 = fa.select_frontier(current_time=1.0)
+    assert fa.state == "ROUTE" and math.hypot(t1.target_wx - 1.0, t1.target_wy - 1.0) < 0.6, f"first target {t1}"
+    fa.on_pose(PoseMsg(timestamp=2.0, x=1.0, y=1.0, yaw=0.0))
+    t2 = fa.select_frontier(current_time=2.0)
+    assert fa.route_i == 1 and t2.target_wx > 1.0 and t2.target_wy > 1.0, "did not head for the next waypoint"
+    t3 = fa.select_frontier(current_time=3.0 + ROUTE_STALL_S)
+    assert fa.route_i == 2 and t3.target_wx < 0.0, "a waypoint it cannot approach was not skipped"
+    fa.on_pose(PoseMsg(timestamp=70.0, x=-1.0, y=1.0, yaw=0.0))
+    fa.select_frontier(current_time=70.0)
+    assert fa.route_i == 3 and fa.state != "ROUTE", f"exploration did not resume ({fa.state})"
+    grid.grid_log_odds[38:41, 20:23] = -2.0
+    print("PASSED")
+
+
+def test_route_detour_round_a_wall_is_progress():
+    """A waypoint behind a wall is reached by walking round it, first moving away from it in a straight line. Run 16
+    skipped waypoints 25 and 26 that way (straight-line progress); walking distance is the measure."""
+    print("Running test_route_detour_round_a_wall_is_progress...", end=" ")
+    grid = _walled_room()
+    grid.grid_log_odds[11:60, 39:42] = 2.0            # wall at x = 0 from the south wall up to y ~ 1.0
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.route = [(0.6, -1.2)]
+    for k, (x, y) in enumerate([(-0.6, -1.2), (-0.6, -0.5), (-0.6, 0.3), (-0.4, 1.2), (0.3, 1.2), (0.6, 0.4)]):
+        fa.on_pose(PoseMsg(timestamp=40.0 * k, x=x, y=y, yaw=0.0))
+        fa.select_frontier(current_time=40.0 * k)
+        assert fa.route_i == 0, f"waypoint skipped at ({x}, {y}) while walking round the wall"
+    print("PASSED")
+
+
 def test_patrol_after_exploration_instead_of_idle():
     """Live run 7 stood idle from 1736 s to the 3000 s mission end: every completion exit returned no target. Now the
     robot patrols to the reachable place it has not seen for longest, keeps that target until reached, then moves on;
@@ -1111,6 +1151,27 @@ def test_frontier_is_viewed_from_a_standoff_not_from_the_drop():
     assert tgt is not None, "no target"
     edge_x = grid.grid_to_world(80, 0)[0] - 0.5 * grid.res
     assert edge_x - tgt.target_wx >= STANDOFF_M - grid.res,         f"viewpoint {edge_x - tgt.target_wx:.2f} m from unknown space (standoff {STANDOFF_M} m)"
+    print("PASSED")
+
+
+def test_sensor_gaps_in_seen_floor_do_not_block_viewpoints():
+    """The depth camera leaves unknown stripes and dots inside floor it has seen. Measuring the standoff from every
+    unknown cell left rescue run 15 without viewpoints for 76 % of its frontier cells; it declared the north side
+    unreachable at 76 % coverage. Specks are ignored; the real unknown edge still keeps its standoff (and the thin
+    strip past the floor edge at the map window border still counts as unknown)."""
+    print("Running test_sensor_gaps_in_seen_floor_do_not_block_viewpoints...", end=" ")
+    from agents.frontier_agent import STANDOFF_M
+    grid = BayesianOccupancyGrid(-3.0, 3.0, -3.0, 3.0, 0.05)
+    lo = grid.grid_log_odds
+    lo[:] = 0.0
+    lo[:, :80] = -2.0                     # floor seen up to x = +1.0, unexplored beyond
+    lo[2::4, 2:78:4] = 0.0                # unknown single-cell sensor gaps every 0.2 m across the seen floor
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.on_pose(PoseMsg(timestamp=1.0, x=-2.0, y=0.1, yaw=0.0))
+    tgt = fa.select_frontier(current_time=10.0)
+    assert tgt is not None and fa.state != "MISSION_COMPLETE", f"no viewpoint through sensor gaps ({fa.state})"
+    edge_x = grid.grid_to_world(80, 0)[0] - 0.5 * grid.res
+    assert edge_x - 1.5 <= tgt.target_wx <= edge_x - STANDOFF_M + grid.res,         f"target x {tgt.target_wx:.2f}: not a standoff viewpoint of the unexplored edge at x {edge_x:.2f}"
     print("PASSED")
 
 

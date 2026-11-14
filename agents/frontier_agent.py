@@ -57,7 +57,8 @@ STANDOFF_M = 0.50         # a frontier is viewed from at least this far back fro
                           # stairwell stays unknown for ever (rescue run 9 picked viewpoints 7 cm from the drop with a
                           # 30 cm position error; run 13 fell off with 35 cm: in open floor nothing corrects odometry);
                           # the camera sees well past its 0.22 m blind zone
-RETIRE_RADIUS = 6.0       # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
+UNKNOWN_SPECK_CELLS = 7   # unknown patches narrower than this (0.35 m) are sensor gaps in seen floor, not unexplored space
+RETIRE_RADIUS = 6.0      # cells (0.3 m): a retired frontier also covers its cluster's medoid drifting as it shrinks
 FAIL_RADIUS_M = 0.6       # failures this close together are the same place (rescue run 12: points 0.25-0.5 m apart)
 COMMIT_PROGRESS_M = 0.25  # a committed target is kept while the walking distance to it shrinks by this much ...
 DOOR_MAX_FAILS = 2           # doorway transits ending stuck or unreachable before that doorway is skipped
@@ -67,6 +68,8 @@ COVER_RADIUS_M = 0.35       # a patrol point the robot has never been within thi
 COVER_BONUS_S = 900.0       # unwalked floor (under a table, a narrow gap) outranks merely stale floor
 PATROL_SECONDS_PER_M = 20.0  # staleness worth one metre of walking (the robot walks about 12 s per metre)
 EXPLORED_OVERLAP = 0.7    # a new room label whose free floor is this much inside finished rooms is already covered
+ROUTE_REACHED_M = 0.6     # a route waypoint counts as visited within this distance
+ROUTE_STALL_S = 60.0      # ... and is skipped when the robot gets no closer to it (by 0.2 m) for this long
 COMMIT_STALL_S = 20.0     # ... within this many seconds; otherwise the attempt counts as a failure
 
 
@@ -93,6 +96,13 @@ class FrontierAgent(BaseAgent):
         # segmenting an open field gives arbitrary rooms that re-label as the map grows, and rescue run 14 swept
         # 150 s of already-explored floor under a new label. Off = best frontier over the whole map.
         self.room_sweep = True
+        # Operator search route (scene profile "route"): waypoints visited in order before free exploration. Each is
+        # approached through the reachable cell nearest to it (it may still be unknown); a waypoint that gets no closer
+        # for ROUTE_STALL_S is skipped, so a blocked route never holds the robot.
+        self.route: List[Tuple[float, float]] = []
+        self.route_i = 0
+        self._route_best = (float("inf"), 0.0)
+        self.route_after = 0.0  # the stall clock starts after the stand-still gyro calibration
         self.visits = SpatialMemory(bucket=1.0)
         self.patrol_failed = SpatialMemory(bucket=1.0)
         self.failed_doorways = SpatialMemory(bucket=1.0)  # doorway transits that ended stuck or unreachable
@@ -381,11 +391,23 @@ class FrontierAgent(BaseAgent):
         # Viewpoints: reachable cells at least STANDOFF_M from unknown space. Every frontier target, fresh or slid along a
         # receding frontier, stands at one (rescue run 13 slid along the floor edge and walked off it).
         lo = self.grid.grid_log_odds
-        known = ((lo <= self.grid.thresh_free) | (lo >= self.grid.thresh_occ)).astype(np.uint8)
+        # Standoff from unknown *areas*, not from specks: the depth camera leaves unknown stripes and dots inside seen floor,
+        # and measuring from every unknown cell left 76 % of rescue run 15's frontier cells without a viewpoint, so it
+        # declared the north side unreachable at 76 % coverage. Unknown narrower than UNKNOWN_SPECK_CELLS is ignored;
+        # outside the map window counts as unknown so the thin strip past the floor edge (a drop) is kept.
+        unk = ((lo > self.grid.thresh_free) & (lo < self.grid.thresh_occ)).astype(np.uint8)
+        pad = UNKNOWN_SPECK_CELLS
+        unk = cv2.copyMakeBorder(unk, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=1)
+        unk = cv2.morphologyEx(unk, cv2.MORPH_OPEN, cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (UNKNOWN_SPECK_CELLS, UNKNOWN_SPECK_CELLS)))[pad:-pad, pad:-pad]
+        known = (1 - unk).astype(np.uint8)
         clear_of_unknown = cv2.distanceTransform(known, cv2.DIST_L2, 3) * self.grid.res >= STANDOFF_M
         view_map = np.where(clear_of_unknown, dist_map, np.inf).astype(np.float32)
         standoff_cells = int(math.ceil(STANDOFF_M / self.grid.res))
-
+        if self.route_i < len(self.route):
+            tgt = self._route_target(current_time, rx, ry, dist_map, view_map)
+            if tgt is not None:
+                return tgt
 
         # Check if committed target was physically reached
         if self.committed_target is not None:
@@ -709,6 +731,39 @@ class FrontierAgent(BaseAgent):
             return target_msg
 
         return self._finish(current_time, rx, ry, dist_map, inflated_mask, "No candidate left.")
+
+    def _route_target(self, current_time, rx, ry, dist_map, view_map) -> Optional[FrontierTargetMsg]:
+        field = view_map if np.isfinite(view_map).any() else dist_map
+        ys, xs = np.nonzero(np.isfinite(field))
+        while self.route_i < len(self.route):
+            wx, wy = self.route[self.route_i]
+            d = math.hypot(wx - rx, wy - ry)
+            # Approach through the reachable cell nearest the waypoint (standing clear of unknown space where possible).
+            # Progress = walking distance to that cell + what is left from it: a detour round the building is
+            # progress, a straight-line measure called it a stall (run 16 skipped waypoints 25 and 26 that way).
+            i, left = None, d
+            if len(xs):
+                cx, cy = self.grid.grid_to_world(xs, ys)
+                gap = np.hypot(cx - wx, cy - wy)
+                i = int(np.argmin(gap + 0.05 * field[ys, xs]))
+                left = float(field[ys[i], xs[i]] + gap[i])
+            if left < self._route_best[0] - 0.2 or current_time < self.route_after:
+                self._route_best = (min(left, self._route_best[0]), current_time)
+            if d <= ROUTE_REACHED_M or current_time - self._route_best[1] > ROUTE_STALL_S:
+                print(f"  [ROUTE] waypoint {self.route_i + 1}/{len(self.route)} ({wx:.2f}, {wy:.2f}) "
+                      f"{'reached' if d <= ROUTE_REACHED_M else f'skipped (no progress, {d:.2f} m away)'}")
+                self.route_i += 1
+                self._route_best = (float("inf"), current_time)
+                continue
+            if i is None:
+                return None
+            self.state, self.committed_target = "ROUTE", None
+            msg = FrontierTargetMsg(timestamp=current_time, target_gx=int(xs[i]), target_gy=int(ys[i]),
+                                    target_wx=float(cx[i]), target_wy=float(cy[i]), room_id=-1, area=50, is_doorway=False)
+            self.bus.publish("frontier/target", msg)
+            return msg
+        print("  [ROUTE] operator route finished -> free exploration")
+        return None
 
     def _score_frontiers(self, frontier_list, rx, ry, r_yaw: float = 0.0):
         """Score reachable frontiers by unknown area in view, walking distance, clearance, novelty and turning cost."""

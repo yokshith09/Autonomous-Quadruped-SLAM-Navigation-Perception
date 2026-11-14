@@ -295,6 +295,8 @@ def main():
     perception_agent.publish_cloud = bool(args.record_3d)
     planner_module.NARROW_GAPS = bool(args.narrow_gaps) or bool(scene.get("narrow_gaps", False))
     frontier_agent.room_sweep = bool(scene.get("room_sweep", True))
+    frontier_agent.route = [tuple(map(float, p)) for p in scene.get("route", [])]
+    frontier_agent.route_after = float(scene.get("gyro_calibration_s", 0.0))
     robot_module.ODOM_SCALE = float(args.odom_scale if args.odom_scale is not None else scene.get("odom_scale", 1.0))
     print(f"  [SCENE] {scene['name']} | odom_scale {robot_module.ODOM_SCALE:.3f} | narrow gaps {planner_module.NARROW_GAPS} | room sweep {frontier_agent.room_sweep}", flush=True)
     cloud_offsets = [0]  # 3D view per step, for offline 3D-matching studies
