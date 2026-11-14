@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Phase II external-review report (PDF) in the department template: python -m evaluation.phase2_report [out.pdf]
 
-Bracketed grey text marks what the team still has to fill in. Scene 2 numbers marked (E) are the expected values of the
-full-exploration run (forecast from rescue runs 16 and 19, 2026-11-14) and are to be replaced after that run.
+Bracketed grey text marks what the team still has to fill in. All results are measured (runs 20261115_001709 and
+20261115_022940, current code).
 """
 import os
 import sys
@@ -82,9 +82,9 @@ def build():
         "during a stand-still calibration. Exploration chooses safe viewpoints at the edge of the known map, can "
         "follow an operator's search route and plans through narrow gaps. The same code was evaluated in two "
         "simulated environments in CoppeliaSim: a 10 x 10 m building with rooms and a 16 x 16 m rescue field with "
-        "rubble. Across both, the robot reaches a mean position error of 13.9 cm, mean map precision of 96.4 % and "
-        "mean floor coverage of 93.9 %, with no collisions measured (scene 2 values are the expected full-run "
-        "values, see Section 5). On the same recordings, odometry alone drifts 153.6 cm and the BreezySLAM "
+        "rubble, where it also passes through a damaged building. Averaged over both, the position "
+        "error is 21.8 cm, map precision 80.4 %, map F1 78.0 % and floor coverage 90.0 %, with no collisions. "
+        "On the same recordings, odometry alone drifts 153.6 cm and the BreezySLAM "
         "baseline 149.6 cm. Perception of evidence, event triggering and secure logging are not integrated yet."))
 
     # 2
@@ -195,9 +195,10 @@ def build():
     h.append("<h3>5.1 Functional Test Cases &amp; Verification</h3>")
     h.append(tbl(["Test ID", "Feature / Scenario", "Input / User Action", "Observed Output", "Result"], [
         ["TC-01", "Full autonomous exploration (scene 1)", "Start in unknown 10 x 10 m building, 30 min",
-         "97.7 % of floor mapped, 0 stuck events, ATE 11.7 cm", "Pass"],
-        ["TC-02", "Rescue field with operator route (scene 2)", "28-waypoint route, rubble, 12 min",
-         "14 of 28 waypoints in 12 min, 0 collisions, ATE 12.3 cm; full run " + ph("pending"), "Partial"],
+         "94.2 % of floor mapped, 0 collisions, 1 stall recovered, ATE 14.8 cm", "Pass"],
+        ["TC-02", "Rescue field, operator route through the building (scene 2)", "70-waypoint route, rubble, 40 min",
+         "Through the building (in 218 s, out of the north doorway 594 s), 59 of 70 waypoints, 0 collisions, 5 stalls "
+         "recovered", "Pass"],
         ["TC-03", "Module integration (SLAM replay)", "Replay stored recordings through SLAM",
          "Reproduces live ATE exactly (11.7 / 12.3 cm)", "Pass"],
         ["TC-04", "Boundary: blocked route waypoint", "Waypoint behind rubble", "Skipped at once, route continues",
@@ -205,22 +206,24 @@ def build():
         ["TC-05", "Boundary: robot stalls", "No progress along path", "Watchdog turn-away, mission continues", "Pass"],
         ["TC-06", "Boundary: floor edge ahead", "Drop at the edge of the rescue field",
          "Stops 0.44 m before the edge", "Pass"],
-        ["TC-07", "Automated unit tests", "pytest, 82 tests", "82 passed", "Pass"],
+        ["TC-07", "Automated unit tests", "pytest, 90 tests", "90 passed", "Pass"],
     ], raw_cols=(3,)))
     h.append(cap(3, "Table", "Functional Testing Summary Across Core Application Scenarios"))
     # 5.2 our results
     h.append("<h3>5.2 Results of Our System: Scene 1, Scene 2 and Average</h3>")
-    h.append(para("One system with the same code in both environments; only the scene profile differs. Scene 2 "
-                  "values marked (E) are the expected values of the full exploration run (forecast from rescue runs "
-                  "16 and 19) and will be replaced after that run; scene 1 will be confirmed by a verification run."))
-    h.append(tbl(["Metric", "Scene 1: building (run 34)", "Scene 2: rescue field", "Average (final)"], [
-        ["Position error (ATE RMSE)", "11.7 cm", "16 cm (E)", "13.9 cm"],
-        ["Map precision vs scene model", "99.7 %", "93 % (E)", "96.4 %"],
-        ["Map recall vs scene model", "92.4 %", "60 % (E)", "76.2 %"],
-        ["Map F1", "95.9 %", "73 % (E)", "84.5 %"],
-        ["Floor covered", "97.7 %", "90 % (E)", "93.9 %"],
-        ["Collisions / stuck events", "not measured / 0", "0 / 0 (E)", "0 / 0"],
-        ["Control step (median / 95th pct.)", "27 / 138 ms", "22 / 118 ms", "25 / 128 ms"],
+    h.append(para("One system with the same code in both environments; only the scene profile differs. Both runs use "
+                  "the current code. Earlier best runs: scene 1 run 34 (11.7 cm, F1 95.9 %, older code and a start "
+                  "heading 2 degrees different; run 34's code from today's start gives 32.0 cm) and scene 2 run 19 "
+                  "(12.3 cm over its first 12 minutes)."))
+    h.append(tbl(["Metric", "Scene 1: building", "Scene 2: rescue field (through the building)", "Average (final)"], [
+        ["Run length / distance", "1800 s / 156.1 m", "2400 s / 134.7 m", "-"],
+        ["Position error (ATE RMSE)", "14.8 cm", "28.8 cm", "21.8 cm"],
+        ["Map precision vs scene model", "93.1 %", "67.7 %", "80.4 %"],
+        ["Map recall vs scene model", "84.9 %", "66.4 %", "75.7 %"],
+        ["Map F1", "88.8 %", "67.1 %", "78.0 %"],
+        ["Floor covered", "94.2 %", "85.8 %", "90.0 %"],
+        ["Collisions / stuck events (recovered)", "0 / 1", "0 / 5", "0 / 3 per run"],
+        ["Control step (median / 95th pct.)", "34 / 140 ms", "23 / 160 ms", "29 / 150 ms"],
     ]))
     h.append(cap(4, "Table", "Results per environment and the final average across environments"))
 
@@ -320,28 +323,32 @@ def build():
         "<b>On the public TUM benchmark (same data):</b> 25.9 cm average with the scene-2 settings, ahead of "
         "RTABMap (28.7), OpenVSLAM (39.2) and ORB-SLAM3 (172.0) on average, but only slightly better than wheel "
         "odometry alone (28.7); 40.5 cm with the scene-1 settings.",
-        "<b>Across environments:</b> 13.9 cm average error, 96.4 % map precision, 93.9 % floor covered, no "
-        "collisions measured, with one code base."]))
+        "<b>Across environments:</b> 21.8 cm average error, 80.4 % map precision, 78.0 % map F1, 90.0 % floor "
+        "covered, no collisions, through the damaged building in scene 2, with one code base.",
+        "<b>Exploration against nearest-frontier:</b> " + ph("Table 7 row after the baseline runs")]))
 
     # 5.7 prototype
     h.append("<h3>5.7 Working Prototype Demonstration</h3>")
     h.append(para(ph("Insert CoppeliaSim screenshots of the robot in scene 1 and scene 2")))
     h.append("<p><img src='scene1.png' width='520'/></p>")
-    h.append(cap(3, "Figure", "Scene 1 (building): (a) layout from the scene model, (b) map built by the robot with the "
-                 "true path (blue) and estimated path (orange)"))
+    h.append(cap(3, "Figure", "Scene 1 (building), 30-minute run on the current code: (a) layout from the scene model, "
+                 "(b) map built by the robot with the true path (blue) and estimated path (orange)"))
     h.append("<p><img src='scene2_full.png' width='520'/></p>")
-    h.append(cap(4, "Figure", "Scene 2 (rescue field), most complete exploration so far (run 16): (a) layout, (b) map and "
-                 "paths. To be replaced by the full run on the operator route"))
+    h.append(cap(4, "Figure", "Scene 2 (rescue field), 40-minute run on the operator route: (a) layout, (b) map and paths; "
+                 "the path enters the damaged building from the south, visits its east room and leaves by the north doorway"))
     h.append(para(
         "<b>Evaluation &amp; Usability Summary:</b> the control loop runs in real time on a PC CPU (median 25 ms per "
-        "step for all agents). Maps are 95.8-99.7 % precise where the robot has looked; in scene 2 the map recall "
-        "is limited because a 2D camera slice sees only the faces of rubble that point towards the robot."))
+        "step for all agents). In scene 2 the position error stays near 11 cm for 17 minutes and then grows to "
+        "29 cm RMSE over 40 minutes: the heading comes from the gyro alone there (scan-based heading correction "
+        "made replays worse: 65-110 cm), and about 2 degrees of residual heading drift accumulates on long open "
+        "stretches. Map recall is limited because a 2D camera slice sees only the faces of rubble that point "
+        "towards the robot."))
 
     # 5.8 to come
     h.append("<h3>5.8 Work Still to Come</h3>")
     h.append(bullets([
-        "Scene 2 full exploration run on the operator route; replaces every (E) value, Figure 4 and the averages.",
-        "Scene 1 verification run on the current code, with a measured collision count.",
+        "Reduce heading drift on long open stretches (periodic stand-still gyro re-calibration, or a heading "
+        "reference that does not need right-angle walls).",
         "Improve scan matching on real Kinect data so it gains clearly over wheel odometry on TUM.",
         "Nearest-frontier exploration in both scenes (Table 7).",
         "Runtime breakdown per agent (CPU and memory)."]))
@@ -365,12 +372,13 @@ def build():
     h.append("<h2>7 Conclusion, Limitations &amp; Future Scope</h2>")
     h.append(bullets([
         "<b>Conclusion:</b> one depth camera, a gyro and leg odometry are enough for a quadruped to explore two "
-        "very different simulated environments with about 12-16 cm position error, precise maps and no collisions, "
-        "with the same code; it beats odometry and a standard light 2D SLAM by an order of magnitude on identical data.",
-        "<b>Current Operational Limitations:</b> simulation only; map recall in open rubble fields is about 60 %; "
+        "very different simulated environments with 15-29 cm position error over 30-40 minute runs and no collisions, "
+        "with the same code, and passes through a damaged building; on identical data it is about ten times more accurate "
+        "than odometry alone, BreezySLAM and Cartographer.",
+        "<b>Current Operational Limitations:</b> simulation only; map recall in open rubble fields is about 66 %; "
         "position error grows on long open-floor stretches; heading in the rescue profile relies on the gyro, so "
         "uncorrected gyro bias raises the error (Table 6); evidence perception, event trigger and secure logging "
-        "are not integrated; " + ph("scene 2 full run and scene 1 verification pending"),
+        "are not integrated; heading drifts about 2 degrees over 40 minutes in open rubble fields.",
         "<b>Future Enhancements:</b> Cartographer comparison and nearest-frontier exploration baseline; "
         "more viewpoints around obstacles; the team's Mamba model for evidence detection; "
         + ph("other planned features")]))

@@ -200,22 +200,31 @@ Everything else is identical code. The per-scene file is `config/scenes/<scene>.
 
 ---
 
-## 8. Results
+## 8. Results (measured, current code, 2026-11-15)
 
-| Metric | Scene 1 (run 34) | Scene 2 | Average |
+| Metric | Scene 1 (30 min) | Scene 2 (40 min, through the building) | Average |
 |---|---|---|---|
-| Position error (ATE) | 11.7 cm | 16 cm (E) | 13.9 cm |
-| Map precision | 99.7 % | 93 % (E) | 96.4 % |
-| Map recall | 92.4 % | 60 % (E) | 76.2 % |
-| Map F1 | 95.9 % | 73 % (E) | 84.5 % |
-| Floor covered | 97.7 % | 90 % (E) | 93.9 % |
-| Collisions | not measured then | 0 (all measured runs) | 0 |
+| Position error (ATE) | 14.8 cm | 28.8 cm | 21.8 cm |
+| Map precision | 93.1 % | 67.7 % | 80.4 % |
+| Map recall | 84.9 % | 66.4 % | 75.7 % |
+| Map F1 | 88.8 % | 67.1 % | 78.0 % |
+| Floor covered | 94.2 % | 85.8 % | 90.0 % |
+| Collisions | 0 | 0 | 0 |
+| Stuck events (all recovered) | 1 | 5 | 3 per run |
 
-(E) = expected value of the scene 2 full run, to be replaced by the measured run. The best measured scene 2 run so
-far (run 19, 12 min) had 12.3 cm error, 95.8 % precision, 0 collisions, 59 % of the floor.
+**Scene 2 highlight:** the robot entered the damaged building from the south at 218 s, visited its east room and left
+through the 1 m north doorway at 594 s, with no collisions. 59 of the 70 route waypoints were reached.
 
-What they mean: the robot knows where it is to about the width of a hand; nearly everything it draws is really
-there; in the rubble field it misses the hidden sides of rubble blocks, so recall is lower.
+**Earlier best runs (kept, older conditions):** scene 1 run 34: 11.7 cm, F1 95.9 % (older code and a start heading 2
+degrees different - from today's start, run 34's own code gives 32.0 cm, so today's code is better); scene 2 run 19:
+12.3 cm, but only 12 minutes and 59 % of the floor.
+
+**Why scene 2 error is higher:** error stays near 11 cm for the first 17 minutes, then grows. In the rubble field the
+heading comes from the gyro alone (no right-angle walls to correct it); about 2 degrees of drift builds up over 40
+minutes. We tested scan-based heading correction on the recording: it made things worse (65-110 cm), so it stays off.
+
+What the numbers mean: the robot knows where it is to about a hand's width in the building and two hands' width after
+40 minutes in the rubble field; most of what it draws is really there; it misses the hidden sides of rubble blocks.
 
 ---
 
