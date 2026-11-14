@@ -294,3 +294,4 @@ Run 34 (20261113_232046, 1800 s): ATE 11.7 cm (max 24.5), map accuracy 2.8 cm, p
 - Final average table added to BEST_RESULTS_ALL_ENVIRONMENTS.md. Next (user): full rescue run, scene 1 verification run.
 - Published-numbers comparison of the cross-environment averages: docs/results/benchmarks_published.md (context only, not same-data).
 - Plan set: docs/project/PLAN_NEXT.md (scene 1 verification -> scene 2 full route run -> benchmarks 3a-3g -> write-up).
+- 3a done: odometry-only and BreezySLAM on our recordings (docs/results/benchmarks_slam_baselines.md). Average ATE: ours 12.0 cm, odometry 153.6 cm, BreezySLAM best-tuned 149.6 cm. TUM Pioneer bags downloading to E:\project_phase1\datasets\tum (~0.25 MB/s).
