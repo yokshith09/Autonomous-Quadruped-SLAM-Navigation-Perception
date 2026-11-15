@@ -76,6 +76,8 @@ def _render(nodes, edges, W, H, path, scale):
         fc, ec = PALETTE[n.get("color", "white")]
         if NOFILL and fc != "none":
             fc = "white"
+        if n.get("noborder"):
+            ec = "none"
         kind = n.get("kind", "round")
         ls = (0, (5, 3)) if n.get("dashed") else "-"
         lw = n.get("lw", 1.3)
@@ -153,7 +155,9 @@ def _style(n):
             "image": "shape=image;imageAspect=0;aspect=fixed;"}[kind]
     if NOFILL and fc != "none":
         fc = "#ffffff"
-    s = base + "whiteSpace=wrap;html=1;fontFamily=%s;fontSize=%d;" % (FONT if SKETCH else "Helvetica", n.get("size", 16))
+    if n.get("noborder"):
+        ec = "none"
+    s = base + "whiteSpace=wrap;html=1;fontFamily=%s;fontSize=%d;" % (FONT if FONT != "Arial" else "Helvetica", n.get("size", 16))
     if SKETCH:
         s += "sketch=1;curveFitting=1;jiggle=2;"
     if kind != "text":
@@ -191,7 +195,8 @@ def write_drawio(nodes, edges, W, H, path, name):
         s = sidefrac.get(e.get("s", "b"), e.get("s")) if not isinstance(e.get("s"), tuple) else e["s"]
         d = sidefrac.get(e.get("d", "t"), e.get("d")) if not isinstance(e.get("d"), tuple) else e["d"]
         st = ("edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;"
-              + ("sketch=1;curveFitting=1;jiggle=2;fontFamily=%s;" % FONT if SKETCH else "") +
+              + ("sketch=1;curveFitting=1;jiggle=2;" if SKETCH else "") +
+              ("fontFamily=%s;" % FONT if FONT != "Arial" else "") +
               f"fontSize={e.get('size', 13)};exitX={s[0]};exitY={s[1]};entryX={d[0]};entryY={d[1]};")
         if e.get("dashed"):
             st += "dashed=1;"

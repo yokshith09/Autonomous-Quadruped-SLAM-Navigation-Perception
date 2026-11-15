@@ -1,4 +1,4 @@
-"""Whole-system architecture: big pictures, little text, hand-drawn style (PNG + .drawio with embedded pictures).
+"""Whole-system architecture: big pictures, little text, plain draw.io style in Times New Roman (PNG + .drawio with embedded pictures).
 
 Canvas 1600 x 900 px; titles 30 px and labels 24-26 px print at about 9 pt at full page width.
 """
@@ -14,16 +14,16 @@ def img(name):
 
 
 def system():
-    K.SKETCH, K.NOFILL, font = True, True, K.FONT
-    K.FONT = "Segoe Print"
+    font = K.FONT
+    K.FONT = "Times New Roman"
     W, H = 1600, 900
     n, e = {}, []
 
     def frame(nid, x, y, w, h, title, color):
-        n[nid] = dict(x=x, y=y, w=w, h=h, kind="frame", color=color, label=title, size=30, lw=2.6)
+        n[nid] = dict(x=x, y=y, w=w, h=h, kind="frame", color=color, label=title, size=32, noborder=True)
 
     def item(nid, x, y, w, h, label, size=25):
-        n[nid] = dict(x=x, y=y, w=w, h=h, kind="round", color="dark", label=label, size=size, lw=1.8)
+        n[nid] = dict(x=x, y=y, w=w, h=h, kind="round", color="white", label=label, size=size, lw=1.4)
 
     def pic(nid, x, y, w, h, name):
         n[nid] = dict(x=x, y=y, w=w, h=h, kind="image", image=img(name))
@@ -61,8 +61,8 @@ def system():
     frame("dec", 1060, 480, 300, 380, "Decision", "red")
     item("dec1", 1085, 560, 250, 110, "Navigation\ngoal")
     item("dec2", 1085, 700, 250, 110, "Path +\ncommands")
-    n["cloud"] = dict(x=1405, y=590, w=170, h=150, kind="ellipse", color="dark", label="Cloud\nsync", size=28,
-                      bold="all", lw=2.4)
+    n["cloud"] = dict(x=1405, y=590, w=170, h=150, kind="ellipse", color="blue", label="Cloud\nsync", size=28,
+                      bold="all", lw=1.6)
 
     for a, b, lab, kw in [
         ("scene", "sen", "", dict(s="r", d="l")),
@@ -78,7 +78,7 @@ def system():
     ]:
         e.append(dict(src=a, dst=b, label=lab, size=24, lw=2.2, head=18, **kw))
     K.build(n, e, W, H, os.path.join(OUT, "fig_system_architecture"), "System architecture")
-    K.SKETCH, K.NOFILL, K.FONT = False, False, font
+    K.FONT = font
 
 
 if __name__ == "__main__":
