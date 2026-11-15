@@ -13,6 +13,8 @@
 
 % small picture inside an architecture box (variant B)
 \newcommand{\archpic}[1]{\includegraphics[width=1.55cm,height=0.9cm,keepaspectratio]{#1}}
+% large picture inside a robot-core box
+\newcommand{\bigpic}[1]{\includegraphics[width=3.0cm,height=1.8cm,keepaspectratio]{#1}}
 
 \graphicspath{{../}{./}{figures/}}
 
@@ -247,50 +249,57 @@
 \end{frame}
 
 % --- SLIDE 2b: ROBOT CORE ARCHITECTURE (NAVIGATION) ---
+% Agents in two rows around the message bus; only the name and a large picture inside each box,
+% the description outside (above the top row, below the bottom row). Every arrow is a straight line.
 \begin{frame}{4. End-to-End Application Architecture (Navigation)}
 \framesubtitle{Robot Core: Seven Agents on One Message Bus}
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-    agent/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!8, align=center,
-        font=\scriptsize, text width=2.0cm, minimum height=2.75cm, inner sep=4pt},
+    abox/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!8, align=center,
+        font=\small, text width=3.1cm, minimum height=2.5cm, inner sep=4pt},
+    atext/.style={font=\scriptsize, align=center, text width=3.6cm, inner sep=3pt},
     busbox/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!20, align=center,
-        font=\small, minimum width=15.6cm, minimum height=0.85cm, inner sep=3pt},
-    biarr/.style={{Latex[length=2mm]}-{Latex[length=2mm]}, thick, amritaMaroon},
-    hz/.style={font=\tiny\bfseries, text=amritaMaroon}
+        font=\small, minimum height=0.9cm, inner sep=3pt},
+    biarr/.style={{Latex[length=2.5mm]}-{Latex[length=2.5mm]}, thick, amritaMaroon},
+    oneway/.style={-{Latex[length=2.5mm]}, thick, amritaMaroon}
 ]
 
-% heading
-\node[archsection] at (7.8,4.0) {ROBOT CORE: ONE 20 Hz SCHEDULER RUNS EVERY AGENT AT ITS OWN RATE};
+% ---------- top row: camera, perception, SLAM, mapping, supervisor ----------
+\node[abox] (kin)  at (0,2.6)  {\textbf{Kinect camera}\\[3pt]\bigpic{img_rgbd.png}};
+\node[abox] (per)  at (4,2.6)  {\textbf{Perception}\\[3pt]\bigpic{icon_scan.png}};
+\node[abox] (slam) at (8,2.6)  {\textbf{SLAM}\\[3pt]\bigpic{img_map2.png}};
+\node[abox] (map)  at (12,2.6) {\textbf{Mapping}\\[3pt]\bigpic{icon_grid.png}};
+\node[abox] (sup)  at (16,2.6) {\textbf{Supervisor}\\[3pt]{\footnotesize mission state\\[2pt]knowledge graph\\of rooms\\[2pt]event timeline}};
 
-% six navigation agents
-% each box: name, picture, then all text below the picture (rate, what it does, topic it publishes)
-\node[agent] (per)  at (1.3,1.9)  {\textbf{Perception}\\[2pt]\archpic{icon_scan.png}\\[1pt]{\tiny 10 Hz}\\depth frame\\to 2D scan\\[2pt]{\tiny\ttfamily out: sensor/scan}};
-\node[agent] (slam) at (4.4,1.9)  {\textbf{SLAM}\\[2pt]\archpic{img_map2.png}\\[1pt]{\tiny 10 Hz}\\ICP pose,\\loop closure\\[2pt]{\tiny\ttfamily out: pose/slam}};
-\node[agent] (map)  at (7.5,1.9)  {\textbf{Mapping}\\[2pt]\archpic{icon_grid.png}\\[1pt]{\tiny 10 Hz}\\occupancy grid,\\rooms, doorways\\[2pt]{\tiny\ttfamily out: map/grid}};
-\node[agent] (fro)  at (10.6,1.9) {\textbf{Frontier}\\[2pt]\archpic{img_map.png}\\[1pt]{\tiny 1 Hz}\\route waypoint\\or frontier goal\\[2pt]{\tiny\ttfamily out: frontier/target}};
-\node[agent] (plan) at (13.7,1.9) {\textbf{Planning}\\[2pt]\archpic{icon_path.png}\\[1pt]{\tiny 5 Hz}\\A* path on the\\inflated grid\\[2pt]{\tiny\ttfamily out: plan/path}};
-\node[agent] (loco) at (16.8,1.9) {\textbf{Locomotion}\\[2pt]\archpic{img_robot.png}\\[1pt]{\tiny 20 Hz}\\trot gait, watchdog,\\leg odometry, gyro\\[2pt]{\tiny\ttfamily out: control/actuation}};
+\node[atext, anchor=south] at (kin.north)  {depth + colour frames};
+\node[atext, anchor=south] at (per.north)  {10 Hz: depth frame to 2D scan\\\texttt{out: sensor/scan}};
+\node[atext, anchor=south] at (slam.north) {10 Hz: ICP pose, loop closure\\\texttt{out: pose/slam}};
+\node[atext, anchor=south] at (map.north)  {10 Hz: occupancy grid, rooms, doorways\\\texttt{out: map/grid}};
+\node[atext, anchor=south] at (sup.north)  {2 Hz: ends the mission by returning to the start point};
 
-% message bus
-\node[busbox, minimum width=17.6cm] (bus) at (9.05,-0.55)
-    {\textbf{MESSAGE BUS (publish / subscribe)} \quad {\scriptsize every agent reads the latest message on each topic; agents never call each other}};
+% ---------- message bus ----------
+\node[busbox, minimum width=15.6cm] (bus) at (10,0)
+    {\textbf{MESSAGE BUS (publish / subscribe)}\quad{\scriptsize one 20 Hz scheduler runs every agent at its own rate; agents never call each other}};
 
-\foreach \a in {per, slam, map, fro, plan, loco}
+% ---------- bottom row: frontier, planning, locomotion, joints ----------
+\node[abox] (fro)  at (4,-2.6)  {\textbf{Frontier}\\[3pt]\bigpic{img_map.png}};
+\node[abox] (plan) at (8,-2.6)  {\textbf{Planning}\\[3pt]\bigpic{icon_path.png}};
+\node[abox] (loco) at (12,-2.6) {\textbf{Locomotion}\\[3pt]\bigpic{img_robot.png}};
+\node[abox] (leg)  at (16,-2.6) {\textbf{12 leg joints}\\[3pt]\bigpic{robot_sim.png}};
+
+\node[atext, anchor=north] at (fro.south)  {1 Hz: route waypoint or frontier goal\\\texttt{out: frontier/target}};
+\node[atext, anchor=north] at (plan.south) {5 Hz: A* path on the inflated grid\\\texttt{out: plan/path}};
+\node[atext, anchor=north] at (loco.south) {20 Hz: trot gait, watchdog, leg odometry, gyro\\\texttt{out: control/actuation}};
+\node[atext, anchor=north] at (leg.south)  {joint angles from the trot gait};
+
+% ---------- arrows (all straight) ----------
+\draw[oneway] (kin.east) -- (per.west);
+\foreach \a in {per, slam, map, sup}
     \draw[biarr] (\a.south) -- (\a.south |- bus.north);
-
-% camera in, supervisor, joint commands out
-\node[agent, text width=2.6cm, minimum height=2.1cm] (kin) at (1.9,-2.85)
-    {\textbf{Kinect camera}\\[2pt]\archpic{img_rgbd.png}\\[1pt]depth + colour frames};
-\node[agent, text width=4.2cm, minimum height=2.1cm] (sup) at (9.05,-2.85)
-    {\textbf{Supervisor agent}\\[3pt]{\tiny 2 Hz}\\mission state, knowledge graph\\of rooms, event timeline;\\ends the mission by returning\\to the start point};
-\node[agent, text width=2.6cm, minimum height=2.1cm] (leg) at (16.2,-2.85)
-    {\textbf{12 leg joints}\\[3pt]driven by the\\trot gait};
-
-% the camera feeds Perception directly (left of the bus); Locomotion drives the joints directly (right of the bus)
-\draw[archarr] (kin.west) -- ++(-0.6,0) |- node[pos=0.25, left, archlab] {depth\\frames} (per.west);
-\draw[biarr] (sup.north) -- (sup.north |- bus.south);
-\draw[archarr] (loco.east) -- ++(0.5,0) |- node[pos=0.25, right, archlab] {joint\\commands} (leg.east);
+\foreach \a in {fro, plan, loco}
+    \draw[biarr] (\a.north) -- (\a.north |- bus.south);
+\draw[oneway] (loco.east) -- (leg.west);
 \end{tikzpicture}}
 \end{frame}
 
