@@ -1,4 +1,7 @@
-"""Whole-system architecture, hand-drawn style (PNG + .drawio with draw.io's sketch style), no background fills."""
+"""Whole-system architecture: big pictures, little text, hand-drawn style (PNG + .drawio with embedded pictures).
+
+Canvas 1600 x 900 px; titles 30 px and labels 24-26 px print at about 9 pt at full page width.
+"""
 import os
 
 from evaluation import drawio_kit as K
@@ -6,66 +9,77 @@ from evaluation import drawio_kit as K
 OUT = os.path.join("docs", "report_phase2", "figures")
 
 
+def img(name):
+    return os.path.join(OUT, name)
+
+
 def system():
     K.SKETCH, K.NOFILL, font = True, True, K.FONT
     K.FONT = "Segoe Print"
-    W, H = 2120, 980
+    W, H = 1600, 900
     n, e = {}, []
 
     def frame(nid, x, y, w, h, title, color):
-        n[nid] = dict(x=x, y=y, w=w, h=h, kind="frame", color=color, label=title, size=24, lw=2.2)
+        n[nid] = dict(x=x, y=y, w=w, h=h, kind="frame", color=color, label=title, size=30, lw=2.6)
 
-    def item(nid, x, y, w, h, label, size=19):
-        n[nid] = dict(x=x, y=y, w=w, h=h, kind="round", color="dark", label=label, size=size, sub=17, lw=1.6)
+    def item(nid, x, y, w, h, label, size=25):
+        n[nid] = dict(x=x, y=y, w=w, h=h, kind="round", color="dark", label=label, size=size, lw=1.8)
 
-    frame("env", 20, 230, 290, 390, "Scene", "grey")
-    item("env1", 45, 305, 240, 70, "Rooms, rubble")
-    item("env2", 45, 395, 240, 80, "People, furniture,\nevidence items", size=18)
-    item("env3", 45, 495, 240, 90, "Unknown layout\nno prior map")
-    frame("sen", 370, 150, 280, 480, "Sensing", "green")
-    item("cam", 395, 225, 230, 80, "Colour camera\nKinect RGB")
-    item("dep", 395, 335, 230, 80, "Depth camera\nKinect depth")
-    item("imu", 395, 445, 230, 80, "Gyro +\nleg odometry")
-    frame("rob", 710, 40, 290, 300, "Quadruped robot", "blue")
-    item("rob1", 735, 110, 240, 90, "12-joint legs\ntrot gait")
-    item("rob2", 735, 220, 240, 90, "Kinect on the body\n60 deg view", size=18)
-    frame("per", 1060, 40, 380, 300, "Scene understanding", "orange")
-    item("per1", 1085, 110, 330, 90, "Fine-tuned VideoMamba\n+ HorNet gated convolution", size=18)
-    item("per2", 1085, 220, 330, 90, "Crime or not, kind of\nemergency, crime type", size=18)
-    frame("core", 710, 420, 730, 240, "Robot core: SLAM and exploration", "purple")
-    item("icp", 735, 495, 215, 130, "ICP pose\nestimation\nloop closure")
-    item("mapc", 967, 495, 215, 130, "Map\nconstruction\noccupancy grid")
-    item("fro", 1199, 495, 215, 130, "Frontier\ndetection\noperator route")
-    frame("dec", 1620, 420, 300, 240, "Decision", "red")
-    item("nav", 1645, 490, 250, 70, "Navigation goal")
-    item("cmd", 1645, 575, 250, 70, "Movement commands", size=18)
-    frame("mot", 710, 750, 530, 200, "Motion control", "orange")
-    item("loco", 735, 820, 225, 100, "Locomotion\ntrot gait, watchdog", size=18)
-    item("drv", 985, 820, 225, 100, "Joint drivers\n12 joints")
-    frame("log", 1620, 40, 300, 300, "Logging", "yellow")
-    item("log1", 1645, 105, 250, 62, "Map coordinates")
-    item("log2", 1645, 180, 250, 62, "Hash (SHA-256)")
-    item("log3", 1645, 255, 250, 62, "ROI metadata")
-    n["cloud"] = dict(x=1955, y=135, w=150, h=110, kind="ellipse", color="dark", label="Cloud\nsync", size=20,
-                      bold="all", lw=2.0)
+    def pic(nid, x, y, w, h, name):
+        n[nid] = dict(x=x, y=y, w=w, h=h, kind="image", image=img(name))
 
-    e.append(dict(src="env", dst="sen", s=(1, 0.397), d="l", label="environment", size=17, ly=-20))
-    e.append(dict(src="sen", dst="rob", s="r", d="l", label="sensor data", size=17))
-    e.append(dict(src="rob", dst="per", s="r", d="l", label="colour video", size=17, ly=-20))
-    e.append(dict(src="rob", dst="core", s="b", d=(0.198, 0), label="depth, odometry, gyro", size=17))
-    e.append(dict(src="core", dst="dec", s="r", d="l", label="pose, map, frontiers", size=17, ly=-22))
-    e.append(dict(src="per", dst="dec", s="b", d=(0.5, 0), pts=[(1250, 385), (1770, 385)], label="crime alerts",
-                  size=17, li=1))
-    e.append(dict(src="per", dst="log", s="r", d="l", label="clips", size=17, ly=-20))
-    e.append(dict(src="log", dst="cloud", s="r", d="l", label="upload", size=17, ly=-20))
-    e.append(dict(src="dec", dst="mot", s="b", d=(1, 0.15), pts=[(1770, 780)], label="movement commands", size=17,
-                  li=1))
-    e.append(dict(src="mot", dst="env", s="l", d="b", pts=[(165, 850)], label="robot moves", size=17, li=0))
-    e.append(dict(src="mot", dst="sen", s=(0.12, 0), d="b", pts=[(774, 700), (510, 700)], label="leg odometry",
-                  size=17, li=1))
-    for d in (n, e):
-        pass
-    for nd in n.values():
-        nd.setdefault("color", "dark")
+    def text(nid, x, y, w, h, label, size=24):
+        n[nid] = dict(x=x, y=y, w=w, h=h, kind="text", label=label, size=size, bold=False)
+
+    # row 1: sensing to understanding
+    frame("scene", 20, 20, 300, 380, "Scene", "grey")
+    pic("scene_i", 45, 80, 250, 255, "img_scene.png")
+    text("scene_t", 20, 342, 300, 46, "unknown, no map")
+    frame("sen", 360, 20, 340, 380, "Kinect + IMU", "green")
+    pic("sen_i", 380, 85, 300, 135, "img_rgbd.png")
+    text("sen_t", 360, 232, 340, 140, "colour + depth\ngyro, leg odometry")
+    frame("rob", 740, 20, 280, 380, "Quadruped", "blue")
+    pic("rob_i", 760, 85, 240, 197, "img_robot.png")
+    text("rob_t", 740, 300, 280, 70, "12 joints")
+    frame("und", 1060, 20, 300, 380, "Video model", "orange")
+    pic("und_i", 1110, 80, 200, 200, "icon_frames.png")
+    text("und_t", 1060, 292, 300, 80, "VideoMamba\ncrime type")
+    frame("log", 1400, 20, 180, 380, "Logging", "yellow")
+    item("log1", 1415, 90, 150, 70, "map log")
+    item("log2", 1415, 180, 150, 70, "hash")
+    item("log3", 1415, 270, 150, 70, "ROI clips")
+
+    # row 2: core, decision, motion
+    frame("mot", 20, 480, 300, 380, "Motion", "orange")
+    item("mot1", 45, 560, 250, 110, "Trot gait\nwatchdog")
+    item("mot2", 45, 700, 250, 110, "12 joint\ndrivers")
+    frame("core", 360, 480, 660, 380, "SLAM + exploration", "purple")
+    pic("core_i", 380, 545, 300, 256, "img_map2.png")
+    item("core1", 705, 545, 290, 85, "ICP pose")
+    item("core2", 705, 650, 290, 85, "Occupancy map")
+    item("core3", 705, 755, 290, 85, "Frontier goal")
+    frame("dec", 1060, 480, 300, 380, "Decision", "red")
+    item("dec1", 1085, 560, 250, 110, "Navigation\ngoal")
+    item("dec2", 1085, 700, 250, 110, "Path +\ncommands")
+    n["cloud"] = dict(x=1405, y=590, w=170, h=150, kind="ellipse", color="dark", label="Cloud\nsync", size=28,
+                      bold="all", lw=2.4)
+
+    for a, b, lab, kw in [
+        ("scene", "sen", "", dict(s="r", d="l")),
+        ("sen", "rob", "", dict(s="r", d="l")),
+        ("rob", "und", "video", dict(s="r", d="l", ly=-22)),
+        ("und", "log", "", dict(s="r", d="l")),
+        ("log", "cloud", "upload", dict(s="b", d="t", lx=48)),
+        ("rob", "core", "depth + odometry", dict(s="b", d=(0.79, 0), lx=6)),
+        ("core", "dec", "", dict(s="r", d="l")),
+        ("und", "dec", "alerts", dict(s="b", d="t", lx=40)),
+        ("dec", "mot", "commands", dict(s="b", d="b", pts=[(1210, 885), (170, 885)], li=1)),
+        ("mot", "scene", "moves", dict(s="t", d="b", lx=42)),
+    ]:
+        e.append(dict(src=a, dst=b, label=lab, size=24, lw=2.2, head=18, **kw))
     K.build(n, e, W, H, os.path.join(OUT, "fig_system_architecture"), "System architecture")
     K.SKETCH, K.NOFILL, K.FONT = False, False, font
+
+
+if __name__ == "__main__":
+    system()
