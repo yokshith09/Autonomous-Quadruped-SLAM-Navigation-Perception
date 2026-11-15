@@ -183,7 +183,7 @@
 \end{frame}
 
 % ===================== PAGE 8: COMPONENTS & USER WORKFLOW =====================
-\begin{frame}{6. Architectural Components \& Interface Design}
+\begin{frame}{4. Architectural Components \& Interface Design}
     \framesubtitle{Component Breakdown \& User Workflow}
     \begin{block}{Core Application Components}
         \small
@@ -204,7 +204,7 @@
 \end{frame}
 
 % ===================== PAGE 9: DATA & PLATFORM =====================
-\begin{frame}{7. Architectural Components \& Interface Design}
+\begin{frame}{5. Architectural Components \& Interface Design}
     \framesubtitle{Data Management, Interfaces \& Technology Specifications}
     \begin{block}{Data Management \& External Interfaces}
         \small
@@ -223,8 +223,37 @@
     \end{block}
 \end{frame}
 
+% ===================== PAGE 10: IMPLEMENTATION OVERVIEW =====================
+\begin{frame}{6. Implementation Details: Overview}
+    \framesubtitle{End-to-End Application Module \& Integration Status}
+    \begin{table}
+        \centering
+        \scriptsize
+        \renewcommand{\arraystretch}{1.2}
+        \begin{tabular}{p{3.4cm} p{7.4cm} c}
+            \toprule
+            \textbf{Application Module} & \textbf{Implemented Features \& Integration Scope} & \textbf{Status} \\
+            \midrule
+            Operator interface & Start the mission, mark an optional search route, watch the live map; read the mission report and report the crime.& 100\% (Functional) \\
+            SLAM \& exploration & Seven agents on one shared message bus. The robot explores and returns to its start point. & 100\% (Integrated) \\
+            Scene understanding & Trained network: crime or not, kind of emergency, crime type, and the moment it is most visible & 100\% (Functional) \\
+            Data storage & Each mission saves the map, path, event timeline and sensor recording; a mission can be replayed and checked later & 100\% (Integrated) \\
+            Sensors \& motors & Kinect depth and colour camera, gyro, leg odometry, 12 leg joints, collision check & 100\% (Functional, sim) \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    \begin{block}{Prototype Environment \& Repository}
+        \footnotesize
+        \begin{itemize}
+            \item \textbf{Execution Platform:} navigation tested in the CoppeliaSim simulator on Windows 11 (AMD Ryzen 7, CPU only); scene understanding on a Tesla V100 GPU.
+            \item \textbf{Source Repository:} github.com/yokshith09/Autonomous-Quadruped-SLAM-Navigation-Perception (tag final-multi-env-v2); github.com/vijaykrishnaaa/VideoMamba-HorNet-Crime-Recognition
+        \end{itemize}
+    \end{block}
+\end{frame}
+
 % ===================== PAGE 7: SCENE-UNDERSTANDING NETWORK =====================
-\begin{frame}{5. End-to-End Application Architecture (Scene Understanding)}
+\begin{frame}{7. End-to-End Application Architecture (Scene Understanding)}
     \framesubtitle{VideoMamba-Small with a HorNet Gated Convolution}
     \centering
     \figorbox{fig_recognition_model.png}{0.97\textwidth}{Recognition network: figures/fig\_recognition\_model.png}
@@ -235,7 +264,7 @@
 \end{frame}
 
 % ===================== PAGE 12: SCENE UNDERSTANDING IMPLEMENTATION =====================
-\begin{frame}{10. Functional Module Implementation Details}
+\begin{frame}{8. Functional Module Implementation Details}
     \framesubtitle{Scene Understanding: From Video to Answer}
     \begin{block}{Scene Understanding}
         \small
@@ -261,7 +290,7 @@
 \end{frame}
 
 % ===================== PAGE 16: DEMO, SCENE UNDERSTANDING =====================
-\begin{frame}{12. Working Prototype Demonstration: Scene Understanding}
+\begin{frame}{9. Working Prototype Demonstration: Scene Understanding}
     \framesubtitle{One Command, One Video, Three-Level Answer}
     \begin{columns}[c]
         \column{0.24\textwidth}
@@ -289,7 +318,7 @@
 \end{frame}
 
 % ===================== PAGE 6: ROBOT CORE ARCHITECTURE =====================
-\begin{frame}{4. End-to-End Application Architecture (Navigation)}
+\begin{frame}{10. End-to-End Application Architecture (Navigation)}
 \framesubtitle{Robot Core: Seven Agents on One Message Bus}
 \centering
 \resizebox{\textwidth}{!}{%
@@ -321,7 +350,7 @@
 \node[agent, minimum height=3.0cm] (kin) at (0,-3.4)
     {\textbf{Kinect camera}\\[3pt]\includegraphics[width=2.6cm,height=1.6cm,keepaspectratio]{img_rgbd.png}\\[2pt]{\scriptsize depth + colour frames}};
 \node[agent, text width=4.4cm, minimum height=3.0cm] (sup) at (8.25,-3.4)
-    {\textbf{Supervisor agent}\\[4pt]{\scriptsize 2 Hz\\[2pt]mission state, knowledge graph of rooms, event timeline\\[2pt]ends the mission by returning to the start point}};
+    {\textbf{Supervisor agent}\\[4pt]{\scriptsize 2 Hz\\[2pt]mission state, knowledge graph of rooms, event timeline}};
 \node[agent, minimum height=3.0cm] (leg) at (16.5,-3.4)
     {\textbf{12 leg joints}\\[3pt]\includegraphics[width=2.6cm,height=1.6cm,keepaspectratio]{robot_sim.png}\\[2pt]{\scriptsize joint angles from the gait}};
 
@@ -332,7 +361,7 @@
 \end{frame}
 
 % ===================== PAGE 11: NAVIGATION AGENTS =====================
-\begin{frame}{9. Functional Module Implementation Details}
+\begin{frame}{11. Functional Module Implementation Details}
     \framesubtitle{Navigation: What Each Agent Does}
     \small
     \begin{itemize}
@@ -369,6 +398,8 @@
                 \textbf{Ours} & \textbf{11.7 / 12.3 cm} & \textbf{12.0 cm} \\
                 \bottomrule
             \end{tabular}
+
+            {\tiny Same recordings for every method: best run per scene (scene 2: 12-min run). Full final runs: 14.8 / 28.8 cm, average 21.8 cm.}
         \end{block}
         \begin{block}{Exploration vs nearest-frontier (same scenes)}
             \scriptsize
@@ -398,7 +429,7 @@
 \end{frame}
 
 % ===================== PAGE 13: FUNCTIONAL TESTING =====================
-\begin{frame}{11. Functional Testing \& Verification Results}
+\begin{frame}{13. Functional Testing \& Verification Results}
     \framesubtitle{End-to-End Feature Verification \& Test Case Summary}
     \begin{table}
         \centering
@@ -422,14 +453,14 @@
     \begin{block}{Application Verification Summary}
         \scriptsize
         \begin{itemize}
-            \item \textbf{Functional Verification:} two environments, same code: 21.8 cm mean position error, 90.0\% floor covered, map F1 78.0\%, no collisions; 90 automated tests pass.
+            \item \textbf{Functional Verification:} two environments, same code: 21.8 cm mean position error, 90.0\% floor covered, map F1 78.0\%, no collisions; 91 automated tests pass.
             \item \textbf{Responsiveness \& Operational Metrics:} 29 ms median control step on a CPU; scene understanding answers a 10 to 14 s video in 9 to 14 s on the GPU.
         \end{itemize}
     \end{block}
 \end{frame}
 
 % ===================== PAGE 15: DEMO, NAVIGATION =====================
-\begin{frame}{11. Working Prototype Demonstration: Navigation}
+\begin{frame}{14. Working Prototype Demonstration: Navigation}
     \framesubtitle{End-to-End Application Walkthrough \& Visual Evidence}
     \begin{columns}[c]
         \column{0.34\textwidth}
@@ -452,7 +483,7 @@
 \section{Technical Knowledge}
 
 % ===================== PAGE 17: TECHNICAL JUSTIFICATION =====================
-\begin{frame}{13. Technical Justification \& Architectural Decisions}
+\begin{frame}{15. Technical Justification \& Architectural Decisions}
     \framesubtitle{Platform Rationale, Engineering Trade-offs \& Operational Considerations}
     \begin{columns}[T]
         \column{0.49\textwidth}
@@ -491,37 +522,6 @@
             \end{itemize}
         \end{block}
     \end{columns}    \end{frame}
-
-% ===================== PAGE 10: IMPLEMENTATION OVERVIEW (not in your order; kept here, out of the talk) =====================
-% Your order leaves out page 10. It is kept below, commented out, so nothing is lost.
-% To show it, remove the % at the start of each line and move the frame where you want it.
-%\begin{frame}{8. Implementation Details: Overview}
-%    \framesubtitle{End-to-End Application Module \& Integration Status}
-%    \begin{table}
-%        \centering
-%        \scriptsize
-%        \renewcommand{\arraystretch}{1.2}
-%        \begin{tabular}{p{3.4cm} p{7.4cm} c}
-%            \toprule
-%            \textbf{Application Module} & \textbf{Implemented Features \& Integration Scope} & \textbf{Status} \\
-%            \midrule
-%            Operator interface & Start the mission, mark an optional search route, watch the live map; read the mission report and report the crime.& 100\% (Functional) \\
-%            SLAM \& exploration & Seven agents on one shared message bus. The robot explores and returns to its start point. & 100\% (Integrated) \\
-%            Scene understanding & Trained network: crime or not, kind of emergency, crime type, and the moment it is most visible & 100\% (Functional) \\
-%            Data storage & Each mission saves the map, path, event timeline and sensor recording; a mission can be replayed and checked later & 100\% (Integrated) \\
-%            Sensors \& motors & Kinect depth and colour camera, gyro, leg odometry, 12 leg joints, collision check & 100\% (Functional, sim) \\
-%            \bottomrule
-%        \end{tabular}
-%    \end{table}
-%
-%    \begin{block}{Prototype Environment \& Repository}
-%        \footnotesize
-%        \begin{itemize}
-%            \item \textbf{Execution Platform:} navigation tested in the CoppeliaSim simulator on Windows 11 (AMD Ryzen 7, CPU only); scene understanding on a Tesla V100 GPU.
-%            \item \textbf{Source Repository:} github.com/yokshith09/Autonomous-Quadruped-SLAM-Navigation-Perception (tag final-multi-env-v2); github.com/vijaykrishnaaa/VideoMamba-HorNet-Crime-Recognition
-%        \end{itemize}
-%    \end{block}
-%\end{frame}
 
 % =========================================================================
 % REFERENCES & THANK YOU
