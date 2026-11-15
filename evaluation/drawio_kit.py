@@ -18,7 +18,7 @@ PALETTE = {  # draw.io default fills / strokes
     "blue": ("#dae8fc", "#6c8ebf"), "green": ("#d5e8d4", "#82b366"), "yellow": ("#fff2cc", "#d6b656"),
     "orange": ("#ffe6cc", "#d79b00"), "red": ("#f8cecc", "#b85450"), "purple": ("#e1d5e7", "#9673a6"),
     "grey": ("#f5f5f5", "#666666"), "white": ("#ffffff", "#000000"), "none": ("none", "none"),
-    "dark": ("#ffffff", "#333333"),
+    "dark": ("#ffffff", "#333333"), "maroon": ("#f3f4f6", "#a3154f"),
 }
 FONT = "Arial"
 SKETCH = False     # hand-drawn look: wobbly lines (matplotlib path.sketch, draw.io sketch=1)
@@ -203,6 +203,8 @@ def write_drawio(nodes, edges, W, H, path, name):
               + ("sketch=1;curveFitting=1;jiggle=2;" if SKETCH else "") +
               ("fontFamily=%s;" % FONT if FONT != "Arial" else "") +
               f"fontSize={e.get('size', 13)};exitX={s[0]};exitY={s[1]};entryX={d[0]};entryY={d[1]};")
+        if e.get("color"):
+            st += "strokeColor=%s;" % e["color"]
         if e.get("dashed"):
             st += "dashed=1;"
         if e.get("both"):
