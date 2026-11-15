@@ -369,16 +369,16 @@ def build():
     h.append(para(
         "<b>Evaluation &amp; Usability Summary:</b> the control loop runs in real time on a PC CPU (median 25 ms per "
         "step for all agents). In scene 2 the position error stays near 11 cm for 17 minutes and then grows to "
-        "29 cm RMSE over 40 minutes: the heading comes from the gyro alone there (scan-based heading correction "
-        "made replays worse: 65-110 cm), and about 2 degrees of residual heading drift accumulates on long open "
-        "stretches. Map recall is limited because a 2D camera slice sees only the faces of rubble that point "
+        "29 cm RMSE over 40 minutes. Replays of the recording show the cause is distance, not heading: removing the "
+        "gyro's bias drift exactly (heading error 2.0 -> 0.8 degrees) did not lower the position error, while on long "
+        "open stretches only 26 % of scans find enough structure to match, so position rests on leg odometry. Map recall is limited because a 2D camera slice sees only the faces of rubble that point "
         "towards the robot."))
 
     # 5.8 to come
     h.append("<h3>5.8 Work Still to Come</h3>")
     h.append(bullets([
-        "Reduce heading drift on long open stretches (periodic stand-still gyro re-calibration, or a heading "
-        "reference that does not need right-angle walls).",
+        "Reduce distance drift on long open stretches (wider field of view or visual odometry; tuning was tested and "
+        "does not fix it).",
         "Improve scan matching on real Kinect data so it gains clearly over wheel odometry on TUM.",
         
         "Runtime on the target robot computer once hardware is chosen."]))
@@ -408,7 +408,7 @@ def build():
         "<b>Current Operational Limitations:</b> simulation only; map recall in open rubble fields is about 66 %; "
         "position error grows on long open-floor stretches; heading in the rescue profile relies on the gyro, so "
         "uncorrected gyro bias raises the error (Table 6); evidence perception, event trigger and secure logging "
-        "are not integrated; heading drifts about 2 degrees over 40 minutes in open rubble fields.",
+        "are not integrated; on long open stretches position rests on leg odometry, so error grows after ~17 minutes.",
         "<b>Future Enhancements:</b> Cartographer comparison and nearest-frontier exploration baseline; "
         "more viewpoints around obstacles; the team's Mamba model for evidence detection; "
         + ph("other planned features")]))

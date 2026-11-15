@@ -221,9 +221,13 @@ through the 1 m north doorway at 594 s, with no collisions. 59 of the 70 route w
 degrees different - from today's start, run 34's own code gives 32.0 cm, so today's code is better); scene 2 run 19:
 12.3 cm, but only 12 minutes and 59 % of the floor.
 
-**Why scene 2 error is higher:** error stays near 11 cm for the first 17 minutes, then grows. In the rubble field the
-heading comes from the gyro alone (no right-angle walls to correct it); about 2 degrees of drift builds up over 40
-minutes. We tested scan-based heading correction on the recording: it made things worse (65-110 cm), so it stays off.
+**Why scene 2 error is higher:** error stays near 11 cm for the first 17 minutes, then grows. Two causes were tested
+on the run's recording. (1) Heading: the gyro bias drifts slightly (0.048 -> 0.057 deg/s over 40 min); correcting it
+perfectly cut the heading error from 2.0 to 0.8 deg but did NOT lower the position error, so heading is not the
+limit. (2) Distance: on long open stretches there is little for the camera to match (only 26 % of scans are
+accepted), so position comes from leg odometry, whose step length varies by a few percent. That is the real limit;
+fixing it needs more sensing (a wider view, or visual odometry), not tuning. Scan-based heading correction made
+replays worse (65-110 cm), so it stays off.
 
 What the numbers mean: the robot knows where it is to about a hand's width in the building and two hands' width after
 40 minutes in the rubble field; most of what it draws is really there; it misses the hidden sides of rubble blocks.
@@ -303,7 +307,7 @@ the final map quality is the same - the gain there is coverage and reliability (
 4. **Gyro bias** not removed by calibration goes straight into the heading in scene 2.
 5. **On real data (TUM) the scan matcher adds little over good wheel odometry.**
 6. **Scene 2 run-to-run variation** of several cm; we use averaged replays to decide changes.
-7. **Error in scene 2 grows after ~17 minutes** (11 cm -> 29 cm RMSE over 40 min) from about 2 degrees of gyro heading drift.
+7. **Error in scene 2 grows after ~17 minutes** (11 cm -> 29 cm RMSE over 40 min): leg-odometry distance error on open stretches with little to match (heading drift was tested and is not the cause).
 8. **Later stages** (evidence detection, trigger, secure logs) are not integrated.
 
 ---
