@@ -264,12 +264,13 @@
 \node[archsection] at (7.8,4.0) {ROBOT CORE: ONE 20 Hz SCHEDULER RUNS EVERY AGENT AT ITS OWN RATE};
 
 % six navigation agents
-\node[agent] (per)  at (1.3,1.9)  {\textbf{Perception}\\{\tiny 10 Hz}\\[2pt]\archpic{icon_scan.png}\\[1pt]depth frame\\to 2D scan\\[2pt]{\tiny\ttfamily out: sensor/scan}};
-\node[agent] (slam) at (4.4,1.9)  {\textbf{SLAM}\\{\tiny 10 Hz}\\[2pt]\archpic{img_map2.png}\\[1pt]ICP pose,\\loop closure\\[2pt]{\tiny\ttfamily out: pose/slam}};
-\node[agent] (map)  at (7.5,1.9)  {\textbf{Mapping}\\{\tiny 10 Hz}\\[2pt]\archpic{icon_grid.png}\\[1pt]occupancy grid,\\rooms, doorways\\[2pt]{\tiny\ttfamily out: map/grid}};
-\node[agent] (fro)  at (10.6,1.9) {\textbf{Frontier}\\{\tiny 1 Hz}\\[2pt]\archpic{img_map.png}\\[1pt]route waypoint\\or frontier goal\\[2pt]{\tiny\ttfamily out: frontier/target}};
-\node[agent] (plan) at (13.7,1.9) {\textbf{Planning}\\{\tiny 5 Hz}\\[2pt]\archpic{icon_path.png}\\[1pt]A* path on the\\inflated grid\\[2pt]{\tiny\ttfamily out: plan/path}};
-\node[agent] (loco) at (16.8,1.9) {\textbf{Locomotion}\\{\tiny 20 Hz}\\[2pt]\archpic{img_robot.png}\\[1pt]trot gait,\\watchdog\\[2pt]{\tiny\ttfamily out: control/actuation}};
+% each box: name, picture, then all text below the picture (rate, what it does, topic it publishes)
+\node[agent] (per)  at (1.3,1.9)  {\textbf{Perception}\\[2pt]\archpic{icon_scan.png}\\[1pt]{\tiny 10 Hz}\\depth frame\\to 2D scan\\[2pt]{\tiny\ttfamily out: sensor/scan}};
+\node[agent] (slam) at (4.4,1.9)  {\textbf{SLAM}\\[2pt]\archpic{img_map2.png}\\[1pt]{\tiny 10 Hz}\\ICP pose,\\loop closure\\[2pt]{\tiny\ttfamily out: pose/slam}};
+\node[agent] (map)  at (7.5,1.9)  {\textbf{Mapping}\\[2pt]\archpic{icon_grid.png}\\[1pt]{\tiny 10 Hz}\\occupancy grid,\\rooms, doorways\\[2pt]{\tiny\ttfamily out: map/grid}};
+\node[agent] (fro)  at (10.6,1.9) {\textbf{Frontier}\\[2pt]\archpic{img_map.png}\\[1pt]{\tiny 1 Hz}\\route waypoint\\or frontier goal\\[2pt]{\tiny\ttfamily out: frontier/target}};
+\node[agent] (plan) at (13.7,1.9) {\textbf{Planning}\\[2pt]\archpic{icon_path.png}\\[1pt]{\tiny 5 Hz}\\A* path on the\\inflated grid\\[2pt]{\tiny\ttfamily out: plan/path}};
+\node[agent] (loco) at (16.8,1.9) {\textbf{Locomotion}\\[2pt]\archpic{img_robot.png}\\[1pt]{\tiny 20 Hz}\\trot gait, watchdog,\\leg odometry, gyro\\[2pt]{\tiny\ttfamily out: control/actuation}};
 
 % message bus
 \node[busbox, minimum width=17.6cm] (bus) at (9.05,-0.55)
@@ -278,17 +279,18 @@
 \foreach \a in {per, slam, map, fro, plan, loco}
     \draw[biarr] (\a.south) -- (\a.south |- bus.north);
 
-% sensors in, supervisor, joint commands out
+% camera in, supervisor, joint commands out
 \node[agent, text width=2.6cm, minimum height=2.1cm] (kin) at (1.9,-2.85)
-    {\textbf{Kinect + IMU}\\[2pt]\archpic{img_rgbd.png}\\[1pt]depth, colour, gyro,\\leg odometry};
+    {\textbf{Kinect camera}\\[2pt]\archpic{img_rgbd.png}\\[1pt]depth + colour frames};
 \node[agent, text width=4.2cm, minimum height=2.1cm] (sup) at (9.05,-2.85)
-    {\textbf{Supervisor agent}\\{\tiny 2 Hz}\\[3pt]mission state, knowledge graph\\of rooms, event timeline;\\ends the mission by returning\\to the start point};
+    {\textbf{Supervisor agent}\\[3pt]{\tiny 2 Hz}\\mission state, knowledge graph\\of rooms, event timeline;\\ends the mission by returning\\to the start point};
 \node[agent, text width=2.6cm, minimum height=2.1cm] (leg) at (16.2,-2.85)
-    {\textbf{12 leg joints}\\[3pt]joint commands from\\the trot gait};
+    {\textbf{12 leg joints}\\[3pt]driven by the\\trot gait};
 
-\draw[archarr] (kin.north) -- node[right, archlab] {sensor/rgbd} (kin.north |- bus.south);
+% the camera feeds Perception directly (left of the bus); Locomotion drives the joints directly (right of the bus)
+\draw[archarr] (kin.west) -- ++(-0.6,0) |- node[pos=0.25, left, archlab] {depth\\frames} (per.west);
 \draw[biarr] (sup.north) -- (sup.north |- bus.south);
-\draw[archarr] (leg.north |- bus.south) -- node[right, archlab] {control/actuation} (leg.north);
+\draw[archarr] (loco.east) -- ++(0.5,0) |- node[pos=0.25, right, archlab] {joint\\commands} (leg.east);
 \end{tikzpicture}}
 \end{frame}
 
