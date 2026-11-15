@@ -9,7 +9,10 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{calc}
+\usetikzlibrary{calc, arrows.meta}
+
+% small picture inside an architecture box (variant B)
+\newcommand{\archpic}[1]{\includegraphics[width=1.55cm,height=0.9cm,keepaspectratio]{#1}}
 
 \graphicspath{{../}{./}{figures/}}
 
@@ -119,16 +122,118 @@
     \end{block}
 \end{frame}
 
-% --- SLIDE 2: END-TO-END APPLICATION ARCHITECTURE (FULL-SLIDE DIAGRAM) ---
-\begin{frame}{2. End-to-End Application Architecture}
-    \framesubtitle{System Architecture \& Sensor-to-Action Workflow}
-    \centering
-    \figorbox{fig_system_architecture.png}{0.97\textwidth}{System architecture: figures/fig\_system\_architecture.png}
-    \vspace{0.1cm}
+% --- SLIDE 2: END-TO-END APPLICATION ARCHITECTURE ---
+% Two versions of the same diagram: A (text only) and B (pictures in the boxes). Keep one, delete the other.
+% Shared styles for both versions.
+\tikzset{
+    archbox/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!8, align=center,
+        font=\scriptsize, text width=1.65cm, minimum height=1.25cm, inner sep=4pt},
+    archbottom/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!8, align=center,
+        font=\scriptsize, text width=2.4cm, minimum height=1.3cm, inner sep=5pt},
+    archarr/.style={-{Latex[length=2mm]}, thick, amritaMaroon},
+    archsection/.style={font=\small\bfseries, text=amritaMaroon},
+    archlab/.style={font=\tiny, text=black!85, fill=white, inner sep=2pt, align=center}
+}
 
-    \begin{block}{Architecture Summary}
-        \footnotesize The Kinect, gyro and legs feed the robot core (SLAM, mapping, frontier exploration), which sets the goal and movement commands; colour video goes to scene understanding, whose alerts and clips go to decision and logging.
-    \end{block}
+% ---------- VERSION A: TEXT ONLY ----------
+\begin{frame}{2. End-to-End Application Architecture}
+\framesubtitle{System Architecture \& Sensor-to-Action Workflow}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}
+
+% section headings
+\node[archsection] at (8.15,3.35) {ROBOT ONBOARD: NAVIGATION AGENTS (CPU, 20 Hz)};
+\node[archsection] at (9.2,-3.25) {SCENE UNDERSTANDING \& EVIDENCE};
+
+% top row: sensing to legs
+\node[archbox] (kin)  at (1.1,1.45)   {\textbf{Kinect + IMU}\\[3pt]depth, colour\\gyro, odometry};
+\node[archbox] (per)  at (3.45,1.45)  {\textbf{Perception}\\[3pt]depth frame\\to 2D scan};
+\node[archbox] (slam) at (5.8,1.45)   {\textbf{SLAM}\\[3pt]ICP pose\\loop closure};
+\node[archbox] (map)  at (8.15,1.45)  {\textbf{Mapping}\\[3pt]occupancy grid\\5 cm cells};
+\node[archbox] (fro)  at (10.5,1.45)  {\textbf{Exploration}\\[3pt]route waypoint\\or frontier goal};
+\node[archbox] (plan) at (12.85,1.45) {\textbf{Planning}\\[3pt]A* path};
+\node[archbox] (loco) at (15.2,1.45)  {\textbf{Locomotion}\\[3pt]trot gait\\12 joints};
+
+\draw[archarr] (kin.east) -- (per.west);
+\draw[archarr] (per.east) -- (slam.west);
+\draw[archarr] (slam.east) -- (map.west);
+\draw[archarr] (map.east) -- (fro.west);
+\draw[archarr] (fro.east) -- (plan.west);
+\draw[archarr] (plan.east) -- (loco.west);
+
+% closed loop: moving changes what the sensors see
+\draw[archarr] (loco.north) -- ++(0,0.6) -| node[pos=0.25, above, archlab] {robot moves: new view, leg odometry, gyro} (kin.north);
+
+% bottom row: scene understanding and evidence
+\node[archbottom] (vid)   at (3.45,-1.95) {\textbf{Video model}\\[4pt]VideoMamba-Small\\+ HorNet gated conv.};
+\node[archbottom] (cls)   at (7.3,-1.95)  {\textbf{Classifier}\\[4pt]crime or not, kind of\\emergency, crime type (13)};
+\node[archbottom] (log)   at (11.15,-1.95) {\textbf{Logging}\\[4pt]map log, hash\\ROI clips};
+\node[archbottom] (cloud) at (15.0,-1.95) {\textbf{Cloud sync}\\[4pt]upload for\\responders};
+
+\draw[archarr] (vid.east) -- node[above=5pt, archlab] {clip scores} (cls.west);
+\draw[archarr] (cls.east) -- node[above=5pt, archlab] {crime, time} (log.west);
+\draw[archarr] (log.east) -- node[above=5pt, archlab] {upload} (cloud.west);
+
+% colour video from the Kinect; map and pose to the log
+\draw[archarr] (kin.south) -- ++(0,-0.99) -| node[pos=0.25, above, archlab] {colour video} (vid.north);
+\draw[archarr] (map.south) -- ++(0,-0.99) -| node[pos=0.25, above, archlab] {map, pose} (log.north);
+\end{tikzpicture}}
+
+\vspace{0.15cm}
+{\scriptsize Agents never call each other: they exchange the latest messages on one publish--subscribe bus, each at its own rate; a supervisor keeps the mission state and a graph of rooms. After exploration the robot returns to its start point.}
+\end{frame}
+
+% ---------- VERSION B: PICTURES IN THE BOXES ----------
+\begin{frame}{2. End-to-End Application Architecture}
+\framesubtitle{System Architecture \& Sensor-to-Action Workflow}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    archbox/.append style={minimum height=2.15cm},
+    archbottom/.append style={minimum height=2.15cm}
+]
+
+% section headings
+\node[archsection] at (8.15,3.85) {ROBOT ONBOARD: NAVIGATION AGENTS (CPU, 20 Hz)};
+\node[archsection] at (9.2,-3.75) {SCENE UNDERSTANDING \& EVIDENCE};
+
+% top row: sensing to legs
+\node[archbox] (kin)  at (1.1,1.6)   {\textbf{Kinect + IMU}\\[2pt]\archpic{img_rgbd.png}\\[1pt]depth, colour, gyro};
+\node[archbox] (per)  at (3.45,1.6)  {\textbf{Perception}\\[2pt]\archpic{icon_scan.png}\\[1pt]2D scan};
+\node[archbox] (slam) at (5.8,1.6)   {\textbf{SLAM}\\[2pt]\archpic{img_map2.png}\\[1pt]ICP pose};
+\node[archbox] (map)  at (8.15,1.6)  {\textbf{Mapping}\\[2pt]\archpic{icon_grid.png}\\[1pt]occupancy grid};
+\node[archbox] (fro)  at (10.5,1.6)  {\textbf{Exploration}\\[2pt]\archpic{img_map.png}\\[1pt]frontier goal};
+\node[archbox] (plan) at (12.85,1.6) {\textbf{Planning}\\[2pt]\archpic{icon_path.png}\\[1pt]A* path};
+\node[archbox] (loco) at (15.2,1.6)  {\textbf{Locomotion}\\[2pt]\archpic{img_robot.png}\\[1pt]trot gait};
+
+\draw[archarr] (kin.east) -- (per.west);
+\draw[archarr] (per.east) -- (slam.west);
+\draw[archarr] (slam.east) -- (map.west);
+\draw[archarr] (map.east) -- (fro.west);
+\draw[archarr] (fro.east) -- (plan.west);
+\draw[archarr] (plan.east) -- (loco.west);
+
+% closed loop: moving changes what the sensors see
+\draw[archarr] (loco.north) -- ++(0,0.6) -| node[pos=0.25, above, archlab] {robot moves: new view, leg odometry, gyro} (kin.north);
+
+% bottom row: scene understanding and evidence
+\node[archbottom] (vid)   at (3.45,-2.05) {\textbf{Video model}\\[2pt]\archpic{icon_frames.png}\\[1pt]VideoMamba + HorNet};
+\node[archbottom] (cls)   at (7.3,-2.05)  {\textbf{Classifier}\\[2pt]\archpic{icon_nn.png}\\[1pt]crime or not, kind, type};
+\node[archbottom] (log)   at (11.15,-2.05) {\textbf{Logging}\\[4pt]map log, hash\\ROI clips};
+\node[archbottom] (cloud) at (15.0,-2.05) {\textbf{Cloud sync}\\[4pt]upload for\\responders};
+
+\draw[archarr] (vid.east) -- node[above=5pt, archlab] {clip scores} (cls.west);
+\draw[archarr] (cls.east) -- node[above=5pt, archlab] {crime, time} (log.west);
+\draw[archarr] (log.east) -- node[above=5pt, archlab] {upload} (cloud.west);
+
+% colour video from the Kinect; map and pose to the log
+\draw[archarr] (kin.south) -- ++(0,-0.7) -| node[pos=0.25, above, archlab] {colour video} (vid.north);
+\draw[archarr] (map.south) -- ++(0,-0.7) -| node[pos=0.25, above, archlab] {map, pose} (log.north);
+\end{tikzpicture}}
+
+\vspace{0.1cm}
+{\scriptsize Agents never call each other: they exchange the latest messages on one publish--subscribe bus, each at its own rate; a supervisor keeps the mission state and a graph of rooms. After exploration the robot returns to its start point.}
 \end{frame}
 
 % --- SLIDE 2b: NAVIGATION AGENTS & MISSION FLOW ---
