@@ -99,8 +99,8 @@
     \begin{block}{Problem Statement \& Target Stakeholders}
         \small
         \begin{itemize}
-            \item \textbf{Real-World Problem:} before entering a crime scene, hostage site or collapsed building, responders have no map, cannot see inside safely, and do not know what kind of incident it is.
-            \item \textbf{Target Users \& Use Context:} police first-response and forensic teams, search-and-rescue units; a quadruped robot goes in first.
+            \item \textbf{Real-World Problem:} before entering a crime scene, hostage site or collapsed building, responders have no map of the inside, cannot safely see what is behind walls and doors, and do not know what kind of incident it is; sending people in first puts both the responders and the evidence at risk.
+            \item \textbf{Target Users \& Use Context:} police first-response and forensic teams, search-and-rescue and disaster-response units; a four-legged robot goes in first, maps the place and reports what it sees before any person enters.
         \end{itemize}
     \end{block}
 \end{frame}
@@ -111,17 +111,17 @@
     \begin{block}{Functional Requirements}
         \small
         \begin{itemize}
-            \item \textbf{FR-1:} explores an unknown place without an operator and returns to its start point with a map of the building.
-            \item \textbf{FR-2:} tracks its own position and builds a floor map using one depth camera, a gyro and leg movements.
-            \item \textbf{FR-3:} from camera video, detects whether a crime is happening, the kind of emergency, and which of 13 crimes it is.
+            \item \textbf{FR-1:} explores an unknown place on its own without an operator steering it, avoids obstacles, can follow a route drawn by the operator, and returns to its start point with a map of the building.
+            \item \textbf{FR-2:} tracks its own position and builds a 2D floor map (5 cm cells) of walls and obstacles using only one depth camera, a gyro and leg movements, with no lidar and no GPS.
+            \item \textbf{FR-3:} from camera video, detects whether a crime is happening, the kind of emergency (violence, property or hazard), which of 13 crimes it is, and the moment it is most visible.
         \end{itemize}
     \end{block}
 
     \begin{block}{Non-Functional Requirements \& Constraints}
         \small
         \begin{itemize}
-            \item \textbf{NFR-1:} real time: 20 Hz control loop, median 29 ms per step on a CPU, no GPU.
-            \item \textbf{NFR-2:} safety: zero collisions, recovery from every stall, same code in every environment.
+            \item \textbf{NFR-1:} real time: the whole control loop runs at 20 Hz, with a median of 29 ms per step on a laptop CPU; navigation needs no GPU.
+            \item \textbf{NFR-2:} safety and reliability: zero collisions in all test runs, recovery from every stall, a check that stops the robot before floor edges, and the same code in every environment.
         \end{itemize}
     \end{block}
 \end{frame}
