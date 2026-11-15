@@ -301,6 +301,8 @@ def main():
     frontier_agent.room_sweep = bool(scene.get("room_sweep", True))
     frontier_agent.strategy = args.frontier_strategy
     frontier_agent.route_required = set(int(i) for i in scene.get("route_required", []))
+    if scene.get("return_home", True):   # after exploration: back to the start pose, or to the profile's return_point
+        frontier_agent.return_point = tuple(map(float, scene.get("return_point", (init_x, init_y))))
     frontier_agent.route = [] if args.frontier_strategy == "nearest" else [tuple(map(float, p)) for p in scene.get("route", [])]
     frontier_agent.route_after = float(scene.get("gyro_calibration_s", 0.0))
     robot_module.ODOM_SCALE = float(args.odom_scale if args.odom_scale is not None else scene.get("odom_scale", 1.0))

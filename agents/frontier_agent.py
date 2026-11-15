@@ -104,6 +104,8 @@ class FrontierAgent(BaseAgent):
         # 150 s of already-explored floor under a new label. Off = best frontier over the whole map.
         self.room_sweep = True
         self.strategy = "ours"          # "nearest": Yamauchi nearest-frontier baseline (benchmark only)
+        self.return_point = None        # after exploration: walk here and stop (main_agentic: start pose or profile)
+        self.returned = False
         # Operator search route (scene profile "route"): waypoints visited in order before free exploration. Each is
         # approached through the reachable cell nearest to it (it may still be unknown); a waypoint that gets no closer
         # for ROUTE_STALL_S is skipped, so a blocked route never holds the robot.
@@ -337,6 +339,19 @@ class FrontierAgent(BaseAgent):
             self._complete_log_t = current_time
         self.state = "MISSION_COMPLETE"
         self.committed_target = None
+        if self.return_point is not None:
+            # Return to the start point (or the point given in the scene profile) and stop there.
+            wx, wy = self.return_point
+            if self.returned or math.hypot(wx - rx, wy - ry) < 0.40:
+                if not self.returned:
+                    print(f"  [FRONTIER] Back at the return point ({wx:.2f}, {wy:.2f}): mission finished.")
+                self.returned = True
+                return None
+            gx, gy = self.grid.world_to_grid(wx, wy)
+            msg = FrontierTargetMsg(timestamp=current_time, target_gx=gx, target_gy=gy, target_wx=wx, target_wy=wy,
+                                    room_id=-1, area=0, is_doorway=False)
+            self.bus.publish("frontier/target", msg)
+            return msg
         if not self.patrol:
             return None
         if self.patrol_target is not None:

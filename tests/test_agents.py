@@ -1454,6 +1454,22 @@ def test_required_route_waypoint_is_not_skipped_as_blocked():
     print("PASSED")
 
 
+def test_returns_to_start_point_after_exploration():
+    """After exploration is complete the robot walks back to the return point (start pose by default) and stops there."""
+    print("Running test_returns_to_start_point_after_exploration...", end=" ")
+    grid = _walled_room()                              # fully explored room: no frontier left inside
+    fa = FrontierAgent(MessageBus(), grid_ref=grid)
+    fa.return_point = (-1.0, -1.0)
+    fa.on_grid(GridMapMsg(timestamp=0.0, log_odds=grid.grid_log_odds, free_cells=0, occupied_cells=0, unknown_cells=0,
+                          explored_pct=0.0, room_labels=None, doorways=[], doorway_rooms=[]))
+    fa.on_pose(PoseMsg(timestamp=0.0, x=1.0, y=1.0, yaw=0.0))
+    tgt = fa._finish(1.0, 1.0, 1.0, None, None, "test")
+    assert tgt is not None and abs(tgt.target_wx + 1.0) < 1e-6 and abs(tgt.target_wy + 1.0) < 1e-6, "not heading home"
+    assert fa._finish(2.0, -0.9, -1.1, None, None, "test") is None and fa.returned, "did not stop at the return point"
+    assert fa._finish(3.0, 1.0, 1.0, None, None, "test") is None, "must stay finished once back"
+    print("PASSED")
+
+
 if __name__ == "__main__":
     print("=== RUNNING MULTI-AGENT STACK UNIT TESTS ===")
     test_message_bus()
