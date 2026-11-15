@@ -21,6 +21,8 @@ PALETTE = {  # draw.io default fills / strokes
     "dark": ("#ffffff", "#333333"),
 }
 FONT = "Arial"
+SKETCH = False     # hand-drawn look: wobbly lines (matplotlib path.sketch, draw.io sketch=1)
+NOFILL = False     # no background fills
 
 
 def _anchor(n, side):
@@ -60,6 +62,11 @@ def _lines(label, bold_first):
 
 
 def render_png(nodes, edges, W, H, path, scale=2.0):
+    with plt.rc_context({"path.sketch": (1.4, 110, 2.2) if SKETCH else None}):
+        _render(nodes, edges, W, H, path, scale)
+
+
+def _render(nodes, edges, W, H, path, scale):
     fig = plt.figure(figsize=(W / 100 * scale / 2, H / 100 * scale / 2))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(0, W); ax.set_ylim(H, 0); ax.axis("off")
@@ -67,6 +74,8 @@ def render_png(nodes, edges, W, H, path, scale=2.0):
     for nid, n in nodes.items():
         x, y, w, h = n["x"], n["y"], n["w"], n["h"]
         fc, ec = PALETTE[n.get("color", "white")]
+        if NOFILL and fc != "none":
+            fc = "white"
         kind = n.get("kind", "round")
         ls = (0, (5, 3)) if n.get("dashed") else "-"
         lw = n.get("lw", 1.3)
@@ -142,7 +151,11 @@ def _style(n):
             "ellipse": "ellipse;", "text": "text;strokeColor=none;fillColor=none;",
             "frame": "rounded=1;arcSize=4;verticalAlign=top;align=left;spacingLeft=10;container=1;",
             "image": "shape=image;imageAspect=0;aspect=fixed;"}[kind]
-    s = base + "whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=%d;" % n.get("size", 16)
+    if NOFILL and fc != "none":
+        fc = "#ffffff"
+    s = base + "whiteSpace=wrap;html=1;fontFamily=%s;fontSize=%d;" % (FONT if SKETCH else "Helvetica", n.get("size", 16))
+    if SKETCH:
+        s += "sketch=1;curveFitting=1;jiggle=2;"
     if kind != "text":
         s += f"fillColor={fc};strokeColor={ec};"
     if n.get("dashed"):
@@ -178,6 +191,7 @@ def write_drawio(nodes, edges, W, H, path, name):
         s = sidefrac.get(e.get("s", "b"), e.get("s")) if not isinstance(e.get("s"), tuple) else e["s"]
         d = sidefrac.get(e.get("d", "t"), e.get("d")) if not isinstance(e.get("d"), tuple) else e["d"]
         st = ("edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1.5;"
+              + ("sketch=1;curveFitting=1;jiggle=2;fontFamily=%s;" % FONT if SKETCH else "") +
               f"fontSize={e.get('size', 13)};exitX={s[0]};exitY={s[1]};entryX={d[0]};entryY={d[1]};")
         if e.get("dashed"):
             st += "dashed=1;"
