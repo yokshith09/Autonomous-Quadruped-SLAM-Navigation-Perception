@@ -248,58 +248,46 @@
 {\scriptsize Agents never call each other: they exchange the latest messages on one publish--subscribe bus, each at its own rate; a supervisor keeps the mission state and a graph of rooms. After exploration the robot returns to its start point.}
 \end{frame}
 
-% --- SLIDE 2b: ROBOT CORE ARCHITECTURE (NAVIGATION) ---
-% Agents in two rows around the message bus; only the name and a large picture inside each box,
-% the description outside (above the top row, below the bottom row). Every arrow is a straight line.
+% --- SLIDE: ROBOT CORE ARCHITECTURE (NAVIGATION) ---
 \begin{frame}{4. End-to-End Application Architecture (Navigation)}
 \framesubtitle{Robot Core: Seven Agents on One Message Bus}
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-    abox/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!8, align=center,
-        font=\small, text width=3.1cm, minimum height=2.5cm, inner sep=4pt},
-    atext/.style={font=\scriptsize, align=center, text width=3.6cm, inner sep=3pt},
+    agent/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!8, align=center,
+        font=\small, text width=2.7cm, minimum height=3.6cm, inner sep=4pt},
     busbox/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!20, align=center,
         font=\small, minimum height=0.9cm, inner sep=3pt},
     biarr/.style={{Latex[length=2.5mm]}-{Latex[length=2.5mm]}, thick, amritaMaroon},
     oneway/.style={-{Latex[length=2.5mm]}, thick, amritaMaroon}
 ]
 
-% ---------- top row: camera, perception, SLAM, mapping, supervisor ----------
-\node[abox] (kin)  at (0,2.6)  {\textbf{Kinect camera}\\[3pt]\bigpic{img_rgbd.png}};
-\node[abox] (per)  at (4,2.6)  {\textbf{Perception}\\[3pt]\bigpic{icon_scan.png}};
-\node[abox] (slam) at (8,2.6)  {\textbf{SLAM}\\[3pt]\bigpic{img_map2.png}};
-\node[abox] (map)  at (12,2.6) {\textbf{Mapping}\\[3pt]\bigpic{icon_grid.png}};
-\node[abox] (sup)  at (16,2.6) {\textbf{Supervisor}\\[3pt]{\footnotesize mission state\\[2pt]knowledge graph\\of rooms\\[2pt]event timeline}};
-
-\node[atext, anchor=south] at (kin.north)  {depth + colour frames};
-\node[atext, anchor=south] at (per.north)  {10 Hz: depth frame to 2D scan\\\texttt{out: sensor/scan}};
-\node[atext, anchor=south] at (slam.north) {10 Hz: ICP pose, loop closure\\\texttt{out: pose/slam}};
-\node[atext, anchor=south] at (map.north)  {10 Hz: occupancy grid, rooms, doorways\\\texttt{out: map/grid}};
-\node[atext, anchor=south] at (sup.north)  {2 Hz: ends the mission by returning to the start point};
+% ---------- six navigation agents: name, picture, then text below the picture ----------
+\node[agent] (per)  at (0,2.6)    {\textbf{Perception}\\[3pt]\includegraphics[width=2.6cm,height=1.9cm,keepaspectratio]{icon_scan.png}\\[2pt]{\scriptsize 10 Hz\\depth frame to 2D scan}};
+\node[agent] (slam) at (3.3,2.6)  {\textbf{SLAM}\\[3pt]\includegraphics[width=2.6cm,height=1.9cm,keepaspectratio]{img_map2.png}\\[2pt]{\scriptsize 10 Hz\\ICP pose, loop closure}};
+\node[agent] (map)  at (6.6,2.6)  {\textbf{Mapping}\\[3pt]\includegraphics[width=2.6cm,height=1.9cm,keepaspectratio]{icon_grid.png}\\[2pt]{\scriptsize 10 Hz\\occupancy grid, rooms}};
+\node[agent] (fro)  at (9.9,2.6)  {\textbf{Frontier}\\[3pt]\includegraphics[width=2.6cm,height=1.9cm,keepaspectratio]{img_map.png}\\[2pt]{\scriptsize 1 Hz\\route or frontier goal}};
+\node[agent] (plan) at (13.2,2.6) {\textbf{Planning}\\[3pt]\includegraphics[width=2.6cm,height=1.9cm,keepaspectratio]{icon_path.png}\\[2pt]{\scriptsize 5 Hz\\A* path}};
+\node[agent] (loco) at (16.5,2.6) {\textbf{Locomotion}\\[3pt]\includegraphics[width=2.6cm,height=1.9cm,keepaspectratio]{img_robot.png}\\[2pt]{\scriptsize 20 Hz\\trot gait, watchdog}};
 
 % ---------- message bus ----------
-\node[busbox, minimum width=15.6cm] (bus) at (10,0)
+\node[busbox, minimum width=19.6cm] (bus) at (8.25,-0.55)
     {\textbf{MESSAGE BUS (publish / subscribe)}\quad{\scriptsize one 20 Hz scheduler runs every agent at its own rate; agents never call each other}};
 
-% ---------- bottom row: frontier, planning, locomotion, joints ----------
-\node[abox] (fro)  at (4,-2.6)  {\textbf{Frontier}\\[3pt]\bigpic{img_map.png}};
-\node[abox] (plan) at (8,-2.6)  {\textbf{Planning}\\[3pt]\bigpic{icon_path.png}};
-\node[abox] (loco) at (12,-2.6) {\textbf{Locomotion}\\[3pt]\bigpic{img_robot.png}};
-\node[abox] (leg)  at (16,-2.6) {\textbf{12 leg joints}\\[3pt]\bigpic{robot_sim.png}};
-
-\node[atext, anchor=north] at (fro.south)  {1 Hz: route waypoint or frontier goal\\\texttt{out: frontier/target}};
-\node[atext, anchor=north] at (plan.south) {5 Hz: A* path on the inflated grid\\\texttt{out: plan/path}};
-\node[atext, anchor=north] at (loco.south) {20 Hz: trot gait, watchdog, leg odometry, gyro\\\texttt{out: control/actuation}};
-\node[atext, anchor=north] at (leg.south)  {joint angles from the trot gait};
-
-% ---------- arrows (all straight) ----------
-\draw[oneway] (kin.east) -- (per.west);
-\foreach \a in {per, slam, map, sup}
+\foreach \a in {per, slam, map, fro, plan, loco}
     \draw[biarr] (\a.south) -- (\a.south |- bus.north);
-\foreach \a in {fro, plan, loco}
-    \draw[biarr] (\a.north) -- (\a.north |- bus.south);
-\draw[oneway] (loco.east) -- (leg.west);
+
+% ---------- camera, supervisor, leg joints ----------
+\node[agent, minimum height=3.0cm] (kin) at (0,-3.4)
+    {\textbf{Kinect camera}\\[3pt]\includegraphics[width=2.6cm,height=1.6cm,keepaspectratio]{img_rgbd.png}\\[2pt]{\scriptsize depth + colour frames}};
+\node[agent, text width=4.4cm, minimum height=3.0cm] (sup) at (8.25,-3.4)
+    {\textbf{Supervisor agent}\\[4pt]{\scriptsize 2 Hz\\[2pt]mission state, knowledge graph of rooms, event timeline\\[2pt]ends the mission by returning to the start point}};
+\node[agent, minimum height=3.0cm] (leg) at (16.5,-3.4)
+    {\textbf{12 leg joints}\\[3pt]\includegraphics[width=2.6cm,height=1.6cm,keepaspectratio]{robot_sim.png}\\[2pt]{\scriptsize joint angles from the gait}};
+
+\draw[oneway] (kin.north) -- (kin.north |- bus.south);
+\draw[biarr]  (sup.north) -- (sup.north |- bus.south);
+\draw[oneway] (leg.north |- bus.south) -- (leg.north);
 \end{tikzpicture}}
 \end{frame}
 
