@@ -246,21 +246,50 @@
 {\scriptsize Agents never call each other: they exchange the latest messages on one publish--subscribe bus, each at its own rate; a supervisor keeps the mission state and a graph of rooms. After exploration the robot returns to its start point.}
 \end{frame}
 
-% --- SLIDE 2b: NAVIGATION AGENTS & MISSION FLOW ---
-\begin{frame}{2. End-to-End Application Architecture (Navigation)}
-    \framesubtitle{Seven Agents on One Message Bus \& One Exploration Mission}
-    \begin{columns}[c]
-        \column{0.62\textwidth}
-        \centering
-        \figorbox{fig_navigation_pipeline.png}{\linewidth}{Navigation agents: figures/fig\_navigation\_pipeline.png}
-        \column{0.36\textwidth}
-        \centering
-        \figorbox{fig_control_flow.png}{0.72\linewidth}{Control flow: figures/fig\_control\_flow.png}
-    \end{columns}
-    \vspace{0.1cm}
-    \begin{block}{Architecture Summary}
-        \footnotesize Agents never call each other: one 20 Hz scheduler runs each at its own rate and they exchange the latest messages on the bus. A mission ends by returning to the start point.
-    \end{block}
+% --- SLIDE 2b: ROBOT CORE ARCHITECTURE (NAVIGATION) ---
+\begin{frame}{4. End-to-End Application Architecture (Navigation)}
+\framesubtitle{Robot Core: Seven Agents on One Message Bus}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    agent/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!8, align=center,
+        font=\scriptsize, text width=2.0cm, minimum height=2.75cm, inner sep=4pt},
+    busbox/.style={draw=amritaMaroon, thick, rounded corners=3pt, fill=amritaMaroon!20, align=center,
+        font=\small, minimum width=15.6cm, minimum height=0.85cm, inner sep=3pt},
+    biarr/.style={{Latex[length=2mm]}-{Latex[length=2mm]}, thick, amritaMaroon},
+    hz/.style={font=\tiny\bfseries, text=amritaMaroon}
+]
+
+% heading
+\node[archsection] at (7.8,4.0) {ROBOT CORE: ONE 20 Hz SCHEDULER RUNS EVERY AGENT AT ITS OWN RATE};
+
+% six navigation agents
+\node[agent] (per)  at (1.3,1.9)  {\textbf{Perception}\\{\tiny 10 Hz}\\[2pt]\archpic{icon_scan.png}\\[1pt]depth frame\\to 2D scan\\[2pt]{\tiny\ttfamily out: sensor/scan}};
+\node[agent] (slam) at (4.4,1.9)  {\textbf{SLAM}\\{\tiny 10 Hz}\\[2pt]\archpic{img_map2.png}\\[1pt]ICP pose,\\loop closure\\[2pt]{\tiny\ttfamily out: pose/slam}};
+\node[agent] (map)  at (7.5,1.9)  {\textbf{Mapping}\\{\tiny 10 Hz}\\[2pt]\archpic{icon_grid.png}\\[1pt]occupancy grid,\\rooms, doorways\\[2pt]{\tiny\ttfamily out: map/grid}};
+\node[agent] (fro)  at (10.6,1.9) {\textbf{Frontier}\\{\tiny 1 Hz}\\[2pt]\archpic{img_map.png}\\[1pt]route waypoint\\or frontier goal\\[2pt]{\tiny\ttfamily out: frontier/target}};
+\node[agent] (plan) at (13.7,1.9) {\textbf{Planning}\\{\tiny 5 Hz}\\[2pt]\archpic{icon_path.png}\\[1pt]A* path on the\\inflated grid\\[2pt]{\tiny\ttfamily out: plan/path}};
+\node[agent] (loco) at (16.8,1.9) {\textbf{Locomotion}\\{\tiny 20 Hz}\\[2pt]\archpic{img_robot.png}\\[1pt]trot gait,\\watchdog\\[2pt]{\tiny\ttfamily out: control/actuation}};
+
+% message bus
+\node[busbox, minimum width=17.6cm] (bus) at (9.05,-0.55)
+    {\textbf{MESSAGE BUS (publish / subscribe)} \quad {\scriptsize every agent reads the latest message on each topic; agents never call each other}};
+
+\foreach \a in {per, slam, map, fro, plan, loco}
+    \draw[biarr] (\a.south) -- (\a.south |- bus.north);
+
+% sensors in, supervisor, joint commands out
+\node[agent, text width=2.6cm, minimum height=2.1cm] (kin) at (1.9,-2.85)
+    {\textbf{Kinect + IMU}\\[2pt]\archpic{img_rgbd.png}\\[1pt]depth, colour, gyro,\\leg odometry};
+\node[agent, text width=4.2cm, minimum height=2.1cm] (sup) at (9.05,-2.85)
+    {\textbf{Supervisor agent}\\{\tiny 2 Hz}\\[3pt]mission state, knowledge graph\\of rooms, event timeline;\\ends the mission by returning\\to the start point};
+\node[agent, text width=2.6cm, minimum height=2.1cm] (leg) at (16.2,-2.85)
+    {\textbf{12 leg joints}\\[3pt]joint commands from\\the trot gait};
+
+\draw[archarr] (kin.north) -- node[right, archlab] {sensor/rgbd} (kin.north |- bus.south);
+\draw[biarr] (sup.north) -- (sup.north |- bus.south);
+\draw[archarr] (leg.north |- bus.south) -- node[right, archlab] {control/actuation} (leg.north);
+\end{tikzpicture}}
 \end{frame}
 
 % --- SLIDE 2c: SCENE-UNDERSTANDING NETWORK ---
