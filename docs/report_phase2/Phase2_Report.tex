@@ -1,0 +1,668 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx} % Times New Roman font for professional document typography
+\usepackage{graphicx}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+
+% --- Amrita Colors ---
+\definecolor{amritaMaroon}{HTML}{A4123F}
+
+% --- Title & Section Formatting ---
+\titlespacing*{\section}{0pt}{12pt}{4pt}
+\titlespacing*{\subsection}{0pt}{8pt}{3pt}
+\titleformat{\section}{\large\bfseries\color{amritaMaroon}}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{amritaMaroon}}{\thesubsection}{0.6em}{}
+
+\pagestyle{plain}
+
+% A figure file is used when it exists in the figures folder; otherwise a labelled box is shown.
+\newcommand{\figorbox}[3]{%
+  \IfFileExists{figures/#1}{\includegraphics[width=#2]{figures/#1}}{%
+    \fbox{\begin{minipage}[c][4.5cm]{0.9\textwidth}\centering\textbf{[#3]}\end{minipage}}}}
+
+\begin{document}
+
+% ==========================================
+% HEADER & TITLE BLOCK
+% ==========================================
+\noindent
+\begin{minipage}{\textwidth}
+    \centering
+    {\Large \textbf{\textcolor{amritaMaroon}{
+    AMRITA VISHWA VIDYAPEETHAM \\
+    SCHOOL OF COMPUTING \\
+    DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING \\
+    }}}
+    \vspace{0.2cm}
+    {\large \textbf{Autonomous First-Response Crime Scene Exploration Using a Lightweight Onboard Intelligence System}} \\[0.1cm]
+    \textbf{23CSE498 - Project Phase II (External Review)} \quad | \quad \textbf{Team Number: [G040]} \\
+    \today
+\end{minipage}
+
+\vspace{0.3cm}
+\hrule
+\vspace{0.3cm}
+
+% --- Team & Guide Details ---
+\noindent
+\begin{center}
+    \renewcommand{\arraystretch}{1.45}
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{|l|p{4.8cm}|p{4.6cm}|p{3.2cm}|}
+        \hline
+        \multicolumn{2}{|c|}{\textbf{Team Members}} & \textbf{Project Guide} & \textbf{Project Type} \\
+        \hline
+        \small CB.SC.U4CSE23062 & \small \raggedright Karthik Raju &
+        \multirow{5}{=}{\raggedright \small \textbf{Mr. Rajeshwar Yadav} \newline \textit{Assistant Professor, \newline Dept. of CSE}} &
+        \multirow{5}{=}{\raggedright \small \textbf{Type 2} \newline Application-Based Project} \\ \cline{1-2}
+        \small CB.SC.U4CSE23063 & \small Maheswar Raju & & \\ \cline{1-2}
+        \small CB.SC.U4CSE23112 & \small Vijay Krishna Burra & & \\ \cline{1-2}
+        \small CB.SC.U4CSE23310 & \small Dhinesh Chandra Boddupally & & \\ \cline{1-2}
+        \small CB.SC.U4CSE23421 & \small Kuchipudi Yokshith Sai Ram & & \\
+        \hline
+    \end{tabular}
+\end{center}
+\vspace{0.2cm}
+
+\section{Abstract}
+\noindent
+Before people enter a crime scene, a hostage site or a collapsed building, first responders need two things: a map of the place and an idea of what is happening inside. This project builds a first-response quadruped robot that provides both. The robot enters an unknown indoor or rubble scene, works out where it is, maps the scene and explores it without an operator steering it. It carries one Kinect (depth and colour), a gyro and leg odometry, with no lidar. Seven cooperating agents on a message bus (perception, SLAM, mapping, frontier exploration, path planning, locomotion, supervision) run at 20 Hz on a CPU. A scene-understanding module reads colour video and answers three questions: is a crime taking place, what kind of emergency is it, and which of 13 crime types is it. It is a VideoMamba-Small network with a HorNet gated convolution in its last eight layers. The same navigation code was evaluated in two simulated environments, a 10 $\times$ 10 m building and a 16 $\times$ 16 m rescue field with rubble and a damaged building. Averaged over both, the position error is 21.8 cm, map precision 80.4\%, map F1 78.0\% and floor coverage 90.0\%, with no collisions; on the same recordings odometry alone drifts 153.6 cm. On the public UCF-Crime test set, scene understanding separates crime from normal video with 90.43\% AUC, names the kind of emergency in 62.62\% of crime videos and the exact crime in 43.10\%, next to 41.43\% and 47.14\% for two recent CLIP-based methods. Navigation is verified in simulation and scene understanding on recorded surveillance video.
+
+% --- 2. PROBLEM DEFINITION & REQUIREMENT ANALYSIS ---
+\section{Problem Definition \& Requirement Analysis}
+
+\subsection{Problem Statement, Context \& Target Users}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item \textbf{Problem Definition:} Before entry into a crime scene, hostage site or collapsed building, responders have no current map, cannot see inside without risk to people or to evidence, and do not know what kind of incident they are walking into. A fight, a robbery and a fire call for different actions. A robot that explores the scene on its own, returns an accurate map and reports what the video shows closes that gap.
+    \item \textbf{Target Users \& Stakeholders:} police first-response and forensic teams, search-and-rescue units.
+    \item \textbf{Existing Limitations:} commercial legged robots either need a pre-recorded map for autonomy (Boston Dynamics Autowalk replays a recorded route \cite{spot}) or depend on expensive lidar \cite{corlito2026}; manual tele-operation needs a trained operator in line of contact. On the video side, most surveillance systems only say that something abnormal happened \cite{sultani2018}; the recent methods that name the crime rely on CLIP, a large image-text model \cite{wu2024ovvad,li2025anomize}.
+    \item \textbf{Application Objectives:}
+    \begin{enumerate}[noitemsep, topsep=2pt]
+        \item Explore an unknown scene autonomously and cover at least 90\% of the reachable floor.
+        \item Keep the position error below 15 cm and the map precision above 95\% with one depth camera.
+        \item Zero collisions and recovery from every stall, with the same code in different environments.
+        \item Tell whether a video shows a crime and name its type among 13 crime classes, measured on the public UCF-Crime test set.
+    \end{enumerate}
+\end{itemize}
+
+\subsection{Functional \& Non-Functional Requirements}
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{|c|p{3.0cm}|p{9.2cm}|}
+        \hline
+        \textbf{Req. ID} & \textbf{Category} & \textbf{Requirement Specification} \\
+        \hline
+        FR-01 & Functional & Explore an unknown scene without operator steering until no reachable frontier is left, then return to the start point (or a point given by the operator). \\
+        \hline
+        FR-02 & Functional & Estimate the robot pose and build a 2D occupancy map (5 cm cells) from depth, gyro and leg odometry. \\
+        \hline
+        FR-03 & Functional & Follow an operator search route when one is given, then continue free exploration. \\
+        \hline
+        FR-04 & Functional & Plan paths through narrow gaps between obstacles; skip targets that cannot be reached. \\
+        \hline
+        FR-05 & Functional & Detect stalls and floor edges and recover (turn-away, skip, stop before a drop). \\
+        \hline
+        FR-06 & Functional & Decide for a video whether a crime is taking place. \\
+        \hline
+        FR-07 & Functional & For a crime, report the kind of emergency, the three most likely crime types out of 13 and the moment in the video where the evidence is strongest. \\
+        \hline
+        NFR-01 & Non-Functional & Real-time navigation: whole control step at 20 Hz; median step 29 ms on a PC CPU, no GPU. \\
+        \hline
+        NFR-02 & Non-Functional & Scene understanding: one 8-frame clip in 58 ms on a Tesla V100 GPU. \\
+        \hline
+        NFR-03 & Non-Functional & Safety: zero collisions; reliability: same code in every environment, only a scene profile differs. \\
+        \hline
+        NFR-04 & Non-Functional & Fair measurement: the recognition test set is used once, and an unsure answer is shown as unsure. \\
+        \hline
+    \end{tabular}
+    \caption{Summary of Application Functional and Non-Functional Requirements}
+\end{table}
+
+% --- 3. APPLICATION ARCHITECTURE & SOLUTION DESIGN ---
+\section{Application Architecture \& Solution Design}
+
+\subsection{End-to-End Application Architecture}
+\noindent
+The robot's sensor is a Kinect with a depth camera and a colour camera that share the same 60 degree view. Figure~\ref{fig:arch} shows the pipeline from a depth frame to joint commands. The perception agent turns each depth frame into a 2D scan of the obstacle band above the floor. The SLAM agent predicts the pose from leg odometry and gyro, corrects it by matching the scan to a submap of recent keyframes and publishes it. The mapping agent writes the scan into the occupancy grid and segments rooms and doorways. The frontier agent picks the next goal (an operator route waypoint, otherwise a safe viewpoint that sees unknown space), the planning agent computes an A* path and the locomotion agent walks it with a trot gait, watching for stalls and floor edges; its leg odometry and gyro feed back into the SLAM prediction. The supervisor sits above the pipeline and keeps the mission state, a knowledge graph of rooms and an event timeline. The agents are not a chain: they never call each other, each one reads the latest messages on one publish-subscribe bus and publishes its own (the topic is shown in each agent's box), and one 20 Hz scheduler runs every agent at its own rate. Figure~\ref{fig:system} places navigation inside the whole system.
+
+Scene understanding works on colour video. It cuts a video into short clips and passes each clip through the recognition network of Figure~\ref{fig:model}. Its answer has three levels: crime or no crime, the kind of emergency, and the crime type with the time at which it is most visible.
+
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_system_architecture.png}{\textwidth}{System architecture diagram: figures/fig\_system\_architecture.png}
+    \caption{System architecture: sensing, SLAM and exploration, decision, motion and scene understanding}
+    \label{fig:system}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_navigation_pipeline.png}{\textwidth}{Navigation pipeline diagram: figures/fig\_navigation\_pipeline.png}
+    \caption{Architecture of the robot's navigation: six agents and the supervisor on one message bus, each running at its own rate}
+    \label{fig:arch}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_control_flow.png}{0.7\textwidth}{Control flow diagram: figures/fig\_control\_flow.png}
+    \caption{Control flow of one exploration mission (20 Hz loop); when exploration is complete the robot returns to its start point}
+    \label{fig:flow}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_recognition_model.png}{\textwidth}{Recognition network diagram: figures/fig\_recognition\_model.png}
+    \caption{Scene-understanding network: VideoMamba-Small with a HorNet gated convolution in the last eight layers}
+    \label{fig:model}
+\end{figure}
+
+\subsection{Component Design, Data Flow \& Technology Stack}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item \textbf{Component Breakdown:} Perception (depth to scan), SLAM (point-to-line ICP against a 16-keyframe submap, gyro calibration, loop closure with a dynamic-covariance-scaling pose graph \cite{agarwal2013,censi2008}), Mapping (Bayesian log-odds grid, rooms, doorways), Frontier (viewpoints 0.5 m from unknown areas, operator route, completion test \cite{yamauchi1997}), Planning (A* on the inflated grid, narrow-gap mode), Locomotion (gait, path following, no-progress watchdog, drop check), Supervisor (mission state, knowledge graph, episodic memory), Scene understanding (VideoMamba-Small \cite{li2024videomamba} with a HorNet gated convolution \cite{rao2022}; 14 outputs: 13 crimes and Background).
+    \item \textbf{User Interaction \& Interface Flow:} the operator loads a scene, optionally draws a search route (stored as waypoints in the scene profile) and starts the mission from the command line; a live view shows the map, path and state; each run ends with a report (REPORT.md, maps, plots). For scene understanding the operator gives a video to one command and reads the three-level answer on the screen.
+    \item \textbf{Data Storage \& External Interfaces:} each run folder holds metrics.json, trajectory.csv, truth\_eval.json, map arrays and a compressed recording of every scan and odometry step; config/scenes holds per-environment profiles; CoppeliaSim is reached through its ZMQ remote API. The perception agent reads the Kinect's depth and colour frames and publishes them together on the sensor/rgbd topic. Localisation and mapping use the depth frames only. Scene understanding stores 256 frames of each video once, so a video is decoded a single time, and writes its scores and predictions as CSV files.
+    \item \textbf{Technology \& Deployment Stack:} navigation: Python 3.12, NumPy, OpenCV, Matplotlib, PyMuPDF; CoppeliaSim with the ZMQ remote API; CPU only. Scene understanding: Python 3.10, PyTorch 2.1 with CUDA 11.8 and the Mamba selective-scan kernel \cite{gu2023}, trained and tested on the university computing cluster through its job scheduler.
+\end{itemize}
+
+% --- 4. COMPLETE IMPLEMENTATION DETAILS (100%) ---
+\section{Implementation Details}
+
+\subsection{Development \& Deployment Environment}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item \textbf{Platform \& Runtime Environment:} Windows 11 PC (AMD Ryzen 7 7735HS, 16 threads, no GPU used) with the CoppeliaSim simulation, headless or with viewer, for navigation; a Linux computing cluster with one Tesla V100 GPU (16 GB) per job for scene understanding.
+    \item \textbf{Libraries, Tools \& Hardware:} listed in Table~\ref{tab:tools}. Our own components, written in the repository without an external SLAM library: point-to-line ICP, keyframe submap, loop closure with a robust pose graph, occupancy grid, A* planner and frontier exploration. Simulated sensors: Kinect depth and colour cameras (60 deg), gyro, joint encoders.
+    \item \textbf{Source Code Repository:} github.com/yokshith09/Autonomous-Quadruped-SLAM-Navigation-Perception (branch improve/exploration; tags such as final-multi-env-v2) and github.com/vijaykrishnaaa/VideoMamba-HorNet-Crime-Recognition
+\end{itemize}
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{4.0cm}|p{10.6cm}|}
+        \hline
+        \textbf{Purpose} & \textbf{Tool / library} \\
+        \hline
+        Languages & Python 3.12 (navigation), Python 3.10 (scene understanding) \\
+        \hline
+        Simulator & CoppeliaSim (Edu), ZMQ remote API client \\
+        \hline
+        Numerics, image processing & NumPy, OpenCV \\
+        \hline
+        Deep learning & PyTorch 2.1 (CUDA 11.8), torchvision, mamba\_ssm (selective-scan kernel) \\
+        \hline
+        Plots, figures, report PDF & Matplotlib, PyMuPDF \\
+        \hline
+        Testing & pytest (91 tests) \\
+        \hline
+        Baselines & BreezySLAM (built from source, C extension); Cartographer (ROS 2 Humble package, run in Docker) \\
+        \hline
+        Data & TUM RGB-D fr2/pioneer sequences (4 ROS bags, read with rosbags); UCF-Crime videos \cite{sultani2018} with the UCA time-stamped captions \cite{yuan2024} \\
+        \hline
+        Version control & Git / GitHub \\
+        \hline
+    \end{tabular}
+    \caption{Tools and libraries used}
+    \label{tab:tools}
+\end{table}
+
+\subsection{Module-Wise Implementation \& Integration Summary}
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{|p{3.5cm}|p{7.8cm}|p{2.9cm}|}
+        \hline
+        \textbf{Application Module} & \textbf{Implemented Features \& Integration Details} & \textbf{Status} \\
+        \hline
+        Operator interface & Command-line mission start, scene profile with operator route, live map view, per-run report and plots; one command that takes a video and prints the three-level answer & Functional \\
+        \hline
+        Core logic: SLAM and exploration & 7 agents on the message bus: SLAM, mapping, frontier, planning, locomotion, supervisor, perception (depth to scan) & 100\% (Integrated) \\
+        \hline
+        Core logic: scene understanding & Trained recognition network; crime or not, kind of emergency, crime type among 13, strongest moment; measured on the full UCF-Crime test set & 100\% (Functional, recorded video) \\
+        \hline
+        Data layer & Run folders with metrics, trajectory, maps and full sensor recordings; offline replay and evaluation against the scene model; stored video frames, score and prediction files & 100\% (Integrated) \\
+        \hline
+        External / IO & CoppeliaSim ZMQ interface: Kinect depth and colour cameras, gyro, joints, contact check & 100\% (Functional, sim) \\
+        \hline
+    \end{tabular}
+    \caption{Application Module Implementation and Integration Status}
+\end{table}
+
+\subsection{Detailed Module Descriptions}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item \textbf{SLAM:} each 2D scan is matched against the last 16 keyframes with point-to-line ICP \cite{censi2008}; a match is accepted only if it agrees with odometry (1 cm + 100\% of the step). Gyro bias is measured while the robot stands still (62 s in the rescue scene). Loop closures against old keyframes enter a pose graph solved with dynamic covariance scaling \cite{agarwal2013}, so a wrong closure cannot pull the map apart.
+    \item \textbf{Exploration:} frontier cells are clustered and a viewpoint is chosen 0.5 m from unknown areas so the robot never walks into unseen space (the rescue field ends in a drop). An operator route, when given, is followed waypoint by waypoint; a waypoint that cannot be approached is skipped at once. Exploration ends only when viewpoints exist and none of them sees a frontier.
+    \item \textbf{Planning \& Locomotion:} A* on the obstacle grid inflated by the robot radius, with a narrower inflation in narrow-gap mode; the gait follows the smoothed path. A watchdog measures progress along the remaining path and triggers a turn-away recovery; a camera check stops the robot before a floor edge.
+    \item \textbf{Scene understanding:} a clip of 8 frames (224 $\times$ 224) is cut into 16 $\times$ 16 patches, which gives 1,569 tokens with the class token. They pass through 24 bidirectional Mamba layers. The first 16 keep their pretrained weights (Kinetics-400 \cite{kay2017}, then UCF-101 \cite{soomro2012}) and are frozen; the last 8 are trained and carry a HorNet gated convolution of order 5 with a GhostModule input \cite{han2020}, run on the 14 $\times$ 14 grid of every frame beside Mamba's own 1D convolution. Training clips are cut to the crime moment with the UCA time stamps; clips with nothing criminal form the Background class. The loss balances the 13 crimes with logit adjustment \cite{menon2021}, because the training set has 123 robbery videos but only 23 shooting videos. A whole video is cut into 32, 16, 8 and 4 equal pieces (60 clips); for each crime the four highest clip scores are averaged, and Background is never returned as a crime. The model has 116.2 M parameters, of which 99.2 M are trained.
+    \item \textbf{End-to-End Integration:} all navigation agents run in one process on a publish-subscribe bus; a scene profile (odometry scale, map size, calibration time, route) is the only per-environment input. Every SLAM change is checked by replaying stored recordings, which reproduce live runs exactly. Scene understanding takes colour video, runs as its own program on a GPU and is evaluated on recorded surveillance video.
+\end{itemize}
+
+% --- 5. FUNCTIONAL TESTING & PROTOTYPE DEMONSTRATION ---
+\section{Functional Testing \& Prototype Demonstration}
+
+\subsection{Functional Test Cases \& Verification}
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{|c|p{3.2cm}|p{3.2cm}|p{4.8cm}|c|}
+        \hline
+        \textbf{Test ID} & \textbf{Feature / Scenario} & \textbf{Input / User Action} & \textbf{Observed Output} & \textbf{Result} \\
+        \hline
+        TC-01 & Full autonomous exploration (scene 1) & Start in unknown 10 $\times$ 10 m building, 30 min & 94.2\% of floor mapped, 0 collisions, 1 stall recovered, ATE 14.8 cm & Pass \\
+        \hline
+        TC-02 & Rescue field, operator route through the building (scene 2) & 70-waypoint route, rubble, 40 min & Through the building (in at 218 s, out of the north doorway at 594 s), 59 of 70 waypoints, 0 collisions, 5 stalls recovered & Pass \\
+        \hline
+        TC-03 & Module integration (SLAM replay) & Replay stored recordings through SLAM & Reproduces live ATE exactly (11.7 / 12.3 cm) & Pass \\
+        \hline
+        TC-04 & Boundary: blocked route waypoint & Waypoint behind rubble & Skipped at once, route continues & Pass \\
+        \hline
+        TC-05 & Boundary: robot stalls & No progress along path & Watchdog turn-away, mission continues & Pass \\
+        \hline
+        TC-06 & Boundary: floor edge ahead & Drop at the edge of the rescue field & Stops 0.44 m before the edge & Pass \\
+        \hline
+        TC-07 & Automated unit tests & pytest, 91 tests & 91 passed & Pass \\
+        \hline
+        TC-08 & Crime or not & 290 UCF-Crime test videos (140 crime, 150 normal) & AUC 90.43\%; 83.33\% of crime videos found & Measured \\
+        \hline
+        TC-09 & Kind of emergency & 140 crime test videos & 62.62\% correct over three groups & Measured \\
+        \hline
+        TC-10 & Crime type & 140 crime test videos, 13 crimes & 43.10\% $\pm$ 1.47 over three training runs & Measured \\
+        \hline
+    \end{tabular}
+    \caption{Functional Testing Summary Across Core Application Scenarios}
+\end{table}
+
+\subsection{Navigation and Mapping Results: Scene 1, Scene 2 and Average}
+\noindent
+One system with the same code in both environments; only the scene profile differs. Both runs use the current code. Earlier best runs: scene 1 run 34 (11.7 cm, F1 95.9\%, older code and a start heading 2 degrees different; run 34's code from today's start gives 32.0 cm) and scene 2 run 19 (12.3 cm over its first 12 minutes).
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{4.8cm}|p{2.8cm}|p{4.6cm}|p{2.2cm}|}
+        \hline
+        \textbf{Metric} & \textbf{Scene 1: building} & \textbf{Scene 2: rescue field (through the building)} & \textbf{Average (final)} \\
+        \hline
+        Run length / distance & 1800 s / 156.1 m & 2400 s / 134.7 m & - \\
+        \hline
+        Position error (ATE RMSE) & 14.8 cm & 28.8 cm & 21.8 cm \\
+        \hline
+        Map precision vs scene model & 93.1\% & 67.7\% & 80.4\% \\
+        \hline
+        Map recall vs scene model & 84.9\% & 66.4\% & 75.7\% \\
+        \hline
+        Map F1 & 88.8\% & 67.1\% & 78.0\% \\
+        \hline
+        Floor covered & 94.2\% & 85.8\% & 90.0\% \\
+        \hline
+        Collisions / stuck events (recovered) & 0 / 1 & 0 / 5 & 0 / 3 per run \\
+        \hline
+        Control step (median / 95th pct.) & 34 / 140 ms & 23 / 160 ms & 29 / 150 ms \\
+        \hline
+    \end{tabular}
+    \caption{Results per environment and the final average across environments}
+\end{table}
+
+\subsection{Benchmarking of Localisation}
+\noindent
+\textbf{Ablation.} Each row removes one part and replays the stored sensor recordings through SLAM (scene 2: mean of 3 seeds, because single replays there vary by a few cm).
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{7.2cm}|c|c|}
+        \hline
+        \textbf{Variant (one part removed)} & \textbf{Scene 1} & \textbf{Scene 2 (3-seed mean)} \\
+        \hline
+        Full system & 11.7 cm & 11.0 cm \\
+        \hline
+        No loop closure & 25.9 cm & 12.4 cm \\
+        \hline
+        Plain instead of robust pose graph & 27.3 cm & 9.3 cm \\
+        \hline
+        Scan-to-scan instead of keyframe submap & 131.8 cm & 29.0 cm \\
+        \hline
+        Point-to-point instead of point-to-line ICP & 291.4 cm & 15.9 cm \\
+        \hline
+        No degeneracy filter & 16.1 cm & 10.9 cm \\
+        \hline
+        No heading prior / no gyro calibration & 295.6 cm & 178.0 cm \\
+        \hline
+        Odometry only & 291.4 cm & 15.7 cm \\
+        \hline
+    \end{tabular}
+    \caption{Ablation: position error with one part removed}
+\end{table}
+
+\noindent
+\textbf{Robustness.} Seeded sensor faults are injected into the scene 2 recording (3 seeds each) and the result is compared with odometry alone under the same faults.
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{6.4cm}|c|c|}
+        \hline
+        \textbf{Injected fault (scene 2, 3 seeds)} & \textbf{Ours} & \textbf{Odometry only} \\
+        \hline
+        None & 12.3 cm & 15.7 cm \\
+        \hline
+        Depth noise 1 / 3 cm & 13.6 / 11.1 cm & 15.7 cm \\
+        \hline
+        Depth points dropped 20 / 50\% & 10.4 / 9.7 cm & 15.7 cm \\
+        \hline
+        Leg odometry noise 5 / 10\% & 9.5 / 10.0 cm & 15.9 / 16.2 cm \\
+        \hline
+        Leg odometry scale error +/-5\% & 15.8 cm & 31.3 cm \\
+        \hline
+        Residual gyro bias 0.01 / 0.03 deg/s & 29.9 / 100.5 cm & 29.6 / 98.0 cm \\
+        \hline
+        All faults combined & 47.8 cm & 50.9 cm \\
+        \hline
+    \end{tabular}
+    \caption{Robustness to seeded sensor faults}
+    \label{tab:faults}
+\end{table}
+
+\noindent
+Depth noise, missing points and leg-odometry errors are absorbed by scan matching; gyro bias left after calibration passes into the error because scene 2 takes its heading from the gyro.
+
+\noindent
+\textbf{Runtime.} Time per call of each agent in the two final runs (PC CPU, no GPU; simulator not included).
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{3.4cm}|c|p{3.6cm}|p{3.6cm}|c|}
+        \hline
+        \textbf{Agent} & \textbf{Rate} & \textbf{Scene 1 median / 95th pct.} & \textbf{Scene 2 median / 95th pct.} & \textbf{Share of agent time} \\
+        \hline
+        Perception (depth to scan) & 10 Hz & 5.6 / 14.3 ms & 4.0 / 8.4 ms & 21\% \\
+        \hline
+        SLAM & 10 Hz & 9.9 / 27.4 ms & 5.9 / 14.4 ms & 26 to 38\% \\
+        \hline
+        Mapping & 10 Hz & 0.5 / 4.4 ms & 0.5 / 3.8 ms & 3 to 6\% \\
+        \hline
+        Frontier & 1 Hz & 16.4 / 33.0 ms & 5.3 / 47.8 ms & 5 to 6\% \\
+        \hline
+        Planning & 5 Hz & 0.3 / 4.4 ms & 0.3 / 11.0 ms & 1 to 11\% \\
+        \hline
+        Locomotion & 20 Hz & 9.3 / 18.1 ms & 7.3 / 10.1 ms & 31\% \\
+        \hline
+        Supervisor & 2 Hz & 0.1 / 0.2 ms & 0.1 / 0.1 ms & 0\% \\
+        \hline
+        Whole process & - & CPU 52\% of one core; memory 110 MB mean & CPU 66\% of one core; memory 239 MB mean & - \\
+        \hline
+    \end{tabular}
+    \caption{Runtime per navigation agent}
+\end{table}
+
+\subsection{Other Localisation and Exploration Methods Run in Our Scenes}
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{6.8cm}|c|c|c|}
+        \hline
+        \textbf{Method (same recordings, same scoring)} & \textbf{Scene 1} & \textbf{Scene 2 (12-min run)} & \textbf{Average} \\
+        \hline
+        Odometry only (leg odometry + gyro) & 291.4 cm & 15.7 cm & 153.6 cm \\
+        \hline
+        BreezySLAM \cite{steux2010}, default settings & 1791.9 cm & 568.4 cm & 1180.2 cm \\
+        \hline
+        BreezySLAM \cite{steux2010}, best of 11 settings & 189.7 cm & 109.5 cm & 149.6 cm \\
+        \hline
+        Ours & 11.7 cm & 12.3 cm & 12.0 cm \\
+        \hline
+        Cartographer \cite{hess2016}, defaults & 585.8 cm & 216.5 cm & 401.2 cm \\
+        \hline
+        Cartographer \cite{hess2016}, best of 8 settings & 341.5 cm & 85.2 cm & 213.4 cm \\
+        \hline
+    \end{tabular}
+    \caption{Position error of other methods on identical data from our two scenes}
+    \label{tab:others}
+\end{table}
+
+\noindent
+\textbf{How Table~\ref{tab:others} is built.} All rows are scored on exactly the same input: the sensor data recorded during the two simulator runs (every 2D scan, leg-odometry step and gyro increment), replayed offline through each method, and compared with the robot's true path from the simulator (ATE RMSE). Only the method that turns this data into a pose changes. Odometry only adds up leg odometry and gyro without using the scans; any SLAM method must beat it. BreezySLAM \cite{steux2010} is an open-source Python/C implementation of CoreSLAM (tinySLAM), a well-known lightweight 2D laser SLAM: it matches each scan to its own occupancy map by random-mutation hill climbing, starting from the odometry guess, and has no loop closure. It receives the same scan, forward odometry and gyro as ours. Its defaults suit 360-degree laser scanners, so 11 settings were tried and the best is reported; with scan matching off it reproduces the odometry row to 0.1 cm, which confirms the data conversion. On our 60-degree depth-camera scan BreezySLAM helps a little in scene 1 (291 to 190 cm) and drifts in scene 2 (16 to 110 cm). Cartographer \cite{hess2016} is Google's open-source SLAM, the industry reference for 2D laser SLAM (scan-to-submap matching plus loop closure in a pose graph). It ran in Docker (ROS 2) on the same scan and odometry; its pose starts within 1 cm of the truth and then drifts, because its matcher and loop closures expect dense 360-degree laser scans. Eight settings were tried (odometry trust, stricter loop closure, no loop closure, smaller submaps); the best, used on both scenes, still ends worse than odometry alone. Ours cuts the odometry error by 96\% in scene 1 and 22\% in scene 2.
+
+\noindent
+\textbf{Exploration against nearest-frontier.} The classic nearest-frontier rule \cite{yamauchi1997} (always walk to the closest frontier) ran in both scenes with the same robot, SLAM, planner and time limit; only the choice of where to go next differs (ours: viewpoints, room sweep, and in scene 2 the operator route).
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{3.4cm}|c|c|c|c|p{3.3cm}|}
+        \hline
+        \textbf{Measure} & \textbf{Scene 1: ours} & \textbf{Scene 1: nearest} & \textbf{Scene 2: ours} & \textbf{Scene 2: nearest} & \textbf{Average: ours / nearest} \\
+        \hline
+        Floor covered & 94.2\% & 84.9\% & 85.8\% & 72.4\% & 90.0 / 78.7\% \\
+        \hline
+        Map recall / F1 & 84.9 / 88.8\% & 85.9 / 89.1\% & 66.4 / 67.1\% & 44.7 / 52.1\% & 75.7 / 78.0 vs 65.3 / 70.6\% \\
+        \hline
+        Position error (ATE) & 14.8 cm & 17.5 cm & 28.8 cm & 36.2 cm & 21.8 / 26.9 cm \\
+        \hline
+        Stuck events (recovered) & 1 & 18 & 5 & 7 & 3 / 12.5 \\
+        \hline
+        Collisions & 0 & 0 & 0 & 0 & 0 / 0 \\
+        \hline
+        Through the damaged building & - & - & yes & no & - \\
+        \hline
+    \end{tabular}
+    \caption{Exploration: our method against nearest-frontier exploration, same scenes and time}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/fig_coverage_scene1.png}{%
+      \includegraphics[width=0.48\textwidth]{figures/fig_coverage_scene1.png}\hfill
+      \includegraphics[width=0.48\textwidth]{figures/fig_coverage_scene2.png}}{%
+      \fbox{\begin{minipage}[c][4.5cm]{0.9\textwidth}\centering\textbf{[Coverage plots: figures/fig\_coverage\_scene1.png and fig\_coverage\_scene2.png]}\end{minipage}}}
+    \caption{Explored share of the map window over time, ours against nearest-frontier (left scene 1, right scene 2)}
+\end{figure}
+
+\noindent
+Ours covers 9 to 13 points more floor, gets stuck far less (1 against 18 in scene 1) and is the only one to pass through the building. In scene 1 the map scores are equal (F1 88.8 against 89.1\%): in a building every method eventually sees the same walls; the gain is coverage and reliability.
+
+\subsection{Public Benchmark for Localisation: TUM RGB-D Pioneer Sequences}
+\noindent
+\textbf{What the dataset is.} TUM RGB-D \cite{sturm2012} is a public SLAM benchmark from the Technical University of Munich: a Microsoft Kinect records colour and depth at 30 Hz while a motion-capture system records the true camera pose at 100 Hz, and a standard tool scores every method the same way (ATE after rigid alignment). Its four Pioneer sequences put the Kinect on a Pioneer 3 wheeled robot driven through a large hall (16 to 40 m paths, 1 to 3 minutes each); the recordings also carry the robot's wheel odometry.
+
+\noindent
+\textbf{Why it fits our comparison.} It is the closest public match to our robot: a ground robot, planar motion, a depth camera of the same kind and field of view as ours, and odometry from the robot itself. Every system in Table~\ref{tab:tum} is scored on the same sequences with the same alignment-based ATE, so it shows where our SLAM stands against published systems on real sensor data. Ours runs with our existing scene profiles, without TUM-specific tuning. Differences: ours estimates position in the plane (x-y), the others in 3D (on a flat floor nearly the same); ours uses the wheel odometry, the visual systems do not.
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{3.6cm}|p{2.9cm}|c|c|c|c|c|}
+        \hline
+        \textbf{System (TUM fr2/pioneer)} & \textbf{Input} & \textbf{360} & \textbf{slam} & \textbf{slam2} & \textbf{slam3} & \textbf{Average} \\
+        \hline
+        ORB-SLAM3 (RGB-D) \cite{merzlyakov2021} & RGB-D images & 105.9 cm & 211.8 cm & 170.9 cm & 199.2 cm & 172.0 cm \\
+        \hline
+        OpenVSLAM (RGB-D) \cite{merzlyakov2021} & RGB-D images & 4.8 cm & 18.8 cm & 122.4 cm & 10.6 cm & 39.2 cm \\
+        \hline
+        RTABMap (RGB-D) \cite{merzlyakov2021} & RGB-D images & 3.8 cm & 35.1 cm & 4.4 cm & 71.6 cm & 28.7 cm \\
+        \hline
+        Wheel odometry only (Pioneer) & wheel odometry & 16.3 cm & 19.0 cm & 58.5 cm & 21.0 cm & 28.7 cm \\
+        \hline
+        Ours, scene-1 settings & depth scan + wheel odometry & 14.8 cm & 69.5 cm & 33.8 cm & 44.1 cm & 40.5 cm \\
+        \hline
+        Ours, scene-2 settings & depth scan + wheel odometry & 15.2 cm & 22.9 cm & 38.3 cm & 27.3 cm & 25.9 cm \\
+        \hline
+    \end{tabular}
+    \caption{ATE RMSE on the TUM Pioneer sequences; published values from \cite{merzlyakov2021}}
+    \label{tab:tum}
+\end{table}
+
+\noindent
+\textbf{Result.} With the scene-2 settings (made for open floor without right-angle walls) ours averages 25.9 cm over the four sequences: ahead of RTABMap (28.7 cm), OpenVSLAM (39.2 cm) and ORB-SLAM3 (172.0 cm) on average, and the most consistent row (15 to 38 cm on every sequence, where each visual system fails on at least one). With the scene-1 settings, whose heading prior assumes walls at right angles to the start heading, ours averages 40.5 cm. Two cautions: the gain over the robot's own wheel odometry is small (28.7 cm average, and better than ours on two sequences), so on real Kinect data much of our accuracy still comes from odometry; and ours uses wheel odometry while the visual systems use images only. No TUM-specific tuning was done; both of our existing profiles are shown.
+
+\subsection{Public Benchmark for Scene Understanding: UCF-Crime}
+\noindent
+\textbf{What the dataset is.} UCF-Crime \cite{sultani2018} is the standard public set of real surveillance video: 1,900 untrimmed videos, with 13 crime types and normal activity. Its official test set has 140 crime videos and 150 normal videos. The network was trained three times with different random seeds on the training part; every number below is the mean of the three runs, with the spread after $\pm$. The best training epoch was chosen on 121 validation videos, and the test set was used once.
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{|p{3.2cm}|p{3.2cm}|p{2.6cm}|p{2.6cm}|p{2.7cm}|}
+        \hline
+        \textbf{Question} & \textbf{Test videos} & \textbf{Metric} & \textbf{Result} & \textbf{Three runs} \\
+        \hline
+        Is there a crime? & 140 crime + 150 normal & AUC (per video) & 90.43\% $\pm$ 1.14 & 91.75 / 90.59 / 88.96 \\
+        \hline
+        What kind of emergency? & 140 crime & Accuracy, 3 groups & 62.62\% $\pm$ 1.78 & 60.71 / 65.00 / 62.14 \\
+        \hline
+        Which of the 13 crimes? & 140 crime & Top-1 accuracy & 43.10\% $\pm$ 1.47 & 41.43 / 45.00 / 42.86 \\
+        \hline
+        Both stages together & 290 (14 possible answers) & Accuracy & 56.78\% $\pm$ 2.66 & 57.93 / 59.31 / 53.10 \\
+        \hline
+    \end{tabular}
+    \caption{Scene understanding at three levels, read from the same trained network}
+    \label{tab:levels}
+\end{table}
+
+\noindent
+\textbf{How Table~\ref{tab:levels} is read.} The crime score of a video is how far its four strongest clips are from the Background output. With the cut-off picked on validation videos, 80.34\% of the 290 test videos are called correctly: 83.33\% of the crime videos are found and 22.44\% of the normal videos are flagged by mistake. The kind of emergency groups the 13 answers into Violence (Abuse, Arrest, Assault, Fighting, Robbery, Shooting), Property (Burglary, Shoplifting, Stealing, Vandalism) and Hazard (Arson, Explosion, Road Accidents). These groups were chosen after the crime-type results were seen. In the last row a normal video counts as right when it is not flagged, and a crime video when it is flagged and named correctly. Guessing among 13 crimes gives 7.7\%.
+
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{|p{3.6cm}|p{5.2cm}|p{3.4cm}|p{2.4cm}|}
+        \hline
+        \textbf{Method} & \textbf{Backbone} & \textbf{Crimes used in training} & \textbf{Top-1 accuracy} \\
+        \hline
+        Wu et al., CVPR 2024 \cite{wu2024ovvad} & Frozen CLIP ViT-B/16 with a temporal adapter & 6 of 13 & 41.43\% \\
+        \hline
+        Anomize, CVPR 2025 \cite{li2025anomize} & Frozen CLIP ViT-B/16 with an LSTM; GPT-4 text & 6 of 13 & 47.14\% \\
+        \hline
+        Ours & VideoMamba-Small with gated convolution, no CLIP & 13 of 13, with UCA time stamps & 43.10\% $\pm$ 1.47 \\
+        \hline
+    \end{tabular}
+    \caption{Crime type on the 140 whole test crime videos of UCF-Crime; published values from the papers}
+    \label{tab:papers}
+\end{table}
+
+\noindent
+\textbf{Reading Table~\ref{tab:papers} with care.} The three rows share the test videos and the metric, not the training setting. The two published methods rely on CLIP, which was pretrained on 400 million image-text pairs, and train on six crimes only; ours trains on all 13 and uses time stamps to find the crime moment. One test video is worth 0.71 points, so a single run on 140 videos has a range of about $\pm$ 8 points. Our result is therefore at the level of the 2024 method and below the 2025 method, not a ranking above either. In the run that was inspected class by class, Road Accidents (17 of 23), Explosion (14 of 21) and Arson (7 of 9) were recognised best; Shoplifting reached 8 of 21, and Shooting was not recognised (0 of 23), with only 23 shooting videos to train on.
+
+\subsection{Where Our System Stands}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item \textbf{Localisation in our scenes (same data):} 12.0 cm average against 153.6 cm for odometry alone and 149.6 cm for the best BreezySLAM setting: an order of magnitude better than both.
+    \item \textbf{Localisation on the public TUM benchmark (same data):} 25.9 cm average with the scene-2 settings, ahead of RTABMap (28.7), OpenVSLAM (39.2) and ORB-SLAM3 (172.0) on average, but only slightly better than wheel odometry alone (28.7); 40.5 cm with the scene-1 settings.
+    \item \textbf{Across environments:} 21.8 cm average error, 80.4\% map precision, 78.0\% map F1, 90.0\% floor covered, no collisions, through the damaged building in scene 2, with one code base.
+    \item \textbf{Exploration against nearest-frontier (same scenes, same time):} 90.0 against 78.7\% of the floor, 3 against 12.5 stuck events per run, and only ours passed through the building.
+    \item \textbf{Scene understanding on the public UCF-Crime test set:} 90.43\% AUC for crime or not, 62.62\% for the kind of emergency and 43.10\% for the crime type, next to 41.43\% and 47.14\% for two recent CLIP-based methods, without using CLIP.
+\end{itemize}
+
+\subsection{Working Prototype Demonstration}
+\noindent
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_sim_robot.jpg}{0.6\textwidth}{Robot in the simulator: figures/fig\_sim\_robot.jpg}
+    \caption{The quadruped robot in CoppeliaSim, with the Kinect (depth and colour camera) on its body}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_scene1.png}{0.8\textwidth}{Scene 1 layout and map: figures/fig\_scene1.png}
+    \caption{Scene 1 (building), 30-minute run on the current code: (a) layout from the scene model, (b) map built by the robot with the true path (blue) and estimated path (orange)}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_scene2.png}{0.8\textwidth}{Scene 2 layout and map: figures/fig\_scene2.png}
+    \caption{Scene 2 (rescue field), 40-minute run on the operator route: (a) layout, (b) map and paths; the path enters the damaged building from the south, visits its east room and leaves by the north doorway}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figures/fig_sim_scene1.jpg}{%
+      \includegraphics[width=0.49\textwidth]{figures/fig_sim_scene1.jpg}\hfill
+      \includegraphics[width=0.49\textwidth]{figures/fig_sim_scene2.jpg}}{%
+      \fbox{\begin{minipage}[c][4.5cm]{0.9\textwidth}\centering\textbf{[Simulator scenes: figures/fig\_sim\_scene1.jpg and fig\_sim\_scene2.jpg]}\end{minipage}}}
+    \caption{The two simulated environments in CoppeliaSim: scene 1, a 10 $\times$ 10 m building with rooms, people and furniture (left), and scene 2, a 16 $\times$ 16 m rescue field with rubble and a damaged building (right)}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \figorbox{fig_demo_output.png}{0.85\textwidth}{Insert a screenshot of the scene-understanding output as figures/fig\_demo\_output.png}
+    \caption{Scene understanding on a video the network had never seen, in which two masked people remove an ATM: crime or not, the three most likely crimes, the kind of emergency and the strongest moment}
+\end{figure}
+
+\noindent
+\textbf{Evaluation \& Usability Summary:} the control loop runs in real time on a PC CPU (median 29 ms per step for all agents). In scene 2 the position error stays near 11 cm for 17 minutes and then grows to 29 cm RMSE over 40 minutes. Replays of the recording show the cause is distance, not heading: removing the gyro's bias drift exactly (heading error 2.0 to 0.8 degrees) did not lower the position error, while on long open stretches only 26\% of scans find enough structure to match, so position rests on leg odometry. Map recall is limited because a 2D camera slice sees only the faces of rubble that point towards the robot. Scene understanding answers for a 10 to 14 s video in 9 to 14 s on the GPU, after 11 to 16 s to load the network, and shows its three most likely crimes so that a close call is visible to the operator.
+
+\subsection{Work Still to Come}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item Reduce distance drift on long open stretches (wider field of view or visual odometry; tuning was tested and does not fix it).
+    \item Improve scan matching on real Kinect data so it gains clearly over wheel odometry on TUM.
+    \item Lower the share of normal videos flagged as crime, and add training video for shooting.
+    \item Evaluate the lighter gated convolution (about 52 M parameters in place of 116.2 M).
+\end{itemize}
+
+% --- 6. TECHNICAL KNOWLEDGE & ARCHITECTURAL DECISIONS ---
+\section{Technical Justification \& Architectural Decisions}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item \textbf{Technology Stack Rationale:} Python with NumPy/OpenCV keeps every navigation algorithm readable and testable and runs on a CPU without a GPU; CoppeliaSim gives exact ground truth and scene geometry for honest scoring; a depth camera is far cheaper than lidar. For scene understanding, VideoMamba reads a clip as one sequence at a cost that grows linearly with its length, where attention grows with the square \cite{li2024videomamba,gu2023}; the gated convolution gives it the 2D neighbourhood of each frame that a 1D sequence loses \cite{rao2022}.
+    \item \textbf{Architectural \& Performance Trade-offs:} a 2D slice of the depth image keeps SLAM fast but gives a narrow 60 deg view, so open floor depends on odometry; a 16-keyframe submap costs more per step than scan-to-scan but cut replay error from 16.3 to 13.9 cm; agents share one process for low latency rather than separate ROS nodes. Freezing the first 16 layers of the recognition network protects it from memorising a training set of 689 crime videos, but those layers never adapt to surveillance footage. The gated convolution holds 90.8 M of the 116.2 M parameters and most of the 370 GFLOPs per clip; a version with separable convolutions (about 52 M parameters) is written and not yet evaluated.
+    \item \textbf{Security, Safety \& Error Handling:} collisions are measured with the simulator's contact check (0 in all measured runs); viewpoints keep 0.5 m from unknown space; a drop check stops the robot at floor edges; the watchdog recovers from stalls; ground truth is used only for scoring, never by SLAM. In scene understanding the cut-off for crime or not is fixed on validation video, an unsure answer is printed as unsure with both candidates, and a video that cannot be read is reported instead of guessed.
+\end{itemize}
+
+% --- 7. CONCLUSION, LIMITATIONS & FUTURE SCOPE ---
+\section{Conclusion, Limitations \& Future Scope}
+\begin{itemize}[noitemsep, topsep=2pt]
+    \item \textbf{Conclusion:} one Kinect, a gyro and leg odometry are enough for a quadruped to explore two very different simulated environments with 15 to 29 cm position error over 30 to 40 minute runs and no collisions, with the same code, and to pass through a damaged building; on identical data it is about ten times more accurate than odometry alone, BreezySLAM and Cartographer. The scene-understanding network tells crime from normal video with 90.43\% AUC and names the crime in 43.10\% of test videos, at the level of recent CLIP-based work.
+    \item \textbf{Current Operational Limitations:} navigation is tested in simulation only; map recall in open rubble fields is about 66\%; heading in the rescue profile relies on the gyro, so uncorrected gyro bias raises the error (Table~\ref{tab:faults}); on long open stretches position rests on leg odometry, so the error grows after about 17 minutes. Scene understanding is tested on recorded surveillance video; it flags about one normal video in five, does not recognise shooting, and its network is large (116.2 M parameters).
+    \item \textbf{Future Enhancements:} more viewpoints around obstacles; a wider field of view or visual odometry for long open stretches; the lighter gated convolution; more training video for the rare crimes.
+\end{itemize}
+% --- 8. DELIVERABLES & TECHNICAL ENRICHMENT SUMMARY ---
+\section{Project Deliverables \& Technical Enrichment Summary}
+\begin{table}[H]
+    \centering
+    \footnotesize
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{4.2cm}|p{7.5cm}|c|}
+        \hline
+        \textbf{Deliverable Category} & \textbf{Details / Title / Repository Link} & \textbf{Status} \\
+        \hline
+        Source Code Repository & github.com/yokshith09/Autonomous-Quadruped-SLAM-Navigation-Perception (docs/ and per-run reports); github.com/vijaykrishnaaa/VideoMamba-HorNet-Crime-Recognition & Completed \\
+        \hline
+        Individual Online Certifications & Cursa online courses (10--20 h each), certificates for all five members: Artificial Intelligence (12 h 40 min, 2 members), Computer Vision Fundamentals (15 h 15 min), CNNs for Computer Vision (19 h 30 min), PyTorch Deep Learning Masterclass (18 h 13 min) & Completed \\
+        \hline
+        Group TEA Deliverable 1 & \textbf{Open-source code repositories:} robot exploration stack (SLAM, mapping, frontier exploration, planning, evaluation and benchmarks) and the VideoMamba--HorNet crime-recognition model, both public on GitHub with documentation & Submitted \\
+        \hline
+        Group TEA Deliverable 2 & \textbf{User study:} questionnaire on the system's purpose, clarity of the project resources, understanding of the techniques (SLAM, frontier exploration, crime-type classification), perceived usefulness, confidence and priorities; 37 responses (25/10/2026) & Submitted \\
+        \hline
+        Group TEA Deliverable 3 & \textbf{Research paper draft:} ``Autonomous First-Response Crime Scene Exploration Using a Lightweight Onboard Intelligence System'' (NavPulse), 10 pages, all five members with the project guide & Submitted \\
+        \hline
+    \end{tabular}
+    \caption{Summary of Completed Project and Technical Enrichment Deliverables}
+\end{table}
+
+% --- REFERENCES ---
+\vspace{0.2cm}
+\nocite{*}
+\renewcommand{\refname}{\large\bfseries\color{amritaMaroon}References}
+\bibliographystyle{ieeetr}
+\bibliography{ref}
+
+\end{document}
