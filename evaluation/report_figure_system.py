@@ -20,7 +20,7 @@ def system():
     n, e = {}, []
 
     def frame(nid, x, y, w, h, title, color):
-        n[nid] = dict(x=x, y=y, w=w, h=h, kind="frame", color=color, label=title, size=32, noborder=True)
+        n[nid] = dict(x=x, y=y, w=w, h=h, kind="frame", color="none", label=title, size=32, noborder=True)
 
     def item(nid, x, y, w, h, label, size=25):
         n[nid] = dict(x=x, y=y, w=w, h=h, kind="round", color="white", label=label, size=size, lw=1.4)
