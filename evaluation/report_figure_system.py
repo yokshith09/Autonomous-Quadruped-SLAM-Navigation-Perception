@@ -65,16 +65,17 @@ def system():
                       bold="all", lw=1.6)
 
     for a, b, lab, kw in [
-        ("scene", "sen", "", dict(s="r", d="l")),
-        ("sen", "rob", "", dict(s="r", d="l")),
-        ("rob", "und", "video", dict(s="r", d="l", ly=-22)),
-        ("und", "log", "", dict(s="r", d="l")),
-        ("log", "cloud", "upload", dict(s="b", d="t", lx=48)),
-        ("rob", "core", "depth + odometry", dict(s="b", d=(0.79, 0), lx=6)),
-        ("core", "dec", "", dict(s="r", d="l")),
-        ("und", "dec", "alerts", dict(s="b", d="t", lx=40)),
-        ("dec", "mot", "commands", dict(s="b", d="b", pts=[(1210, 885), (170, 885)], li=1)),
-        ("mot", "scene", "moves", dict(s="t", d="b", lx=42)),
+        # every arrow starts and ends on a picture, box or caption; anchors chosen so each arrow is straight
+        ("scene_i", "sen_i", "", dict(s=(1, 0.282), d=(0, 0.5))),                    # y = 152
+        ("sen_i", "rob_i", "", dict(s=(1, 0.5), d=(0, 0.34))),                       # y = 152
+        ("rob_i", "und_i", "video", dict(s=(1, 0.482), d=(0, 0.5), ly=-22)),         # y = 180
+        ("und_i", "log2", "", dict(s=(1, 0.675), d="l")),                            # y = 215
+        ("log3", "cloud", "upload", dict(s="b", d="t", lx=48)),                      # x = 1490
+        ("rob_t", "core1", "depth + odometry", dict(s=(0.5, 1), d=(0.603, 0), lx=-110)),  # x = 880
+        ("core3", "dec2", "", dict(s=(1, 0.318), d=(0, 0.745))),                     # y = 782
+        ("und_t", "dec1", "alerts", dict(s=(0.5, 1), d="t", lx=40)),                 # x = 1210
+        ("dec2", "mot2", "commands", dict(s="b", d="b", pts=[(1210, 885), (170, 885)], li=1)),
+        ("mot1", "scene_t", "moves", dict(s="t", d="b", lx=42)),                     # x = 170
     ]:
         e.append(dict(src=a, dst=b, label=lab, size=24, lw=2.2, head=18, **kw))
     K.build(n, e, W, H, os.path.join(OUT, "fig_system_architecture"), "System architecture")

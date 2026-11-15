@@ -34,6 +34,11 @@ def _anchor(n, side):
 
 def _route(n1, n2, e):
     p0, p1 = _anchor(n1, e.get("s", "b")), _anchor(n2, e.get("d", "t"))
+    if not e.get("pts"):   # nearly straight: snap so the arrow is straight and its head points the right way
+        if abs(p1[1] - p0[1]) < 3:
+            p1 = (p1[0], p0[1])
+        elif abs(p1[0] - p0[0]) < 3:
+            p1 = (p0[0], p1[1])
     pts = [p0] + list(e.get("pts", [])) + [p1]
     if not e.get("pts") and p0[0] != p1[0] and p0[1] != p1[1]:   # automatic orthogonal elbow
         if e.get("s", "b") in ("t", "b"):
